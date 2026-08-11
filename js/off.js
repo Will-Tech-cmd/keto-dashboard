@@ -1,5 +1,6 @@
 // off.js — Anbindung an Open Food Facts, Normalisierung, Cache, eigene Produkte.
 import { Store } from "./store.js";
+import { getLocalFoodByBarcode } from "./foods-db.js";
 
 const FIELDS = [
   "product_name", "brands", "quantity", "serving_size",
@@ -9,6 +10,19 @@ const FIELDS = [
 
 function apiUrl(barcode) {
   return `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`;
+}
+
+function searchUrl(term) {
+  const params = new URLSearchParams({
+    search_terms: term,
+    search_simple: "1",
+    action: "process",
+    json: "1",
+    page_size: "15",
+    fields: FIELDS,
+    lc: "de",
+  });
+  return `https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`;
 }
 
 function num(v) {
@@ -55,6 +69,9 @@ function normalizeOwn(p) {
  * Wirft { notFound: true } wenn nichts gefunden wurde -> UI zeigt "Produkt selbst anlegen".
  */
 export async function lookupProduct(barcode, { forceNetwork = false } = {}) {
+  const local = getLocalFoodByBarcode(barcode);
+  if (local) return local;
+
   const own = Store.getOwnProduct(barcode);
   if (own) return normalizeOwn(own);
 
@@ -103,6 +120,41 @@ export async function lookupProduct(barcode, { forceNetwork = false } = {}) {
   const product = normalizeOff(json.product, barcode);
   Store.cacheProduct(barcode, product);
   return product;
+}
+
+/**
+ * Namenssuche bei Open Food Facts (z.B. "Eier", "Gouda"), für Produkte ohne Barcode zur Hand.
+ * Liefert normalisierte Produkte, die zugleich für spätere Barcode-Treffer gecacht werden.
+ * Bei fehlendem Netz oder Fehlern wird still eine leere Liste zurückgegeben (die lokale
+ * Grundnahrungsmittel-Suche in foods-db.js liefert in diesem Fall trotzdem Treffer).
+ */
+export async function searchProductsByName(term) {
+  const q = term.trim();
+  if (q.length < 2 || !navigator.onLine) return [];
+
+  let res;
+  try {
+    res = await fetch(searchUrl(q), { headers: { Accept: "application/json" } });
+  } catch {
+    return [];
+  }
+  if (!res.ok) return [];
+
+  let json;
+  try {
+    json = await res.json();
+  } catch {
+    return [];
+  }
+
+  const products = Array.isArray(json.products) ? json.products : [];
+  return products
+    .filter(p => p.code && p.product_name)
+    .map(p => {
+      const normalized = normalizeOff(p, p.code);
+      Store.cacheProduct(p.code, normalized);
+      return normalized;
+    });
 }
 
 /** Speichert ein von Hand erfasstes Produkt und macht es sofort auffindbar. */

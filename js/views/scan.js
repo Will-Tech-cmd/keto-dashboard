@@ -1,7 +1,8 @@
 // views/scan.js — Scan-Tab: Kamera, Ergebniskarte, manuelle Eingabe, "Produkt selbst anlegen".
 import { Store } from "../store.js";
 import { calcTargets } from "../profiles.js";
-import { lookupProduct, saveOwnProduct } from "../off.js";
+import { lookupProduct, saveOwnProduct, searchProductsByName } from "../off.js";
+import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { showToast, esc } from "../ui.js";
@@ -15,6 +16,7 @@ export function renderScan(container) {
   if (!isScannerSupported()) {
     container.innerHTML = manualOnlyMarkup("Kamera wird von diesem Browser nicht unterstützt.");
     wireManualForm(container);
+    wireSearchToggle(container);
     return;
   }
 
@@ -26,7 +28,9 @@ export function renderScan(container) {
       <div class="scan-status" id="scanStatus">Kamera wird gestartet …</div>
     </div>
     <button class="btn secondary" id="manualToggle">🔢 Barcode manuell eingeben</button>
+    <button class="btn secondary" id="searchToggle" style="margin-top:8px">🔎 Lebensmittel ohne Barcode suchen</button>
     <div id="manualFormWrap" style="display:none;margin-top:12px"></div>
+    <div id="searchFormWrap" style="display:none;margin-top:12px"></div>
     <div id="resultWrap"></div>
   `;
 
@@ -39,6 +43,8 @@ export function renderScan(container) {
       wireManualForm(container);
     }
   });
+
+  wireSearchToggle(container);
 
   const video = container.querySelector("#scanVideo");
   const statusEl = container.querySelector("#scanStatus");
@@ -62,8 +68,116 @@ function manualOnlyMarkup(message) {
     <h1 class="section-title">Scannen</h1>
     <div class="card"><p>${esc(message)}</p></div>
     <div id="manualFormWrap">${manualFormHtml()}</div>
+    <button class="btn secondary" id="searchToggle">🔎 Lebensmittel ohne Barcode suchen</button>
+    <div id="searchFormWrap" style="display:none;margin-top:12px"></div>
     <div id="resultWrap"></div>
   `;
+}
+
+function wireSearchToggle(container) {
+  container.querySelector("#searchToggle").addEventListener("click", () => {
+    const wrap = container.querySelector("#searchFormWrap");
+    const show = wrap.style.display === "none";
+    wrap.style.display = show ? "block" : "none";
+    if (show) {
+      wrap.innerHTML = searchFormHtml();
+      wireSearchForm(container);
+      wrap.querySelector("#foodSearchInput").focus();
+    }
+  });
+}
+
+function searchFormHtml() {
+  return `
+    <div class="card">
+      <label for="foodSearchInput">Lebensmittel suchen (ohne Barcode)</label>
+      <input type="text" id="foodSearchInput" placeholder="z.B. Eier, Gouda, Avocado …" autocomplete="off">
+      <div id="searchResults" style="margin-top:10px"></div>
+    </div>
+  `;
+}
+
+function wireSearchForm(container) {
+  const input = container.querySelector("#foodSearchInput");
+  const resultsEl = container.querySelector("#searchResults");
+  if (!input) return;
+
+  let debounceTimer = null;
+  let requestSeq = 0;
+
+  const runSearch = async () => {
+    const term = input.value.trim();
+    const seq = ++requestSeq;
+    if (term.length < 2) {
+      resultsEl.innerHTML = "";
+      return;
+    }
+
+    const local = searchLocalFoods(term);
+    renderSearchResults(container, resultsEl, local, false, term);
+
+    const online = await searchProductsByName(term);
+    if (seq !== requestSeq) return; // Nutzer hat weitergetippt, veraltete Antwort verwerfen
+    const localNames = new Set(local.map(p => p.name.toLowerCase()));
+    const combined = [...local, ...online.filter(p => !localNames.has(p.name.toLowerCase()))];
+    renderSearchResults(container, resultsEl, combined, true, term);
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(runSearch, 350);
+  });
+}
+
+function renderSearchResults(container, resultsEl, items, isFinal, term) {
+  if (items.length === 0) {
+    resultsEl.innerHTML = isFinal
+      ? `<p class="hint">Keine Treffer für „${esc(term)}". Du kannst es unten als eigenes Produkt anlegen (Barcode z.B. frei erfinden, etwa <code>eigen-${Date.now().toString().slice(-6)}</code>).</p>`
+      : `<p class="hint">Suche …</p>`;
+    return;
+  }
+  resultsEl.innerHTML = items.map((p, i) => `
+    <div class="list-item" data-idx="${i}" style="cursor:pointer">
+      <span style="flex-shrink:0">${p.source === "local" ? "🥑" : "🏷️"}</span>
+      <div class="info">
+        <div class="name">${esc(p.name)}</div>
+        <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${p.source === "local" ? "Grundnahrungsmittel" : "Open Food Facts"}</div>
+      </div>
+    </div>
+  `).join("") + (!isFinal ? `<p class="hint">Suche weitere Online-Treffer …</p>` : "");
+
+  resultsEl.querySelectorAll(".list-item").forEach(row => {
+    row.addEventListener("click", () => {
+      const item = items[Number(row.dataset.idx)];
+      handleSearchSelect(container, item);
+    });
+  });
+}
+
+function handleSearchSelect(container, product) {
+  const searchWrap = container.querySelector("#searchFormWrap");
+  if (searchWrap) searchWrap.style.display = "none";
+  Store.pushRecent(product.barcode);
+  logHistory(product);
+  renderResult(container, product);
+}
+
+/** Protokolliert einen Such-/Scan-Treffer im Verlauf (nur Log, keine Mengen/Kalorien). */
+function logHistory(product) {
+  const profile = Store.getActiveProfile();
+  const targets = calcTargets(profile);
+  const evalResult = evaluateProduct(product, targets);
+  Store.addHistoryEntry({
+    id: crypto.randomUUID(),
+    barcode: product.barcode,
+    name: product.name,
+    brand: product.brand,
+    grade: evalResult.grade,
+    netCarbs100: evalResult.netCarbs100,
+    source: product.source,
+    profileName: profile.name,
+    at: Date.now(),
+  });
 }
 
 function manualFormHtml() {
@@ -98,6 +212,7 @@ async function handleBarcode(container, barcode) {
 
   try {
     const product = await lookupProduct(barcode);
+    logHistory(product);
     renderResult(container, product);
   } catch (err) {
     if (err.notFound) {
@@ -245,6 +360,7 @@ function wireOwnProductForm(container, resultWrap, barcode) {
       ingredientsText: val("#opIngredients").trim(),
     });
     showToast("Produkt gespeichert");
+    logHistory(product);
     renderResult(container, product);
   });
 }

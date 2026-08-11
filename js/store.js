@@ -35,8 +35,11 @@ function defaultState() {
     ownProducts: {},   // barcode -> product object (manuell angelegt)
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
+    history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
   };
 }
+
+const HISTORY_LIMIT = 500;
 
 let state = load();
 
@@ -104,6 +107,19 @@ export const Store = {
   },
   getRecent() {
     return state.recent;
+  },
+
+  // --- Such-/Scan-Verlauf (nur Protokoll, keine Mengen/Kalorien-Tracking) ---
+  addHistoryEntry(entry) {
+    state.history = [entry, ...state.history].slice(0, HISTORY_LIMIT);
+    persist();
+  },
+  getHistory() {
+    return state.history;
+  },
+  clearHistory() {
+    state.history = [];
+    persist();
   },
 
   // --- Favoriten / No-Go ---
