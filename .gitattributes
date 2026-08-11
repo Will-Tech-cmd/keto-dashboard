@@ -1,0 +1,5 @@
+# Verhindert Zeilenumbruch-Konvertierung bei vendorten/binären Dateien (WASM, Sprachdaten, Icons).
+vendor/** -text
+*.wasm binary
+*.png binary
+*.traineddata binary

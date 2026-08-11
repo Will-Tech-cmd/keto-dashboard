@@ -36,7 +36,8 @@ function defaultState() {
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
     history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
-    consumption: [],    // { id, profileId, barcode, name, grams, kcal, netCarbs, fat, protein, at }
+    consumption: [],    // { id, profileId, barcode, name, grams|servings, kcal, netCarbs, fat, protein, at }
+    recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
   };
 }
 
@@ -134,6 +135,23 @@ export const Store = {
   },
   removeConsumption(id) {
     state.consumption = state.consumption.filter(e => e.id !== id);
+    persist();
+  },
+
+  // --- Rezepte ---
+  saveRecipe(recipe) {
+    const i = state.recipes.findIndex(r => r.id === recipe.id);
+    if (i >= 0) state.recipes[i] = recipe; else state.recipes.unshift(recipe);
+    persist();
+  },
+  getRecipe(id) {
+    return state.recipes.find(r => r.id === id) || null;
+  },
+  getRecipes() {
+    return state.recipes;
+  },
+  deleteRecipe(id) {
+    state.recipes = state.recipes.filter(r => r.id !== id);
     persist();
   },
 

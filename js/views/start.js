@@ -77,7 +77,7 @@ function renderConsumption(container, profile, targets) {
   listEl.innerHTML = entries.map(e => `
     <div class="list-item" data-id="${e.id}">
       <div class="info">
-        <div class="name">${esc(e.name)} · ${e.grams} g</div>
+        <div class="name">${esc(e.name)} · ${e.servings != null ? `${e.servings} Portion(en)` : `${e.grams} g`}</div>
         <div class="meta">${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g Netto-KH · ${new Date(e.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
       </div>
       <button class="icon-btn" data-action="undo" title="Entfernen">↩️</button>

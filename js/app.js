@@ -4,6 +4,7 @@ import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan } from "./views/scan.js";
 import { renderLists } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
+import { renderRecipes } from "./views/recipes.js";
 import { showToast } from "./ui.js";
 
 const view = document.getElementById("view");
@@ -17,6 +18,7 @@ const RENDERERS = {
   start: () => renderStart(view, goToTab),
   scan: () => renderScan(view),
   lists: () => renderLists(view),
+  recipes: () => renderRecipes(view),
   profile: () => renderProfile(view, updateProfileSwitchLabel),
 };
 

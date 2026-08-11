@@ -1,7 +1,7 @@
 // sw.js — cached die App-Shell für Offline-Start, holt Open-Food-Facts-Daten network-first
 // (mit Cache-Fallback, damit bereits gescannte Produkte auch offline funktionieren).
 
-const CACHE_NAME = "keto-dashboard-v3";
+const CACHE_NAME = "keto-dashboard-v4";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -16,12 +16,14 @@ const APP_SHELL = [
   "./js/foods-db.js",
   "./js/keto.js",
   "./js/consumption.js",
+  "./js/recipes.js",
   "./js/scanner.js",
   "./js/lists.js",
   "./js/ui.js",
   "./js/views/start.js",
   "./js/views/scan.js",
   "./js/views/profile.js",
+  "./js/views/recipes.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
@@ -66,9 +68,20 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isAppShell) {
-    // Cache-first für die App-Shell selbst, Netzwerk als Fallback.
+    // Cache-first. Bei Cache-Miss (z.B. lazy geladene Tesseract-Dateien beim ersten
+    // Bild-Import) wird die Antwort zusätzlich in den Cache geschrieben, damit sie
+    // danach auch offline verfügbar ist.
     event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request))
+      caches.match(request).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return res;
+        });
+      })
     );
   }
 });

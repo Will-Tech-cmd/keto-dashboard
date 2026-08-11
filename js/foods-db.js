@@ -104,6 +104,7 @@ export const FOODS = [
   // Sonstiges
   food("Oliven (grün)", { kcal: 145, carbs: 3.8, fiber: 3.3, sugars: 0.5, fat: 15, saturatedFat: 2, protein: 1, salt: 3.5 }, 30, ["Oliven"]),
   food("Tofu", { kcal: 76, carbs: 0.7, fiber: 0.3, sugars: 0.5, fat: 4.8, saturatedFat: 0.7, protein: 8, salt: 0.01 }, 100),
+  food("Knoblauch", { kcal: 149, carbs: 28, fiber: 2.1, sugars: 1, fat: 0.5, saturatedFat: 0.1, protein: 6.4, salt: 0.02 }, 5, ["Knoblauchzehe", "Knoblauchzehen"]),
 ];
 
 /** Sucht in der lokalen Tabelle nach Namen/Aliassen, beste Treffer (startsWith) zuerst. */
@@ -118,6 +119,37 @@ export function searchLocalFoods(term) {
     else if (names.some(n => n.includes(q))) contains.push(item);
   }
   return [...starts, ...contains].slice(0, 12).map(toLocalProduct);
+}
+
+/**
+ * Unscharfe Zutaten-Erkennung für den Rezept-Import: prüft in beide Richtungen
+ * (Zutatenname enthält Lebensmittel-Namen ODER umgekehrt), z.B. "Gewürzgurkenscheiben"
+ * → "Gurke". Liefert den längsten (spezifischsten) Treffer, oder null.
+ */
+export function bestLocalFoodMatch(ingredientName) {
+  const q = ingredientName.trim().toLowerCase();
+  if (!q) return null;
+
+  let exact = null;
+  let bestContains = null, bestContainsLen = 0;         // Zutat enthält Lebensmittel-Namen -> längster gewinnt
+  let bestContainedBy = null, bestContainedByLen = Infinity; // Lebensmittel-Name enthält Zutat -> kürzester gewinnt
+
+  for (const item of FOODS) {
+    for (const n of [item.name, ...item.aliases]) {
+      const nl = n.toLowerCase();
+      if (nl === q) {
+        exact = item;
+      } else if (q.includes(nl) && nl.length > bestContainsLen) {
+        bestContains = item;
+        bestContainsLen = nl.length;
+      } else if (nl.includes(q) && nl.length < bestContainedByLen) {
+        bestContainedBy = item;
+        bestContainedByLen = nl.length;
+      }
+    }
+  }
+  const best = exact || bestContains || bestContainedBy;
+  return best ? toLocalProduct(best) : null;
 }
 
 /** Löst einen Pseudo-Barcode "local:<slug>" auf ein lokales Produkt auf, oder null. */
