@@ -3,6 +3,7 @@ import { Store } from "../store.js";
 import { lookupProduct, searchProductsByName } from "../off.js";
 import { searchLocalFoods, bestLocalFoodMatch } from "../foods-db.js";
 import { calcNetCarbs, ketoGrade, GRADE_LABEL } from "../keto.js";
+import { calcTargets } from "../profiles.js";
 import {
   createRecipe, updateRecipeMeta, deleteRecipe, addIngredient, removeIngredient,
   updateIngredient, calcRecipeTotals, calcPerServing, logRecipeConsumption,
@@ -12,6 +13,11 @@ import { showToast, esc } from "../ui.js";
 
 let openRecipeId = null;
 let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-Phase
+
+/** Ampel-Grenzwerte des aktiven Profils (Ernährungsform), für konsistente Bewertung. */
+function activeThresholds() {
+  return calcTargets(Store.getActiveProfile()).gradeThresholds;
+}
 
 export function renderRecipes(container) {
   if (openRecipeId && Store.getRecipe(openRecipeId)) {
@@ -44,7 +50,7 @@ function renderList(container) {
 
   body.innerHTML = recipes.map(r => {
     const perServing = calcPerServing(r);
-    const grade = ketoGrade(perServing.netCarbs);
+    const grade = ketoGrade(perServing.netCarbs, activeThresholds());
     return `
       <div class="card" data-id="${r.id}">
         <div class="btn-row" style="align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -221,7 +227,7 @@ function renderEditor(container, recipeId) {
 function renderTotals(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   const perServing = calcPerServing(recipe);
-  const grade = ketoGrade(perServing.netCarbs);
+  const grade = ketoGrade(perServing.netCarbs, activeThresholds());
   container.querySelector("#totalsCard").innerHTML = `
     <h2>Pro Portion</h2>
     <span class="badge ${grade}" style="margin-bottom:8px;display:inline-flex">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]} ${esc(GRADE_LABEL[grade])}</span>

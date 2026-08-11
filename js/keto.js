@@ -50,17 +50,27 @@ export function calcNetCarbs(per100, { subtractFiber = false } = {}) {
   return per100.carbs;
 }
 
-export function ketoGrade(netCarbs100) {
+// Ernährungsformen mit Standard-Ampelgrenzwerten (g Netto-KH je 100g). Beim Wechsel der
+// Ernährungsform im Profil werden diese als Vorschlag übernommen, bleiben aber frei editierbar.
+export const DIET_TYPES = {
+  keto: { label: "Keto", defaultThresholds: { green: 5, yellow: 10 } },
+  lowcarb: { label: "Low-Carb", defaultThresholds: { green: 15, yellow: 30 } },
+  other: { label: "Sonstiges", defaultThresholds: { green: 15, yellow: 30 } },
+};
+
+const DEFAULT_THRESHOLDS = DIET_TYPES.keto.defaultThresholds;
+
+export function ketoGrade(netCarbs100, thresholds = DEFAULT_THRESHOLDS) {
   if (netCarbs100 == null) return "gray";
-  if (netCarbs100 <= 5) return "green";
-  if (netCarbs100 <= 10) return "yellow";
+  if (netCarbs100 <= thresholds.green) return "green";
+  if (netCarbs100 <= thresholds.yellow) return "yellow";
   return "red";
 }
 
 export const GRADE_LABEL = {
-  green: "Keto-tauglich",
+  green: "Empfohlen",
   yellow: "In Maßen",
-  red: "Nicht keto",
+  red: "Nicht empfohlen",
   gray: "Keine Angabe",
 };
 
@@ -73,7 +83,7 @@ export const GRADE_LABEL = {
 export function evaluateProduct(product, profileTargets, opts = {}) {
   const subtractFiber = opts.subtractFiber ?? product.likelyUsLabel;
   const netCarbs100 = calcNetCarbs(product.per100, { subtractFiber });
-  const grade = ketoGrade(netCarbs100);
+  const grade = ketoGrade(netCarbs100, profileTargets?.gradeThresholds);
 
   const servingGrams = opts.servingGrams ?? parseServingGrams(product.servingSize);
   const netCarbsServing = netCarbs100 != null && servingGrams

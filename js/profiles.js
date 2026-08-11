@@ -68,6 +68,8 @@ export function calcTargets(p) {
     },
     bmr: Math.round(bmr),
     tdee: Math.round(tdee),
+    dietType: p.dietType,
+    gradeThresholds: p.gradeThresholds,
   };
 }
 

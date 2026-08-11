@@ -1,6 +1,7 @@
 // views/profile.js — Profil-Tab: Körperdaten, Zielwert-Konfiguration, Export/Import.
 import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
+import { DIET_TYPES } from "../keto.js";
 import { showToast, esc } from "../ui.js";
 
 export function renderProfile(container, onProfileChanged) {
@@ -97,7 +98,7 @@ function renderProfileForm(container, onProfileChanged) {
         <div>
           <label>Netto-KH-Limit /Tag</label>
           <select id="fCarbLimit">
-            ${[20, 30, 50].map(v => `<option value="${v}" ${v === profile.netCarbLimitG ? "selected" : ""}>${v} g</option>`).join("")}
+            ${[20, 30, 50, 75, 100, 130].map(v => `<option value="${v}" ${v === profile.netCarbLimitG ? "selected" : ""}>${v} g</option>`).join("")}
           </select>
         </div>
         <div>
@@ -105,6 +106,28 @@ function renderProfileForm(container, onProfileChanged) {
           <input type="number" step="0.1" id="fProteinFactor" value="${profile.proteinFactor}">
         </div>
       </div>
+
+      <div class="divider"></div>
+
+      <label>Ernährungsform</label>
+      <select id="fDietType">
+        ${Object.entries(DIET_TYPES).map(([key, d]) =>
+          `<option value="${key}" ${key === profile.dietType ? "selected" : ""}>${esc(d.label)}</option>`
+        ).join("")}
+      </select>
+      <p class="hint" style="margin-top:-2px">Bestimmt die Vorschlagswerte für die Ampel unten (frei anpassbar).</p>
+
+      <div class="field-row">
+        <div>
+          <label>Ampel grün bis (g Netto-KH/100g)</label>
+          <input type="number" step="0.5" id="fGradeGreen" value="${profile.gradeThresholds.green}">
+        </div>
+        <div>
+          <label>Ampel gelb bis (g Netto-KH/100g)</label>
+          <input type="number" step="0.5" id="fGradeYellow" value="${profile.gradeThresholds.yellow}">
+        </div>
+      </div>
+      <p class="hint" style="margin-top:-8px">Darüber gilt ein Produkt als rot/nicht empfohlen. Gilt für Scan, Suche und Rezepte.</p>
 
       <button class="btn" id="saveProfileBtn" style="margin-top:14px">Speichern</button>
     </div>
@@ -125,6 +148,13 @@ function renderProfileForm(container, onProfileChanged) {
     formWrap.querySelector("#deficitWrap").style.display = e.target.value === "lose" ? "" : "none";
   });
 
+  formWrap.querySelector("#fDietType").addEventListener("change", (e) => {
+    const d = DIET_TYPES[e.target.value];
+    if (!d) return;
+    formWrap.querySelector("#fGradeGreen").value = d.defaultThresholds.green;
+    formWrap.querySelector("#fGradeYellow").value = d.defaultThresholds.yellow;
+  });
+
   formWrap.querySelector("#saveProfileBtn").addEventListener("click", () => {
     const val = (id) => formWrap.querySelector(id).value;
     const bodyFatRaw = val("#fBodyFat").trim();
@@ -140,6 +170,11 @@ function renderProfileForm(container, onProfileChanged) {
       deficitPct: parseInt(val("#fDeficit"), 10) || profile.deficitPct,
       netCarbLimitG: parseInt(val("#fCarbLimit"), 10),
       proteinFactor: parseFloat(val("#fProteinFactor")) || profile.proteinFactor,
+      dietType: val("#fDietType"),
+      gradeThresholds: {
+        green: parseFloat(val("#fGradeGreen")) || profile.gradeThresholds.green,
+        yellow: parseFloat(val("#fGradeYellow")) || profile.gradeThresholds.yellow,
+      },
     });
     showToast("Profil gespeichert");
     onProfileChanged?.();

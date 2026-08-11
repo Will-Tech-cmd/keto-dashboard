@@ -17,7 +17,9 @@ function defaultProfile(name) {
     goal: "lose",           // "lose" | "maintain" | "gain"
     deficitPct: 15,         // nur relevant bei goal = "lose"
     proteinFactor: 1.6,     // g je kg fettfreier Masse
-    netCarbLimitG: 20,      // 20 | 30 | 50 (frei editierbar)
+    netCarbLimitG: 20,      // Tagesbudget Netto-KH (frei editierbar)
+    dietType: "keto",       // "keto" | "lowcarb" | "other" -> steuert Ampel-Standardwerte
+    gradeThresholds: { green: 5, yellow: 10 }, // g Netto-KH je 100g, frei editierbar
   };
 }
 
@@ -58,6 +60,13 @@ function load() {
     // Bestandsdaten von vor Einführung des Onboardings: nicht nachträglich zur
     // Ersteinrichtung zwingen, nur wirklich neue Geräte sollen den Dialog sehen.
     if (parsed.onboarded === undefined) merged.onboarded = true;
+    // Bestehende Profile (vor Einführung der Ernährungsform) um die neuen Felder ergänzen,
+    // ohne ihre sonstigen Werte anzutasten.
+    merged.profiles = merged.profiles.map(p => ({
+      dietType: "keto",
+      gradeThresholds: { green: 5, yellow: 10 },
+      ...p,
+    }));
     return merged;
   } catch (e) {
     console.warn("Store: konnte gespeicherte Daten nicht lesen, starte neu.", e);
