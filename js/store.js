@@ -22,11 +22,12 @@ function defaultProfile(name) {
 }
 
 function defaultState() {
-  const p1 = defaultProfile("Wilhelm");
-  const p2 = defaultProfile("Sandra");
+  const p1 = defaultProfile("Profil 1");
+  const p2 = defaultProfile("Profil 2");
   p2.sex = "female";
   return {
     schemaVersion: SCHEMA_VERSION,
+    onboarded: false, // steuert den Ersteinrichtungs-Dialog ("Wie heißt du?") bei neuen Geräten
     profiles: [p1, p2],
     activeProfileId: p1.id,
     favorites: [],     // { barcode, name, brand, addedAt, netCarbs100, grade }
@@ -53,7 +54,11 @@ function load() {
     const parsed = JSON.parse(raw);
     if (!parsed.schemaVersion) return defaultState();
     // Platz für künftige Migrationen anhand schemaVersion
-    return { ...defaultState(), ...parsed };
+    const merged = { ...defaultState(), ...parsed };
+    // Bestandsdaten von vor Einführung des Onboardings: nicht nachträglich zur
+    // Ersteinrichtung zwingen, nur wirklich neue Geräte sollen den Dialog sehen.
+    if (parsed.onboarded === undefined) merged.onboarded = true;
+    return merged;
   } catch (e) {
     console.warn("Store: konnte gespeicherte Daten nicht lesen, starte neu.", e);
     return defaultState();
@@ -67,6 +72,14 @@ function persist() {
 export const Store = {
   get() {
     return state;
+  },
+
+  isOnboarded() {
+    return !!state.onboarded;
+  },
+  setOnboarded() {
+    state.onboarded = true;
+    persist();
   },
 
   getActiveProfile() {

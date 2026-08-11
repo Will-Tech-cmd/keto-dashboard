@@ -5,6 +5,7 @@ import { renderScan, cleanupScan } from "./views/scan.js";
 import { renderLists } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
+import { renderOnboarding } from "./views/onboarding.js";
 import { showToast } from "./ui.js";
 
 const view = document.getElementById("view");
@@ -68,5 +69,16 @@ if ("serviceWorker" in navigator) {
 }
 
 // Init
-updateProfileSwitchLabel();
-goToTab("start");
+if (Store.isOnboarded()) {
+  updateProfileSwitchLabel();
+  goToTab("start");
+} else {
+  tabbar.style.display = "none";
+  profileSwitchBtn.style.display = "none";
+  renderOnboarding(view, () => {
+    tabbar.style.display = "";
+    profileSwitchBtn.style.display = "";
+    updateProfileSwitchLabel();
+    goToTab("start");
+  });
+}

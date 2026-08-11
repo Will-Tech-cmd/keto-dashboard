@@ -1,7 +1,7 @@
 // sw.js — cached die App-Shell für Offline-Start, holt Open-Food-Facts-Daten network-first
 // (mit Cache-Fallback, damit bereits gescannte Produkte auch offline funktionieren).
 
-const CACHE_NAME = "keto-dashboard-v4";
+const CACHE_NAME = "keto-dashboard-v5";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -24,6 +24,7 @@ const APP_SHELL = [
   "./js/views/scan.js",
   "./js/views/profile.js",
   "./js/views/recipes.js",
+  "./js/views/onboarding.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
