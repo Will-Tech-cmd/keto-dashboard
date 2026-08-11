@@ -3,7 +3,7 @@ import { Store } from "../store.js";
 import { calcTargets } from "../profiles.js";
 import { lookupProduct } from "../off.js";
 import { evaluateProduct } from "../keto.js";
-import { getTodayConsumption, sumConsumption, openQuantityModal } from "../consumption.js";
+import { getTodayConsumption, sumConsumption, openQuantityModal, openEditConsumptionModal } from "../consumption.js";
 import { esc, showToast } from "../ui.js";
 
 export async function renderStart(container, goToTab) {
@@ -75,7 +75,7 @@ function renderConsumption(container, profile, targets) {
     return;
   }
   listEl.innerHTML = entries.map(e => `
-    <div class="list-item" data-id="${e.id}">
+    <div class="list-item" data-id="${e.id}" style="cursor:pointer">
       <div class="info">
         <div class="name">${esc(e.name)} · ${e.servings != null ? `${e.servings} Portion(en)` : `${e.grams} g`}</div>
         <div class="meta">${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g Netto-KH · ${new Date(e.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
@@ -85,10 +85,16 @@ function renderConsumption(container, profile, targets) {
   `).join("");
 
   listEl.querySelectorAll(".list-item").forEach(row => {
-    row.querySelector('[data-action="undo"]').addEventListener("click", () => {
-      Store.removeConsumption(row.dataset.id);
+    const id = row.dataset.id;
+    row.querySelector('[data-action="undo"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      Store.removeConsumption(id);
       showToast("Eintrag entfernt");
       renderConsumption(container, profile, targets);
+    });
+    row.addEventListener("click", () => {
+      const entry = Store.getConsumption().find(c => c.id === id);
+      if (entry) openEditConsumptionModal(entry, () => renderConsumption(container, profile, targets));
     });
   });
 }

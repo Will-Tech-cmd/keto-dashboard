@@ -54,6 +54,16 @@ button { font-family: inherit; }
   border-bottom: 1px solid var(--border);
   padding-top: env(safe-area-inset-top);
 }
+/* ---------- Editor-Kopfzeile (z.B. Rezept-Editor: Zurück / fixiertes Speichern) ---------- */
+.editor-topbar {
+  position: sticky; top: var(--topbar-h); z-index: 15;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--bg);
+  padding: 10px 0;
+  margin: 0 0 6px;
+}
+.editor-topbar .btn { width: auto; padding: 0 16px; min-height: 40px; }
+
 .topbar-inner {
   height: var(--topbar-h);
   display: flex; align-items: center; justify-content: space-between;

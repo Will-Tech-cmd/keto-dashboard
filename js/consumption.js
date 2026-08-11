@@ -54,6 +54,90 @@ export function sumConsumption(entries) {
 }
 
 /**
+ * Passt einen bestehenden Verbrauchs-Eintrag auf eine neue Menge an (Gramm bei Produkten,
+ * Portionen bei Rezepten). Skaliert alle Nährwerte proportional, ohne die ursprüngliche
+ * Quelle (Produkt/Rezept) erneut nachschlagen zu müssen.
+ */
+export function rescaleConsumption(id, newAmount) {
+  const entry = Store.getConsumption().find(e => e.id === id);
+  if (!entry) return null;
+  const oldAmount = entry.servings != null ? entry.servings : entry.grams;
+  if (!oldAmount || oldAmount <= 0) return null;
+  const ratio = newAmount / oldAmount;
+
+  const updated = {
+    ...entry,
+    kcal: round1(entry.kcal != null ? entry.kcal * ratio : null),
+    netCarbs: round1(entry.netCarbs != null ? entry.netCarbs * ratio : null),
+    fat: round1(entry.fat != null ? entry.fat * ratio : null),
+    protein: round1(entry.protein != null ? entry.protein * ratio : null),
+  };
+  if (entry.servings != null) updated.servings = newAmount; else updated.grams = newAmount;
+
+  Store.updateConsumption(updated);
+  return updated;
+}
+
+/** Öffnet einen Dialog zum Bearbeiten (Menge anpassen, live Vorschau) oder Löschen eines Eintrags. */
+export function openEditConsumptionModal(entry, onDone) {
+  const isRecipe = entry.servings != null;
+  const currentAmount = isRecipe ? entry.servings : entry.grams;
+  const unitLabel = isRecipe ? "Portionen" : "Gramm";
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(entry.name)}</h2>
+      <p class="hint">Menge anpassen — Nährwerte werden automatisch neu berechnet.</p>
+      <label for="editAmountInput">Menge in ${unitLabel}</label>
+      <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="${isRecipe ? 0.25 : 1}" inputmode="decimal">
+      <p class="hint" id="editPreview" style="margin-top:8px"></p>
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn secondary" id="editDelete">🗑️ Löschen</button>
+        <button type="button" class="btn" id="editSave">Speichern</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector("#editAmountInput");
+  const preview = overlay.querySelector("#editPreview");
+  const updatePreview = () => {
+    const val = parseFloat(input.value);
+    if (!val || val <= 0) { preview.textContent = ""; return; }
+    const ratio = val / currentAmount;
+    const k = entry.kcal != null ? round1(entry.kcal * ratio) : "–";
+    const nc = entry.netCarbs != null ? round1(entry.netCarbs * ratio) : "–";
+    preview.textContent = `→ ${k} kcal · ${nc} g Netto-KH`;
+  };
+  input.addEventListener("input", updatePreview);
+  updatePreview();
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#editDelete").addEventListener("click", () => {
+    Store.removeConsumption(entry.id);
+    showToast("Eintrag entfernt");
+    close();
+    onDone?.();
+  });
+  overlay.querySelector("#editSave").addEventListener("click", () => {
+    const val = parseFloat(input.value);
+    if (!val || val <= 0) {
+      showToast("Bitte eine gültige Menge angeben");
+      return;
+    }
+    rescaleConsumption(entry.id, val);
+    showToast("Aktualisiert");
+    close();
+    onDone?.();
+  });
+
+  input.focus();
+}
+
+/**
  * Öffnet einen Dialog zur Mengeneingabe für ein Produkt und trägt die gewählte Menge
  * als "gegessen" ein. `onLogged` wird nach erfolgreichem Eintrag aufgerufen (z.B. für Refresh).
  */

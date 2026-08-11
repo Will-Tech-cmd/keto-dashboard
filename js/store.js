@@ -150,6 +150,10 @@ export const Store = {
     state.consumption = state.consumption.filter(e => e.id !== id);
     persist();
   },
+  updateConsumption(entry) {
+    const i = state.consumption.findIndex(e => e.id === entry.id);
+    if (i >= 0) { state.consumption[i] = entry; persist(); }
+  },
 
   // --- Rezepte ---
   saveRecipe(recipe) {
