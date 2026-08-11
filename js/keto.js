@@ -102,7 +102,7 @@ export function evaluateProduct(product, profileTargets, opts = {}) {
 }
 
 /** Versucht aus "30 g", "1 Riegel (45g)" etc. eine Grammzahl zu extrahieren. */
-function parseServingGrams(servingSize) {
+export function parseServingGrams(servingSize) {
   if (!servingSize) return null;
   const m = String(servingSize).match(/(\d+(?:[.,]\d+)?)\s*g/i);
   if (!m) return null;

@@ -36,10 +36,12 @@ function defaultState() {
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
     history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
+    consumption: [],    // { id, profileId, barcode, name, grams, kcal, netCarbs, fat, protein, at }
   };
 }
 
 const HISTORY_LIMIT = 500;
+const CONSUMPTION_LIMIT = 1000;
 
 let state = load();
 
@@ -119,6 +121,19 @@ export const Store = {
   },
   clearHistory() {
     state.history = [];
+    persist();
+  },
+
+  // --- Verbrauch (Mengen, die als "gegessen" eingetragen wurden) ---
+  addConsumption(entry) {
+    state.consumption = [entry, ...state.consumption].slice(0, CONSUMPTION_LIMIT);
+    persist();
+  },
+  getConsumption() {
+    return state.consumption;
+  },
+  removeConsumption(id) {
+    state.consumption = state.consumption.filter(e => e.id !== id);
     persist();
   },
 

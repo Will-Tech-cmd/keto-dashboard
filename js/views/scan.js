@@ -5,6 +5,7 @@ import { lookupProduct, saveOwnProduct, searchProductsByName } from "../off.js";
 import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
+import { openQuantityModal } from "../consumption.js";
 import { showToast, esc } from "../ui.js";
 
 let currentBarcode = null;
@@ -262,7 +263,8 @@ function renderResult(container, product) {
         <ul class="warn-list">${evalResult.warnings.map(w => `<li>⚠️ ${esc(w)}</li>`).join("")}</ul>
       ` : ""}
 
-      <div class="btn-row" style="margin-top:14px">
+      <button class="btn" id="eatBtn" style="margin-top:14px">🍽️ Als gegessen eintragen</button>
+      <div class="btn-row" style="margin-top:8px">
         <button class="btn ${isFav ? "" : "secondary"}" id="favBtn">⭐ ${isFav ? "Favorit" : "Favorisieren"}</button>
         <button class="btn ${isNoGo ? "danger" : "secondary"}" id="noGoBtn">🚫 ${isNoGo ? "No-Go" : "No-Go"}</button>
       </div>
@@ -279,6 +281,9 @@ function renderResult(container, product) {
     grade: evalResult.grade,
   });
 
+  resultWrap.querySelector("#eatBtn").addEventListener("click", () => {
+    openQuantityModal(product);
+  });
   resultWrap.querySelector("#favBtn").addEventListener("click", () => {
     Store.addToList("favorites", entry());
     showToast("Zu Favoriten hinzugefügt");

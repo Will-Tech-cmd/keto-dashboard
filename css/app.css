@@ -195,6 +195,39 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .empty-state { text-align: center; color: var(--text-muted); padding: 40px 16px; }
 .empty-state .emoji { font-size: 2.4rem; display: block; margin-bottom: 8px; }
 
+/* ---------- Modal (Mengeneingabe) ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+.modal-card {
+  background: var(--bg-elevated);
+  border-radius: 18px 18px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 560px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,.25);
+}
+@media (min-width: 700px) {
+  .modal-overlay { align-items: center; }
+  .modal-card { border-radius: 18px; }
+}
+
+/* ---------- Fortschrittsbalken (Tagesverbrauch) ---------- */
+.progress-row { margin-bottom: 14px; }
+.progress-row:last-child { margin-bottom: 0; }
+.progress-labels { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: 5px; }
+.progress-labels .name { font-weight: 700; }
+.progress-labels .nums { color: var(--text-muted); }
+.progress-track {
+  height: 10px; border-radius: 999px; background: var(--bg);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .2s; }
+.progress-fill.over { background: var(--red-fg); }
+.progress-over-label { font-size: .78rem; color: var(--red-fg); font-weight: 700; margin-top: 3px; }
+
 /* ---------- Scanner ---------- */
 .scan-wrap {
   position: relative;
