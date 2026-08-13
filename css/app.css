@@ -217,6 +217,7 @@ input[type="text"], input[type="number"], input[type="search"], select {
   border-radius: 18px 18px 0 0;
   padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
   width: 100%; max-width: 560px;
+  max-height: 85vh; overflow-y: auto;
   box-shadow: 0 -4px 24px rgba(0,0,0,.25);
 }
 @media (min-width: 700px) {
@@ -237,6 +238,46 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .2s; }
 .progress-fill.over { background: var(--red-fg); }
 .progress-over-label { font-size: .78rem; color: var(--red-fg); font-weight: 700; margin-top: 3px; }
+
+/* ---------- Fortschrittsringe (Dashboard: Ziel + Verbrauch in einer Karte) ---------- */
+.ring-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px 10px;
+}
+.ring-tile { text-align: center; }
+.ring-wrap { position: relative; width: 108px; height: 108px; margin: 0 auto; }
+.ring-svg { width: 100%; height: 100%; }
+.ring-track { fill: none; stroke: var(--border); stroke-width: 9; }
+.ring-progress {
+  fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round;
+  transition: stroke-dashoffset .3s, stroke .3s;
+}
+.ring-progress.over { stroke: var(--red-fg); }
+.ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; padding: 0 6px;
+}
+.ring-value { font-size: 1.05rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+.ring-value.over { color: var(--red-fg); }
+.ring-unit { font-size: .68rem; color: var(--text-muted); line-height: 1.2; }
+.ring-label { font-weight: 700; font-size: .85rem; margin-top: 8px; }
+.ring-sub { font-size: .76rem; color: var(--text-muted); }
+
+/* ---------- Datumsnavigation (Startseite: Essensplanung) ---------- */
+.date-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.date-nav button {
+  border: none; background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 999px; width: 40px; height: 40px; font-size: 1.1rem; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.date-nav .date-label { font-weight: 800; font-size: 1.05rem; text-align: center; flex: 1; }
+.date-nav .date-label.today-link { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+
+/* ---------- Mahlzeiten-Gruppierung ---------- */
+.meal-group-title { font-weight: 700; font-size: .85rem; color: var(--text-muted); margin: 14px 0 6px; }
+.meal-group-title:first-child { margin-top: 0; }
 
 /* ---------- Scanner ---------- */
 .scan-wrap {

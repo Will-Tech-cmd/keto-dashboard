@@ -14,26 +14,49 @@ const profileSwitchBtn = document.getElementById("profileSwitch");
 const profileSwitchName = document.getElementById("profileSwitchName");
 
 let activeTab = "start";
+let historyInitialized = false;
 
 const RENDERERS = {
   start: () => renderStart(view, goToTab),
   scan: () => renderScan(view),
-  lists: () => renderLists(view),
+  lists: () => renderLists(view, goToTab),
   recipes: () => renderRecipes(view),
   profile: () => renderProfile(view, updateProfileSwitchLabel),
 };
 
-function goToTab(tab) {
+// Jeder Tab-Wechsel bekommt einen eigenen History-Eintrag, damit die Zurück-Geste am Handy
+// durch die zuletzt besuchten Tabs blättert statt die App sofort zu verlassen. Dialoge und
+// der Rezept-Editor koppeln sich zusätzlich selbst an (siehe ui.js: bindBackClose).
+function goToTab(tab, opts = {}) {
   if (tab !== "scan") cleanupScan();
   activeTab = tab;
   tabbar.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === tab);
   });
+  if (!opts.fromPopstate) {
+    if (!historyInitialized) {
+      history.replaceState({ nav: "tab", tab }, "");
+      historyInitialized = true;
+    } else {
+      history.pushState({ nav: "tab", tab }, "");
+    }
+  }
   RENDERERS[tab]();
 }
 
 tabbar.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => goToTab(btn.dataset.tab));
+});
+
+window.addEventListener("popstate", (e) => {
+  const state = e.state;
+  if (state?.nav === "tab" && state.tab !== activeTab) {
+    goToTab(state.tab, { fromPopstate: true });
+  } else if (!state && activeTab !== "start") {
+    // Basis-Zustand erreicht, aber wir sind nicht auf Start — lieber dorthin zurück als
+    // die App auf einer Unterseite zu verlassen.
+    goToTab("start", { fromPopstate: true });
+  }
 });
 
 function updateProfileSwitchLabel() {
@@ -47,7 +70,7 @@ profileSwitchBtn.addEventListener("click", () => {
   Store.setActiveProfile(next.id);
   updateProfileSwitchLabel();
   showToast(`Profil: ${next.name}`);
-  if (activeTab === "start" || activeTab === "profile") RENDERERS[activeTab]();
+  if (activeTab === "start" || activeTab === "profile" || activeTab === "lists") RENDERERS[activeTab]();
 });
 
 // Stream sauber stoppen, wenn die App in den Hintergrund geht (Akku).

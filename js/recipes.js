@@ -1,6 +1,7 @@
 // recipes.js — Rezept-Verwaltung, Nährwert-Summierung, Zutaten-Text-Parser, OCR-Import.
 import { Store } from "./store.js";
 import { calcNetCarbs } from "./keto.js";
+import { getActiveDateKey } from "./consumption.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -92,8 +93,8 @@ export function calcPerServing(recipe) {
   };
 }
 
-/** Trägt N Portionen eines Rezepts als "gegessen" für das aktive Profil ein. */
-export function logRecipeConsumption(recipe, servings) {
+/** Trägt N Portionen eines Rezepts als "gegessen" für das aktive Profil am aktiven Planungstag ein. */
+export function logRecipeConsumption(recipe, servings, meal = null) {
   const perServing = calcPerServing(recipe);
   const profile = Store.getActiveProfile();
   const entry = {
@@ -102,6 +103,8 @@ export function logRecipeConsumption(recipe, servings) {
     barcode: `recipe:${recipe.id}`,
     name: recipe.name,
     servings,
+    meal,
+    dateKey: getActiveDateKey(),
     kcal: round1(perServing.kcal * servings),
     netCarbs: round1(perServing.netCarbs * servings),
     fat: round1(perServing.fat * servings),
@@ -130,20 +133,39 @@ const UNIT_GRAMS = {
 };
 
 const SIZE_QUALIFIERS = /\b(kleine[rs]?|mittlere[rs]?|große[rs]?|groß)\b/gi;
-const LEADING_DESCRIPTORS = /\b(geriebene[rs]?|gehackte[rs]?|frische[rs]?|getrocknete[rs]?|gewürfelte[rs]?|gepresste[rs]?)\b/gi;
+const LEADING_DESCRIPTORS = /\b(geriebene[rs]?|gehackte[rs]?|frische[rs]?|getrocknete[rs]?|gewürfelte[rs]?|gepresste[rs]?|gemahlene[rs]?|geschmolzene[rs]?|zuckerfreie[rn]?|weiche[rs]?)\b/gi;
 const TRAILING_DESCRIPTORS = /[,\s]+\b(fein gehackt|gehackt|gewürfelt|gepresst|gerieben|geraspelt|in scheiben|zum garnieren|nach geschmack|frisch|getrocknet)\b.*$/i;
+
+// Aufzählungszeichen am Zeilenanfang (Rezept-Vorlagen, OCR): "- 150g Mandeln" -> "150g Mandeln"
+const BULLET_PREFIX = /^\s*[-–—•*·]\s*/;
+// Abschnittsüberschriften ohne Menge überspringen: "Zutaten:", "Boden:", "Füllung:" …
+const SECTION_HEADER = /^[^\d]*:\s*$/;
+// Klammerzusätze wie "(geschmolzen)" oder "(ggf mehr oder weniger …)" sind keine Zutat.
+const PAREN_CONTENT = /\([^)]*\)/g;
+// Mengenbereiche auf den kleineren Wert reduzieren: "1-2 TL" -> "1 TL" (im Review anpassbar).
+const QUANTITY_RANGE = /^(\d+(?:[.,]\d+)?)\s*[-–]\s*\d+(?:[.,]\d+)?(?=\s)/;
+// Mengen-Zusatzwörter vor der eigentlichen Einheit: "1 gehäufter EL" -> "1 EL"
+const HEAP_QUALIFIER = /^(gehäufte[rn]?|gestrichene[rn]?)\s+/i;
 
 function parseIngredientLine(rawLine) {
   const raw = rawLine.trim();
   if (!raw) return null;
-  const cleaned = raw.replace(TRAILING_DESCRIPTORS, "").trim() || raw;
 
-  const m = cleaned.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+  let cleaned = raw.replace(BULLET_PREFIX, "").trim();
+  if (!cleaned || SECTION_HEADER.test(cleaned)) return null;
+
+  cleaned = cleaned.replace(PAREN_CONTENT, "").replace(/\s{2,}/g, " ").trim();
+  if (!cleaned) return null;
+
+  cleaned = cleaned.replace(QUANTITY_RANGE, "$1");
+  cleaned = cleaned.replace(TRAILING_DESCRIPTORS, "").trim() || cleaned;
+
+  const m = cleaned.match(/^(\d+(?:[.,]\d+)?)\s*(.+)$/);
   if (!m) {
     return { raw, quantity: null, unit: null, grams: null, name: cleanName(cleaned) };
   }
   const quantity = parseFloat(m[1].replace(",", "."));
-  const rest = m[2].trim();
+  const rest = m[2].trim().replace(HEAP_QUALIFIER, "");
 
   const unitMatch = rest.match(/^([a-zA-ZäöüÄÖÜß]+)\.?\s+(.+)$/);
   if (unitMatch && UNIT_GRAMS[unitMatch[1].toLowerCase()] != null) {

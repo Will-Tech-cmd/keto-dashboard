@@ -1,11 +1,17 @@
-// lists.js — Rendering & Interaktion für den "Listen"-Tab (Favoriten / No-Go / Einkaufsliste).
-import { Store } from "./store.js";
+// lists.js — Rendering & Interaktion für den "Listen"-Tab (Favoriten / No-Go / Einkauf /
+// Verlauf / Auswertung).
+import { Store, dateKeyOf } from "./store.js";
+import { calcTargets } from "./profiles.js";
+import { lookupProduct } from "./off.js";
+import {
+  openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
+} from "./consumption.js";
 import { showToast } from "./ui.js";
 
-let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history"
+let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
 
-export function renderLists(container) {
+export function renderLists(container, goToTab) {
   container.innerHTML = `
     <h1 class="section-title">Listen</h1>
     <div class="subtabs">
@@ -13,6 +19,7 @@ export function renderLists(container) {
       <button class="subtab-btn" data-sub="noGo" type="button">🚫 No-Go</button>
       <button class="subtab-btn" data-sub="shopping" type="button">🛒 Einkauf</button>
       <button class="subtab-btn" data-sub="history" type="button">🕘 Verlauf</button>
+      <button class="subtab-btn" data-sub="evaluation" type="button">📊 Auswertung</button>
     </div>
     <div id="listBody"></div>
   `;
@@ -21,12 +28,12 @@ export function renderLists(container) {
     btn.addEventListener("click", () => {
       activeSubtab = btn.dataset.sub;
       renderSubtabs(container);
-      renderBody(container);
+      renderBody(container, goToTab);
     });
   });
 
   renderSubtabs(container);
-  renderBody(container);
+  renderBody(container, goToTab);
 }
 
 function renderSubtabs(container) {
@@ -35,12 +42,14 @@ function renderSubtabs(container) {
   });
 }
 
-function renderBody(container) {
+function renderBody(container, goToTab) {
   const body = container.querySelector("#listBody");
   if (activeSubtab === "shopping") {
     renderShopping(body);
   } else if (activeSubtab === "history") {
     renderHistory(body);
+  } else if (activeSubtab === "evaluation") {
+    renderEvaluation(body, goToTab);
   } else {
     renderProductList(body, activeSubtab);
   }
@@ -60,7 +69,7 @@ function renderProductList(body, listName) {
   }
 
   body.innerHTML = items.map(item => `
-    <div class="list-item" data-barcode="${esc(item.barcode)}">
+    <div class="list-item" data-barcode="${esc(item.barcode)}" style="cursor:pointer">
       <span class="badge ${item.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(item.grade)}</span>
       <div class="info">
         <div class="name">${esc(item.name)}</div>
@@ -73,15 +82,25 @@ function renderProductList(body, listName) {
 
   body.querySelectorAll(".list-item").forEach(row => {
     const barcode = row.dataset.barcode;
-    row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+    row.querySelector('[data-action="remove"]').addEventListener("click", (e) => {
+      e.stopPropagation();
       Store.removeFromList(listName, barcode);
       renderProductList(body, listName);
       showToast("Entfernt");
     });
-    row.querySelector('[data-action="cart"]').addEventListener("click", () => {
-      const item = Store.get()[listName].find(e => e.barcode === barcode);
+    row.querySelector('[data-action="cart"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      const item = Store.get()[listName].find(e2 => e2.barcode === barcode);
       Store.addShoppingItem(item.name, barcode);
       showToast("Auf Einkaufsliste gesetzt");
+    });
+    row.addEventListener("click", async () => {
+      try {
+        const product = await lookupProduct(barcode);
+        openQuantityModal(product);
+      } catch {
+        showToast("Produkt nicht verfügbar (offline?)");
+      }
     });
   });
 }
@@ -202,7 +221,7 @@ function renderHistoryList(el, items) {
     }
     const time = new Date(entry.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     rows.push(`
-      <div class="list-item">
+      <div class="list-item" data-barcode="${esc(entry.barcode)}" style="cursor:pointer">
         <span class="badge ${entry.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(entry.grade)}</span>
         <div class="info">
           <div class="name">${esc(entry.name)}</div>
@@ -212,6 +231,97 @@ function renderHistoryList(el, items) {
     `);
   }
   el.innerHTML = rows.join("");
+
+  el.querySelectorAll(".list-item[data-barcode]").forEach(row => {
+    row.addEventListener("click", async () => {
+      try {
+        const product = await lookupProduct(row.dataset.barcode);
+        openQuantityModal(product);
+      } catch {
+        showToast("Produkt nicht verfügbar (offline?)");
+      }
+    });
+  });
+}
+
+/** 30-Tage-Auswertung: Tag-für-Tag-Verlauf, Durchschnitte, Zielquote, längste Serie. */
+function renderEvaluation(body, goToTab) {
+  const profile = Store.getActiveProfile();
+  const targets = calcTargets(profile);
+
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const key = dateKeyOf(Date.now() - i * 86400000);
+    const entries = getConsumptionForDate(profile.id, key);
+    days.push({ key, hasEntries: entries.length > 0, totals: sumConsumption(entries) });
+  }
+
+  const withData = days.filter(d => d.hasEntries);
+  const avgKcal = withData.length ? Math.round(withData.reduce((s, d) => s + d.totals.kcal, 0) / withData.length) : null;
+  const avgCarbs = withData.length ? round1(withData.reduce((s, d) => s + d.totals.netCarbs, 0) / withData.length) : null;
+  const daysInTarget = withData.filter(d => d.totals.netCarbs <= targets.netCarbG).length;
+
+  let streak = 0, maxStreak = 0;
+  for (const d of days) {
+    if (d.hasEntries && d.totals.netCarbs <= targets.netCarbG) { streak++; maxStreak = Math.max(maxStreak, streak); }
+    else streak = 0;
+  }
+
+  body.innerHTML = `
+    <div class="grid-2" style="margin-bottom:14px">
+      <div class="stat"><div class="val">${avgKcal ?? "–"}</div><div class="lbl">Ø kcal/Tag</div></div>
+      <div class="stat"><div class="val">${avgCarbs ?? "–"} g</div><div class="lbl">Ø Netto-KH/Tag</div></div>
+      <div class="stat"><div class="val">${daysInTarget}/${withData.length}</div><div class="lbl">Tage im Netto-KH-Ziel</div></div>
+      <div class="stat"><div class="val">${maxStreak}</div><div class="lbl">Längste Serie im Ziel</div></div>
+    </div>
+    ${withData.length === 0 ? `<p class="hint" style="text-align:center;margin-bottom:10px">Noch keine Einträge in den letzten 30 Tagen.</p>` : ""}
+    <div id="evalDays"></div>
+  `;
+
+  const daysEl = body.querySelector("#evalDays");
+  daysEl.innerHTML = [...days].reverse().map(d => evalDayRowHtml(d, targets)).join("");
+
+  daysEl.querySelectorAll(".list-item[data-daykey]").forEach(row => {
+    row.addEventListener("click", () => {
+      setActiveDateKey(row.dataset.daykey);
+      goToTab?.("start");
+    });
+  });
+}
+
+function evalDayRowHtml(d, targets) {
+  const [y, m, dd] = d.key.split("-").map(Number);
+  const ts = new Date(y, m - 1, dd).getTime();
+  const label = dayLabel(ts);
+
+  if (!d.hasEntries) {
+    return `
+      <div class="list-item" data-daykey="${d.key}" style="cursor:pointer;opacity:.55">
+        <div class="info">
+          <div class="name">${esc(label)}</div>
+          <div class="meta">Keine Einträge</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const over = d.totals.netCarbs > targets.netCarbG;
+  const pct = targets.netCarbG > 0 ? Math.min((d.totals.netCarbs / targets.netCarbG) * 100, 100) : 0;
+  return `
+    <div class="list-item" data-daykey="${d.key}" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:6px">
+      <div class="btn-row" style="justify-content:space-between;align-items:center">
+        <span class="name">${esc(label)}</span>
+        <span class="meta">${round1(d.totals.kcal)} kcal · ${round1(d.totals.netCarbs)} g Netto-KH</span>
+      </div>
+      <div class="progress-track" style="height:6px">
+        <div class="progress-fill ${over ? "over" : ""}" style="width:${pct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function round1(v) {
+  return Math.round(v * 10) / 10;
 }
 
 function dayLabel(ts) {

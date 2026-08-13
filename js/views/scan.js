@@ -229,8 +229,11 @@ async function handleBarcode(container, barcode) {
 function renderResult(container, product) {
   const profile = Store.getActiveProfile();
   const targets = calcTargets(profile);
-  const evalResult = evaluateProduct(product, targets);
+  const fiberOverride = Store.getFiberOverride(product.barcode);
+  const subtractFiber = fiberOverride !== undefined ? fiberOverride : product.likelyUsLabel;
+  const evalResult = evaluateProduct(product, targets, { subtractFiber });
   const resultWrap = container.querySelector("#resultWrap");
+  const hasFiber = product.per100.fiber != null && product.per100.fiber > 0;
 
   const isFav = Store.isInList("favorites", product.barcode);
   const isNoGo = Store.isInList("noGo", product.barcode);
@@ -256,8 +259,20 @@ function renderResult(container, product) {
           ${evalResult.pctOfDailyLimit != null ? ` — das sind ${evalResult.pctOfDailyLimit}% deines Tageslimits (${targets.netCarbG} g).` : ""}
         </p>` : ""}
 
+      ${hasFiber ? `
+        <label class="btn-row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+          <input type="checkbox" id="fiberToggle" ${subtractFiber ? "checked" : ""} style="width:auto;min-height:auto;flex:none">
+          <span class="hint" style="margin:0">Ballaststoffe abziehen (${fmt(product.per100.fiber)} g)</span>
+        </label>
+      ` : ""}
       ${!evalResult.fiberAvailable ? `<p class="hint">ℹ️ Keine Ballaststoff-Angabe verfügbar.</p>` : ""}
       ${evalResult.sugarAlcohols ? `<p class="hint">ℹ️ Enthält Zuckeralkohole (z.B. Erythrit/Xylit) — wirken sich meist kaum auf den Blutzucker aus.</p>` : ""}
+
+      ${evalResult.plausibility ? `
+        <p class="hint" style="margin-top:8px;color:var(--red-fg)">
+          ⚠️ Die kcal-Angabe (${fmt(product.per100.kcal)}) passt nicht zu den übrigen Werten — aus Kohlenhydraten/Fett/Eiweiß errechnen sich ca. <strong>${evalResult.plausibility.calculatedKcal} kcal</strong> (${evalResult.plausibility.deviationPct}% Abweichung). Vermutlich ein Fehler in der Datenbank — unten mit „Werte korrigieren" anpassen.
+        </p>
+      ` : ""}
 
       ${evalResult.warnings.length ? `
         <ul class="warn-list">${evalResult.warnings.map(w => `<li>⚠️ ${esc(w)}</li>`).join("")}</ul>
@@ -269,8 +284,18 @@ function renderResult(container, product) {
         <button class="btn ${isNoGo ? "danger" : "secondary"}" id="noGoBtn">🚫 ${isNoGo ? "No-Go" : "No-Go"}</button>
       </div>
       <button class="btn ghost" id="cartBtn" style="margin-top:8px">🛒 Auf Einkaufsliste</button>
+      <button class="btn ghost" id="correctBtn" style="margin-top:8px">✏️ Werte korrigieren</button>
     </div>
   `;
+
+  resultWrap.querySelector("#fiberToggle")?.addEventListener("change", (e) => {
+    Store.setFiberOverride(product.barcode, e.target.checked);
+    renderResult(container, product);
+  });
+  resultWrap.querySelector("#correctBtn").addEventListener("click", () => {
+    resultWrap.innerHTML = ownProductFormHtml(product.barcode, product);
+    wireOwnProductForm(container, resultWrap, product.barcode, () => renderResult(container, product));
+  });
 
   const entry = () => ({
     barcode: product.barcode,
@@ -314,36 +339,41 @@ function renderNotFound(container, barcode) {
   });
 }
 
-function ownProductFormHtml(barcode) {
+/** existing: Produkt mit aktuellen Werten (aus Scan/OFF), wenn als Korrektur geöffnet. */
+function ownProductFormHtml(barcode, existing = null) {
+  const p = existing?.per100 || {};
   return `
     <div class="card">
-      <h2>Neues Produkt · ${esc(barcode)}</h2>
-      <label>Name</label><input type="text" id="opName" required>
-      <label>Marke</label><input type="text" id="opBrand">
+      <h2>${existing ? "Werte korrigieren" : "Neues Produkt"} · ${esc(barcode)}</h2>
+      ${existing ? `<p class="hint" style="margin-top:0">Deine Angaben haben ab jetzt immer Vorrang vor Open Food Facts für dieses Produkt.</p>` : ""}
+      <label>Name</label><input type="text" id="opName" required value="${esc(existing?.name || "")}">
+      <label>Marke</label><input type="text" id="opBrand" value="${esc(existing?.brand || "")}">
       <div class="field-row">
-        <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing"></div>
+        <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
       </div>
       <p class="hint" style="margin-top:12px">Nährwerte pro 100 g:</p>
       <div class="field-row">
-        <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="opCarbs"></div>
-        <div><label>davon Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber"></div>
+        <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="opCarbs" value="${p.carbs ?? ""}"></div>
+        <div><label>davon Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber" value="${p.fiber ?? ""}"></div>
       </div>
       <div class="field-row">
-        <div><label>Zucker (g)</label><input type="number" step="0.1" id="opSugars"></div>
-        <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat"></div>
+        <div><label>Zucker (g)</label><input type="number" step="0.1" id="opSugars" value="${p.sugars ?? ""}"></div>
+        <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat" value="${p.fat ?? ""}"></div>
       </div>
       <div class="field-row">
-        <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="opProtein"></div>
-        <div><label>kcal</label><input type="number" step="1" id="opKcal"></div>
+        <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="opProtein" value="${p.protein ?? ""}"></div>
+        <div><label>kcal</label><input type="number" step="1" id="opKcal" value="${p.kcal ?? ""}"></div>
       </div>
       <label>Zutaten (optional, für Warnhinweise)</label>
-      <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …">
+      <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">
       <button class="btn" id="opSave" style="margin-top:14px">Speichern</button>
+      ${existing ? `<button class="btn ghost" id="opCancel" style="margin-top:8px">Abbrechen</button>` : ""}
     </div>
   `;
 }
 
-function wireOwnProductForm(container, resultWrap, barcode) {
+function wireOwnProductForm(container, resultWrap, barcode, onCancel) {
+  resultWrap.querySelector("#opCancel")?.addEventListener("click", () => onCancel?.());
   resultWrap.querySelector("#opSave").addEventListener("click", () => {
     const val = (id) => resultWrap.querySelector(id).value;
     const name = val("#opName").trim();
@@ -364,6 +394,7 @@ function wireOwnProductForm(container, resultWrap, barcode) {
       kcal: numOrNull(val("#opKcal")),
       ingredientsText: val("#opIngredients").trim(),
     });
+    Store.clearFiberOverride(barcode); // eigene Werte sind jetzt maßgeblich, kein doppeltes Abziehen mehr
     showToast("Produkt gespeichert");
     logHistory(product);
     renderResult(container, product);
@@ -371,5 +402,5 @@ function wireOwnProductForm(container, resultWrap, barcode) {
 }
 
 function fmt(v) {
-  return v == null ? "–" : v;
+  return v == null ? "–" : Math.round(v * 10) / 10;
 }

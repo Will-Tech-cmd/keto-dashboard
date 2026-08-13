@@ -105,6 +105,17 @@ export const FOODS = [
   food("Oliven (grün)", { kcal: 145, carbs: 3.8, fiber: 3.3, sugars: 0.5, fat: 15, saturatedFat: 2, protein: 1, salt: 3.5 }, 30, ["Oliven"]),
   food("Tofu", { kcal: 76, carbs: 0.7, fiber: 0.3, sugars: 0.5, fat: 4.8, saturatedFat: 0.7, protein: 8, salt: 0.01 }, 100),
   food("Knoblauch", { kcal: 149, carbs: 28, fiber: 2.1, sugars: 1, fat: 0.5, saturatedFat: 0.1, protein: 6.4, salt: 0.02 }, 5, ["Knoblauchzehe", "Knoblauchzehen"]),
+
+  // Keto-Backen (für Rezept-Import)
+  food("Kakaopulver", { kcal: 228, carbs: 25, fiber: 33, sugars: 1.8, fat: 14, saturatedFat: 8.5, protein: 20, salt: 0.02 }, 5, ["Kakao"]),
+  food("Erythrit", { kcal: 0, carbs: 0, fiber: 0, sugars: 0, fat: 0, saturatedFat: 0, protein: 0, salt: 0 }, 10, ["Puder-Erythrit", "Erythritol"]),
+  food("Zuckerfreie Schokolade", { kcal: 550, carbs: 10, fiber: 10, sugars: 1, fat: 45, saturatedFat: 27, protein: 8, salt: 0.02 }, 20),
+  food("Vanilleextrakt", { kcal: 12, carbs: 0.1, fiber: 0, sugars: 0.1, fat: 0, saturatedFat: 0, protein: 0, salt: 0 }, 5, ["Vanillearoma", "Vanilleessenz"]),
+  food("Mandelmehl", { kcal: 610, carbs: 8, fiber: 11, sugars: 3, fat: 52, saturatedFat: 4.5, protein: 24, salt: 0.01 }, 30),
+  food("Kokosmehl", { kcal: 400, carbs: 21, fiber: 39, sugars: 7, fat: 13, saturatedFat: 11, protein: 19, salt: 0.4 }, 20),
+  food("Flohsamenschalen", { kcal: 220, carbs: 3, fiber: 85, sugars: 0, fat: 1, saturatedFat: 0, protein: 3, salt: 0.02 }, 10),
+  food("Mascarpone", { kcal: 429, carbs: 4, fiber: 0, sugars: 4, fat: 44, saturatedFat: 29, protein: 5, salt: 0.1 }, 30),
+  food("Skyr", { kcal: 63, carbs: 4, fiber: 0, sugars: 4, fat: 0.2, saturatedFat: 0.1, protein: 11, salt: 0.1 }, 150),
 ];
 
 /** Sucht in der lokalen Tabelle nach Namen/Aliassen, beste Treffer (startsWith) zuerst. */

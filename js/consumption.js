@@ -1,19 +1,70 @@
 // consumption.js — Menge "gegessen" eintragen und mit dem Tagesziel verrechnen.
-import { Store } from "./store.js";
+// Trägt außerdem die aktuell auf der Startseite angezeigte Datumsnavigation (für die
+// Essensplanung), damit Einträge aus Scan/Listen/Rezepten immer auf dem gewählten Tag landen.
+import { Store, dateKeyOf } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
-import { esc, showToast } from "./ui.js";
+import { esc, showToast, bindBackClose } from "./ui.js";
+
+export const MEAL_LABELS = {
+  breakfast: "🌅 Frühstück",
+  lunch: "☀️ Mittag",
+  dinner: "🌙 Abend",
+  snack: "🍎 Snack",
+};
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
 }
 
-function startOfToday() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+/** Zeitgerechter Mahlzeiten-Vorschlag, nur als Startwert — jederzeit umstellbar. */
+export function suggestMeal() {
+  const h = new Date().getHours();
+  if (h < 10) return "breakfast";
+  if (h < 14) return "lunch";
+  if (h < 18) return "snack";
+  return "dinner";
 }
 
-/** Trägt eine gegessene Menge (in Gramm) für das aktive Profil ein. */
-export function logConsumption(product, grams) {
+// ---------------------------------------------------------------------------
+// Aktiver Planungstag (Startseite: "◀ Heute ▶"). Bewusst nicht persistiert — beim
+// nächsten App-Start steht die Navigation wieder auf "heute".
+// ---------------------------------------------------------------------------
+
+let activeDateKey = null;
+
+export function getActiveDateKey() {
+  return activeDateKey || dateKeyOf(Date.now());
+}
+export function isViewingToday() {
+  return getActiveDateKey() === dateKeyOf(Date.now());
+}
+export function setActiveDateKey(key) {
+  activeDateKey = key;
+}
+export function resetActiveDateToToday() {
+  activeDateKey = null;
+}
+/** Verschiebt den aktiven Tag um `deltaDays` (negativ = zurück) und liefert den neuen Schlüssel. */
+export function shiftActiveDate(deltaDays) {
+  const [y, m, d] = getActiveDateKey().split("-").map(Number);
+  activeDateKey = dateKeyOf(new Date(y, m - 1, d + deltaDays).getTime());
+  return activeDateKey;
+}
+
+/** Menschenlesbares Label für einen dateKey: "Heute" / "Morgen" / "Gestern" / Datum. */
+export function dateLabel(dateKey) {
+  const today = dateKeyOf(Date.now());
+  if (dateKey === today) return "Heute";
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const [ty, tm, td] = today.split("-").map(Number);
+  const diffDays = Math.round((new Date(y, m - 1, d) - new Date(ty, tm - 1, td)) / 86400000);
+  if (diffDays === 1) return "Morgen";
+  if (diffDays === -1) return "Gestern";
+  return new Date(y, m - 1, d).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+
+/** Trägt eine gegessene Menge (in Gramm) für das aktive Profil am aktiven Planungstag ein. */
+export function logConsumption(product, grams, meal = null) {
   const g = Number(grams);
   if (!g || g <= 0) return null;
   const scale = g / 100;
@@ -27,6 +78,9 @@ export function logConsumption(product, grams) {
     barcode: product.barcode,
     name: product.name,
     grams: g,
+    servingG: parseServingGrams(product.servingSize), // für spätere Portionen⇄Gramm-Umrechnung
+    meal,
+    dateKey: getActiveDateKey(),
     kcal: round1(per100.kcal != null ? per100.kcal * scale : null),
     netCarbs: round1(netCarbs100 != null ? netCarbs100 * scale : null),
     fat: round1(per100.fat != null ? per100.fat * scale : null),
@@ -37,10 +91,9 @@ export function logConsumption(product, grams) {
   return entry;
 }
 
-/** Alle heutigen Verbrauchs-Einträge eines Profils, neueste zuerst. */
-export function getTodayConsumption(profileId) {
-  const start = startOfToday();
-  return Store.getConsumption().filter(e => e.profileId === profileId && e.at >= start);
+/** Alle Verbrauchs-Einträge eines Profils an einem bestimmten Tag (dateKey "YYYY-MM-DD"). */
+export function getConsumptionForDate(profileId, dateKey) {
+  return Store.getConsumption().filter(e => e.profileId === profileId && e.dateKey === dateKey);
 }
 
 /** Summiert eine Liste von Verbrauchs-Einträgen zu Gesamtwerten. */
@@ -78,11 +131,127 @@ export function rescaleConsumption(id, newAmount) {
   return updated;
 }
 
-/** Öffnet einen Dialog zum Bearbeiten (Menge anpassen, live Vorschau) oder Löschen eines Eintrags. */
+export function setConsumptionMeal(id, meal) {
+  const entry = Store.getConsumption().find(e => e.id === id);
+  if (!entry) return null;
+  const updated = { ...entry, meal };
+  Store.updateConsumption(updated);
+  return updated;
+}
+
+/** Verknüpft ein Portionen- und ein Gramm-Feld: Eingabe in einem rechnet das andere live um. */
+function wireCoupledAmountFields(portionsInput, gramsInput, servingG) {
+  if (!portionsInput || !servingG) return;
+  let syncing = false;
+  portionsInput.addEventListener("input", () => {
+    if (syncing) return;
+    const p = parseFloat(portionsInput.value);
+    if (!p || p <= 0) return;
+    syncing = true;
+    gramsInput.value = round1(p * servingG);
+    gramsInput.dispatchEvent(new Event("input", { bubbles: true }));
+    syncing = false;
+  });
+  gramsInput.addEventListener("input", () => {
+    if (syncing) return;
+    const g = parseFloat(gramsInput.value);
+    if (!g || g <= 0) return;
+    syncing = true;
+    portionsInput.value = round1(g / servingG);
+    syncing = false;
+  });
+}
+
+export function mealChipsHtml(selected) {
+  return `
+    <label>Mahlzeit</label>
+    <div class="btn-row" style="flex-wrap:wrap;gap:6px" id="mealChips">
+      ${Object.entries(MEAL_LABELS).map(([key, label]) => `
+        <button type="button" class="btn ${key === selected ? "" : "secondary"} meal-chip" data-meal="${key}" style="width:auto;flex:none;padding:0 12px">${label}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+export function wireMealChips(overlay, onSelect) {
+  overlay.querySelectorAll(".meal-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      overlay.querySelectorAll(".meal-chip").forEach(c => c.classList.add("secondary"));
+      chip.classList.remove("secondary");
+      onSelect(chip.dataset.meal);
+    });
+  });
+}
+
+/**
+ * Öffnet einen Dialog zur Mengeneingabe für ein Produkt und trägt die gewählte Menge
+ * als "gegessen" ein. `onLogged` wird nach erfolgreichem Eintrag aufgerufen (z.B. für Refresh).
+ */
+export function openQuantityModal(product, onLogged) {
+  const servingG = parseServingGrams(product.servingSize);
+  let selectedMeal = suggestMeal();
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(product.name)}</h2>
+      <p class="hint">Gegessene Menge eintragen — wird von eurem Tagesziel abgezogen.</p>
+      ${servingG ? `
+        <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
+          ${[1, 2, 3, 4].map(n => `<button type="button" class="btn secondary qty-chip" data-portions="${n}" style="width:auto;flex:none;padding:0 14px">${n}× (${round1(servingG * n)} g)</button>`).join("")}
+        </div>
+        <label for="qtyPortionsInput">Portionen</label>
+        <input type="number" id="qtyPortionsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
+      ` : ""}
+      <label for="qtyGramsInput">Menge in Gramm</label>
+      <input type="number" id="qtyGramsInput" value="${servingG || 100}" min="1" inputmode="numeric">
+      ${mealChipsHtml(selectedMeal)}
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn secondary" id="qtyCancel">Abbrechen</button>
+        <button type="button" class="btn" id="qtyConfirm">Eintragen</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const portionsInput = overlay.querySelector("#qtyPortionsInput");
+  const gramsInput = overlay.querySelector("#qtyGramsInput");
+  if (servingG) wireCoupledAmountFields(portionsInput, gramsInput, servingG);
+  wireMealChips(overlay, (meal) => { selectedMeal = meal; });
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#qtyCancel").addEventListener("click", close);
+  overlay.querySelectorAll(".qty-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      if (portionsInput) {
+        portionsInput.value = chip.dataset.portions;
+        portionsInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+  });
+  overlay.querySelector("#qtyConfirm").addEventListener("click", () => {
+    const grams = parseFloat(gramsInput.value);
+    if (!grams || grams <= 0) {
+      showToast("Bitte eine gültige Menge angeben");
+      return;
+    }
+    logConsumption(product, grams, selectedMeal);
+    showToast(`${grams} g eingetragen`);
+    close();
+    onLogged?.();
+  });
+
+  (portionsInput || gramsInput).focus();
+}
+
+/** Öffnet einen Dialog zum Bearbeiten (Menge/Mahlzeit anpassen, live Vorschau) oder Löschen. */
 export function openEditConsumptionModal(entry, onDone) {
   const isRecipe = entry.servings != null;
   const currentAmount = isRecipe ? entry.servings : entry.grams;
-  const unitLabel = isRecipe ? "Portionen" : "Gramm";
+  const servingG = !isRecipe ? entry.servingG : null;
+  let selectedMeal = entry.meal;
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -90,9 +259,20 @@ export function openEditConsumptionModal(entry, onDone) {
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(entry.name)}</h2>
       <p class="hint">Menge anpassen — Nährwerte werden automatisch neu berechnet.</p>
-      <label for="editAmountInput">Menge in ${unitLabel}</label>
-      <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="${isRecipe ? 0.25 : 1}" inputmode="decimal">
+      ${isRecipe ? `
+        <label for="editAmountInput">Menge in Portionen</label>
+        <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
+      ` : servingG ? `
+        <label for="editPortionsInput">Portionen</label>
+        <input type="number" id="editPortionsInput" value="${round1(currentAmount / servingG)}" min="0.1" step="0.25" inputmode="decimal">
+        <label for="editAmountInput">Menge in Gramm</label>
+        <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="1" inputmode="decimal">
+      ` : `
+        <label for="editAmountInput">Menge in Gramm</label>
+        <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="1" inputmode="decimal">
+      `}
       <p class="hint" id="editPreview" style="margin-top:8px"></p>
+      ${mealChipsHtml(selectedMeal)}
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="editDelete">🗑️ Löschen</button>
         <button type="button" class="btn" id="editSave">Speichern</button>
@@ -102,6 +282,10 @@ export function openEditConsumptionModal(entry, onDone) {
   document.body.appendChild(overlay);
 
   const input = overlay.querySelector("#editAmountInput");
+  const portionsInput = overlay.querySelector("#editPortionsInput");
+  if (!isRecipe && servingG) wireCoupledAmountFields(portionsInput, input, servingG);
+  wireMealChips(overlay, (meal) => { selectedMeal = meal; });
+
   const preview = overlay.querySelector("#editPreview");
   const updatePreview = () => {
     const val = parseFloat(input.value);
@@ -114,7 +298,7 @@ export function openEditConsumptionModal(entry, onDone) {
   input.addEventListener("input", updatePreview);
   updatePreview();
 
-  const close = () => overlay.remove();
+  const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#editDelete").addEventListener("click", () => {
     Store.removeConsumption(entry.id);
@@ -129,60 +313,11 @@ export function openEditConsumptionModal(entry, onDone) {
       return;
     }
     rescaleConsumption(entry.id, val);
+    setConsumptionMeal(entry.id, selectedMeal);
     showToast("Aktualisiert");
     close();
     onDone?.();
   });
 
   input.focus();
-}
-
-/**
- * Öffnet einen Dialog zur Mengeneingabe für ein Produkt und trägt die gewählte Menge
- * als "gegessen" ein. `onLogged` wird nach erfolgreichem Eintrag aufgerufen (z.B. für Refresh).
- */
-export function openQuantityModal(product, onLogged) {
-  const servingG = parseServingGrams(product.servingSize);
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(product.name)}</h2>
-      <p class="hint">Gegessene Menge eintragen — wird von eurem Tagesziel abgezogen.</p>
-      ${servingG ? `
-        <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
-          ${[1, 2, 3, 4].map(n => `<button type="button" class="btn secondary qty-chip" data-grams="${servingG * n}" style="width:auto;flex:none;padding:0 14px">${n}× (${servingG * n} g)</button>`).join("")}
-        </div>
-      ` : ""}
-      <label for="qtyGramsInput">Menge in Gramm</label>
-      <input type="number" id="qtyGramsInput" value="${servingG || 100}" min="1" inputmode="numeric">
-      <div class="btn-row" style="margin-top:16px">
-        <button type="button" class="btn secondary" id="qtyCancel">Abbrechen</button>
-        <button type="button" class="btn" id="qtyConfirm">Eintragen</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector("#qtyCancel").addEventListener("click", close);
-  overlay.querySelectorAll(".qty-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      overlay.querySelector("#qtyGramsInput").value = chip.dataset.grams;
-    });
-  });
-  overlay.querySelector("#qtyConfirm").addEventListener("click", () => {
-    const grams = parseFloat(overlay.querySelector("#qtyGramsInput").value);
-    if (!grams || grams <= 0) {
-      showToast("Bitte eine gültige Menge angeben");
-      return;
-    }
-    logConsumption(product, grams);
-    showToast(`${grams} g eingetragen`);
-    close();
-    onLogged?.();
-  });
-
-  overlay.querySelector("#qtyGramsInput").focus();
 }

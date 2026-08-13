@@ -39,15 +39,48 @@ function defaultState() {
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
     history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
-    consumption: [],    // { id, profileId, barcode, name, grams|servings, kcal, netCarbs, fat, protein, at }
+    consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
+    fiberOverrides: {},  // barcode -> true|false, überschreibt die automatische EU/US-Erkennung (Ballaststoff-Schalter)
   };
+}
+
+/** Lokales Datum (nicht UTC) als "YYYY-MM-DD" — Schlüssel für Tagesplanung/Auswertung. */
+export function dateKeyOf(timestamp) {
+  const d = new Date(timestamp);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 const HISTORY_LIMIT = 500;
 const CONSUMPTION_LIMIT = 1000;
 
 let state = load();
+
+/** Ergänzt Bestandsdaten (egal ob aus localStorage geladen oder importiert) um Felder, die
+ * es zum Speicherzeitpunkt noch nicht gab — ohne vorhandene Werte anzutasten. */
+function migrate(parsed) {
+  const merged = { ...defaultState(), ...parsed };
+  // Bestandsdaten von vor Einführung des Onboardings: nicht nachträglich zur
+  // Ersteinrichtung zwingen, nur wirklich neue Geräte sollen den Dialog sehen.
+  if (parsed.onboarded === undefined) merged.onboarded = true;
+  // Bestehende Profile (vor Einführung der Ernährungsform) um die neuen Felder ergänzen,
+  // ohne ihre sonstigen Werte anzutasten.
+  merged.profiles = merged.profiles.map(p => ({
+    dietType: "keto",
+    gradeThresholds: { green: 5, yellow: 10 },
+    ...p,
+  }));
+  // Verbrauchs-Einträge von vor Tagesplanung/Mahlzeiten: dateKey aus dem Zeitstempel
+  // ableiten, damit sie weiterhin ihrem ursprünglichen Tag zugeordnet bleiben.
+  merged.consumption = merged.consumption.map(e => ({
+    meal: null,
+    servingG: null,
+    ...e,
+    dateKey: e.dateKey || dateKeyOf(e.at),
+  }));
+  return merged;
+}
 
 function load() {
   try {
@@ -56,18 +89,7 @@ function load() {
     const parsed = JSON.parse(raw);
     if (!parsed.schemaVersion) return defaultState();
     // Platz für künftige Migrationen anhand schemaVersion
-    const merged = { ...defaultState(), ...parsed };
-    // Bestandsdaten von vor Einführung des Onboardings: nicht nachträglich zur
-    // Ersteinrichtung zwingen, nur wirklich neue Geräte sollen den Dialog sehen.
-    if (parsed.onboarded === undefined) merged.onboarded = true;
-    // Bestehende Profile (vor Einführung der Ernährungsform) um die neuen Felder ergänzen,
-    // ohne ihre sonstigen Werte anzutasten.
-    merged.profiles = merged.profiles.map(p => ({
-      dietType: "keto",
-      gradeThresholds: { green: 5, yellow: 10 },
-      ...p,
-    }));
-    return merged;
+    return migrate(parsed);
   } catch (e) {
     console.warn("Store: konnte gespeicherte Daten nicht lesen, starte neu.", e);
     return defaultState();
@@ -114,6 +136,21 @@ export const Store = {
   },
   getCachedProduct(barcode) {
     return state.cache[barcode]?.product || null;
+  },
+
+  // --- Ballaststoff-Schalter (pro Barcode, überschreibt EU/US-Standarderkennung) ---
+  setFiberOverride(barcode, subtractFiber) {
+    state.fiberOverrides[barcode] = subtractFiber;
+    persist();
+  },
+  getFiberOverride(barcode) {
+    return Object.prototype.hasOwnProperty.call(state.fiberOverrides, barcode)
+      ? state.fiberOverrides[barcode]
+      : undefined;
+  },
+  clearFiberOverride(barcode) {
+    delete state.fiberOverrides[barcode];
+    persist();
   },
 
   // --- eigene, manuell angelegte Produkte ---
@@ -227,7 +264,7 @@ export const Store = {
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.profiles)) {
       throw new Error("Ungültige Datei: kein gültiges Keto-Dashboard-Backup.");
     }
-    state = { ...defaultState(), ...parsed };
+    state = migrate(parsed);
     persist();
   },
 

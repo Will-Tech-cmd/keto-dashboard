@@ -20,9 +20,10 @@ export function renderProfile(container, onProfileChanged) {
     <div class="card">
       <h2>Daten sichern</h2>
       <p class="hint">Exportiere eure Daten (Profile, Favoriten, Listen) als Datei, oder importiere sie auf dem anderen Handy.</p>
-      <div class="btn-row" style="margin-top:10px">
+      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
         <button class="btn secondary" id="exportBtn">⬇️ Exportieren</button>
         <button class="btn secondary" id="importBtn">⬆️ Importieren</button>
+        <button class="btn ghost" id="shareBtn" style="display:none">📤 Backup teilen</button>
       </div>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
@@ -182,17 +183,36 @@ function renderProfileForm(container, onProfileChanged) {
   });
 }
 
+function backupFilename() {
+  return `keto-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+}
+
 function wireExportImport(container) {
   container.querySelector("#exportBtn").addEventListener("click", () => {
     const blob = new Blob([Store.exportJSON()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `keto-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = backupFilename();
     a.click();
     URL.revokeObjectURL(url);
     showToast("Export gestartet");
   });
+
+  // "Teilen" nur anzeigen, wenn die Plattform Dateien wirklich teilen kann (Android/iOS-
+  // Browser meist ja, Desktop meist nein) — sonst lieber gar nicht erst anbieten.
+  const shareBtn = container.querySelector("#shareBtn");
+  const shareFile = () => new File([Store.exportJSON()], backupFilename(), { type: "application/json" });
+  if (navigator.canShare?.({ files: [shareFile()] })) {
+    shareBtn.style.display = "";
+    shareBtn.addEventListener("click", async () => {
+      try {
+        await navigator.share({ files: [shareFile()], title: "Keto-Dashboard Backup" });
+      } catch (e) {
+        if (e.name !== "AbortError") showToast("Teilen fehlgeschlagen: " + e.message);
+      }
+    });
+  }
 
   const fileInput = container.querySelector("#importFile");
   container.querySelector("#importBtn").addEventListener("click", () => fileInput.click());

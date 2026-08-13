@@ -96,6 +96,7 @@ export function evaluateProduct(product, profileTargets, opts = {}) {
 
   const warnings = findIngredientWarnings(product.ingredientsText);
   const sugarAlcohols = hasSugarAlcohols(product.ingredientsText);
+  const plausibility = checkKcalPlausibility(product.per100);
 
   return {
     netCarbs100,
@@ -108,7 +109,27 @@ export function evaluateProduct(product, profileTargets, opts = {}) {
     sugarAlcohols,
     subtractFiber,
     fiberAvailable: product.per100.fiber != null,
+    plausibility,
   };
+}
+
+/**
+ * Grobe Plausibilitätsprüfung: passen die angegebenen kcal zu den Makros?
+ * Nutzt die einfachen Atwater-Faktoren (Kohlenhydrate 4, Fett 9, Eiweiß 4 kcal/g) auf die
+ * deklarierten Werte, ohne Annahmen über EU/US-Ballaststoff-Konvention zu treffen — damit
+ * funktioniert der Check unabhängig davon, ob Ballaststoffe in "carbs" enthalten sind oder
+ * nicht. Bei mehr als 20% Abweichung ist ein Erfassungsfehler in den Rohdaten wahrscheinlich
+ * (z.B. Kommafehler oder vertauschte/doppelt gezählte Werte).
+ * Liefert null, wenn plausibel oder Daten fehlen.
+ */
+export function checkKcalPlausibility(per100) {
+  const { kcal, carbs, fat, protein } = per100;
+  if (kcal == null || carbs == null || fat == null || protein == null) return null;
+  const calculated = carbs * 4 + fat * 9 + protein * 4;
+  if (calculated <= 0) return null;
+  const deviationPct = Math.round((Math.abs(kcal - calculated) / calculated) * 100);
+  if (deviationPct <= 20) return null;
+  return { calculatedKcal: Math.round(calculated), deviationPct };
 }
 
 /** Versucht aus "30 g", "1 Riegel (45g)" etc. eine Grammzahl zu extrahieren. */

@@ -1,31 +1,38 @@
-// views/start.js — Startseite: Zielwerte, Tagesverbrauch, zuletzt gescannte Produkte.
+// views/start.js — Startseite: Datumsnavigation, Ziel-/Verbrauchsringe, Mahlzeiten,
+// zuletzt gescannte Produkte.
 import { Store } from "../store.js";
 import { calcTargets } from "../profiles.js";
 import { lookupProduct } from "../off.js";
 import { evaluateProduct } from "../keto.js";
-import { getTodayConsumption, sumConsumption, openQuantityModal, openEditConsumptionModal } from "../consumption.js";
+import {
+  getConsumptionForDate, sumConsumption, openQuantityModal, openEditConsumptionModal,
+  getActiveDateKey, resetActiveDateToToday, shiftActiveDate,
+  isViewingToday, dateLabel, MEAL_LABELS,
+} from "../consumption.js";
 import { esc, showToast } from "../ui.js";
+
+const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
 export async function renderStart(container, goToTab) {
   const profile = Store.getActiveProfile();
   const targets = calcTargets(profile);
+  const dateKey = getActiveDateKey();
+  const refresh = () => renderStart(container, goToTab);
 
   container.innerHTML = `
     <h1 class="section-title">Hallo, ${esc(profile.name)} 👋</h1>
-    <div class="card">
-      <h2>Deine Tagesziele</h2>
-      <div class="grid-2">
-        <div class="stat"><div class="val">${targets.kcal}</div><div class="lbl">kcal</div></div>
-        <div class="stat"><div class="val">${targets.netCarbG} g</div><div class="lbl">Netto-Kohlenhydrate</div></div>
-        <div class="stat"><div class="val">${targets.fatG} g</div><div class="lbl">Fett</div></div>
-        <div class="stat"><div class="val">${targets.proteinG} g</div><div class="lbl">Eiweiß</div></div>
-      </div>
-      <p class="hint">Verteilung ca. ${targets.percent.fat}% Fett · ${targets.percent.protein}% Eiweiß · ${targets.percent.carbs}% Kohlenhydrate — diese Prozentwerte kannst du 1:1 in Yazio eintragen.</p>
+
+    <div class="date-nav">
+      <button type="button" id="datePrev" aria-label="Vorheriger Tag">◀</button>
+      <span class="date-label ${isViewingToday() ? "" : "today-link"}" id="dateLabelBtn">${esc(dateLabel(dateKey))}</span>
+      <button type="button" id="dateNext" aria-label="Nächster Tag">▶</button>
     </div>
 
-    <h2 class="section-title" style="margin-top:24px">Heute verbraucht</h2>
-    <div id="consumptionCard" class="card"></div>
-    <div id="consumptionList"></div>
+    <div class="card">
+      <div class="ring-grid" id="ringGrid"></div>
+    </div>
+
+    <div id="consumptionList" style="margin-top:14px"></div>
 
     <button class="btn" id="startScanBtn" style="margin-top:20px">📷 Produkt scannen</button>
 
@@ -35,54 +42,85 @@ export async function renderStart(container, goToTab) {
   `;
 
   container.querySelector("#startScanBtn").addEventListener("click", () => goToTab("scan"));
+  container.querySelector("#datePrev").addEventListener("click", () => { shiftActiveDate(-1); refresh(); });
+  container.querySelector("#dateNext").addEventListener("click", () => { shiftActiveDate(1); refresh(); });
+  container.querySelector("#dateLabelBtn").addEventListener("click", () => {
+    if (!isViewingToday()) { resetActiveDateToToday(); refresh(); }
+  });
 
-  renderConsumption(container, profile, targets);
-  renderRecent(container, profile, targets);
+  const entries = renderRings(container, profile, targets, dateKey);
+  renderConsumptionList(container, entries, refresh);
+  renderRecent(container, targets, refresh);
 }
 
-function renderConsumption(container, profile, targets) {
-  const entries = getTodayConsumption(profile.id);
+function renderRings(container, profile, targets, dateKey) {
+  const entries = getConsumptionForDate(profile.id, dateKey);
   const totals = sumConsumption(entries);
-
   const rows = [
-    { key: "kcal", label: "Kalorien", unit: "kcal", target: targets.kcal, consumed: totals.kcal },
-    { key: "netCarbs", label: "Netto-Kohlenhydrate", unit: "g", target: targets.netCarbG, consumed: totals.netCarbs },
-    { key: "fat", label: "Fett", unit: "g", target: targets.fatG, consumed: totals.fat },
-    { key: "protein", label: "Eiweiß", unit: "g", target: targets.proteinG, consumed: totals.protein },
+    { label: "Kalorien", unit: "kcal", target: targets.kcal, consumed: totals.kcal },
+    { label: "Netto-KH", unit: "g", target: targets.netCarbG, consumed: totals.netCarbs },
+    { label: "Fett", unit: "g", target: targets.fatG, consumed: totals.fat },
+    { label: "Eiweiß", unit: "g", target: targets.proteinG, consumed: totals.protein },
   ];
+  container.querySelector("#ringGrid").innerHTML = rows.map(ringTile).join("");
+  return entries;
+}
 
-  container.querySelector("#consumptionCard").innerHTML = rows.map(r => {
-    const pct = r.target > 0 ? Math.min((r.consumed / r.target) * 100, 100) : 0;
-    const over = r.consumed > r.target;
-    const remaining = Math.round((r.target - r.consumed) * 10) / 10;
-    return `
-      <div class="progress-row">
-        <div class="progress-labels">
-          <span class="name">${r.label}</span>
-          <span class="nums">${round1(r.consumed)} / ${r.target} ${r.unit}</span>
+function ringSvg(pct, over) {
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(pct, 1));
+  const offset = c * (1 - clamped);
+  return `
+    <svg viewBox="0 0 100 100" class="ring-svg">
+      <circle class="ring-track" cx="50" cy="50" r="${r}"></circle>
+      <circle class="ring-progress ${over ? "over" : ""}" cx="50" cy="50" r="${r}"
+        stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"
+        transform="rotate(-90 50 50)"></circle>
+    </svg>
+  `;
+}
+
+function ringTile(r) {
+  const over = r.consumed > r.target;
+  const remaining = round1(Math.abs(r.target - r.consumed));
+  const pct = r.target > 0 ? r.consumed / r.target : 0;
+  return `
+    <div class="ring-tile">
+      <div class="ring-wrap">
+        ${ringSvg(pct, over)}
+        <div class="ring-center">
+          <div class="ring-value ${over ? "over" : ""}">${over ? "+" : ""}${remaining}</div>
+          <div class="ring-unit">${esc(r.unit)} ${over ? "über" : "übrig"}</div>
         </div>
-        <div class="progress-track"><div class="progress-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-        ${over
-          ? `<div class="progress-over-label">${Math.abs(remaining)} ${r.unit} über Ziel</div>`
-          : `<div class="hint" style="margin-top:3px">${remaining} ${r.unit} übrig</div>`}
       </div>
-    `;
-  }).join("");
+      <div class="ring-label">${esc(r.label)}</div>
+      <div class="ring-sub">${round1(r.consumed)} / ${r.target} ${esc(r.unit)}</div>
+    </div>
+  `;
+}
 
+function renderConsumptionList(container, entries, refresh) {
   const listEl = container.querySelector("#consumptionList");
   if (entries.length === 0) {
-    listEl.innerHTML = `<div class="empty-state"><span class="emoji">🍽️</span>Heute noch nichts eingetragen.</div>`;
+    listEl.innerHTML = `<div class="empty-state"><span class="emoji">🍽️</span>${isViewingToday() ? "Heute noch nichts eingetragen." : "Für diesen Tag noch nichts eingetragen."}</div>`;
     return;
   }
-  listEl.innerHTML = entries.map(e => `
-    <div class="list-item" data-id="${e.id}" style="cursor:pointer">
-      <div class="info">
-        <div class="name">${esc(e.name)} · ${e.servings != null ? `${e.servings} Portion(en)` : `${e.grams} g`}</div>
-        <div class="meta">${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g Netto-KH · ${new Date(e.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
-      </div>
-      <button class="icon-btn" data-action="undo" title="Entfernen">↩️</button>
-    </div>
-  `).join("");
+
+  const groups = new Map([...MEAL_ORDER, "none"].map(k => [k, []]));
+  for (const e of entries) {
+    const key = MEAL_LABELS[e.meal] ? e.meal : "none";
+    groups.get(key).push(e);
+  }
+
+  let html = "";
+  for (const key of [...MEAL_ORDER, "none"]) {
+    const items = groups.get(key);
+    if (items.length === 0) continue;
+    html += `<div class="meal-group-title">${key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key]}</div>`;
+    html += items.map(entryRowHtml).join("");
+  }
+  listEl.innerHTML = html;
 
   listEl.querySelectorAll(".list-item").forEach(row => {
     const id = row.dataset.id;
@@ -90,16 +128,28 @@ function renderConsumption(container, profile, targets) {
       e.stopPropagation();
       Store.removeConsumption(id);
       showToast("Eintrag entfernt");
-      renderConsumption(container, profile, targets);
+      refresh();
     });
     row.addEventListener("click", () => {
       const entry = Store.getConsumption().find(c => c.id === id);
-      if (entry) openEditConsumptionModal(entry, () => renderConsumption(container, profile, targets));
+      if (entry) openEditConsumptionModal(entry, refresh);
     });
   });
 }
 
-async function renderRecent(container, profile, targets) {
+function entryRowHtml(e) {
+  return `
+    <div class="list-item" data-id="${e.id}" style="cursor:pointer">
+      <div class="info">
+        <div class="name">${esc(e.name)} · ${e.servings != null ? `${e.servings} Portion(en)` : `${e.grams} g`}</div>
+        <div class="meta">${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g Netto-KH · ${new Date(e.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
+      </div>
+      <button class="icon-btn" data-action="undo" title="Entfernen">↩️</button>
+    </div>
+  `;
+}
+
+async function renderRecent(container, targets, refresh) {
   const el = container.querySelector("#recentList");
   const recent = Store.getRecent();
   if (recent.length === 0) {
@@ -137,7 +187,7 @@ async function renderRecent(container, profile, targets) {
   el.querySelectorAll(".list-item").forEach(row => {
     row.addEventListener("click", () => {
       const { product } = rows[Number(row.dataset.idx)];
-      openQuantityModal(product, () => renderConsumption(container, profile, targets));
+      openQuantityModal(product, refresh);
     });
   });
 }

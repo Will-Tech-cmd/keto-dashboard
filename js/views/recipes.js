@@ -9,7 +9,8 @@ import {
   updateIngredient, calcRecipeTotals, calcPerServing, logRecipeConsumption,
   parseIngredientText, recognizeImageText,
 } from "../recipes.js";
-import { showToast, esc } from "../ui.js";
+import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel } from "../consumption.js";
+import { showToast, esc, bindBackClose } from "../ui.js";
 
 let openRecipeId = null;
 let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-Phase
@@ -90,15 +91,18 @@ function renderList(container) {
 
 function openServingsModal(recipe) {
   const perServing = calcPerServing(recipe);
+  let selectedMeal = suggestMeal();
+  const dayLabel = dateLabel(getActiveDateKey());
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(recipe.name)}</h2>
-      <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${perServing.kcal ?? "–"} kcal. Wie viele davon hinzufügen?</p>
+      <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${perServing.kcal ?? "–"} kcal. Wie viele davon zu „${esc(dayLabel)}" hinzufügen?</p>
       <label for="servingsInput">Portionen</label>
       <input type="number" id="servingsInput" value="1" min="0.25" step="0.25">
       <p class="hint" id="servingsPreview" style="margin-top:8px"></p>
+      ${mealChipsHtml(selectedMeal)}
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="servingsCancel">Abbrechen</button>
         <button type="button" class="btn" id="servingsConfirm">Eintragen</button>
@@ -106,6 +110,7 @@ function openServingsModal(recipe) {
     </div>
   `;
   document.body.appendChild(overlay);
+  wireMealChips(overlay, (meal) => { selectedMeal = meal; });
 
   const input = overlay.querySelector("#servingsInput");
   const preview = overlay.querySelector("#servingsPreview");
@@ -117,13 +122,13 @@ function openServingsModal(recipe) {
   input.addEventListener("input", updatePreview);
   updatePreview();
 
-  const close = () => overlay.remove();
+  const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#servingsCancel").addEventListener("click", close);
   overlay.querySelector("#servingsConfirm").addEventListener("click", () => {
     const servings = parseFloat(input.value);
     if (!servings || servings <= 0) { showToast("Bitte eine gültige Anzahl angeben"); return; }
-    logRecipeConsumption(recipe, servings);
+    logRecipeConsumption(recipe, servings, selectedMeal);
     showToast(`${servings} Portion(en) „${recipe.name}" eingetragen`);
     close();
   });
@@ -186,10 +191,11 @@ function renderEditor(container, recipeId) {
     <button class="btn ghost" id="deleteRecipeBtn" style="margin-top:20px">🗑️ Rezept löschen</button>
   `;
 
-  container.querySelector("#backBtn").addEventListener("click", () => {
+  const closeEditor = bindBackClose(() => {
     openRecipeId = null;
     renderList(container);
   });
+  container.querySelector("#backBtn").addEventListener("click", closeEditor);
 
   container.querySelector("#saveBtn").addEventListener("click", () => {
     const name = container.querySelector("#recName").value.trim() || "Rezept";
@@ -211,8 +217,7 @@ function renderEditor(container, recipeId) {
   container.querySelector("#deleteRecipeBtn").addEventListener("click", () => {
     if (confirm(`Rezept „${recipe.name}" wirklich löschen?`)) {
       deleteRecipe(recipeId);
-      openRecipeId = null;
-      renderList(container);
+      closeEditor();
       showToast("Rezept gelöscht");
     }
   });
