@@ -10,6 +10,7 @@
   --green-bg: #e4f6ec; --green-fg: #157347; --green-border: #a9e4c4;
   --yellow-bg: #fff6df; --yellow-fg: #916500; --yellow-border: #f2dd9c;
   --red-bg: #fdeaea;  --red-fg: #b3261e;  --red-border: #f3b8b4;
+  --water-fg: #1565c0;
   --shadow: 0 1px 2px rgba(16, 24, 20, .06), 0 4px 12px rgba(16, 24, 20, .06);
   --radius: 14px;
   --tabbar-h: 64px;
@@ -29,6 +30,7 @@
     --green-bg: #103322; --green-fg: #5fe0a4; --green-border: #1f5c3d;
     --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
     --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
+    --water-fg: #5b9bf5;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
     color-scheme: dark;
   }
@@ -244,7 +246,7 @@ input[type="text"], input[type="number"], input[type="search"], select {
   display: grid; grid-template-columns: 1fr 1fr; gap: 18px 10px;
 }
 .ring-tile { text-align: center; }
-.ring-wrap { position: relative; width: 108px; height: 108px; margin: 0 auto; }
+.ring-wrap { position: relative; width: 88px; height: 88px; margin: 0 auto; }
 .ring-svg { width: 100%; height: 100%; }
 .ring-track { fill: none; stroke: var(--border); stroke-width: 9; }
 .ring-progress {
@@ -254,13 +256,18 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .ring-progress.over { stroke: var(--red-fg); }
 .ring-center {
   position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; text-align: center; padding: 0 6px;
+  align-items: center; justify-content: center; text-align: center; padding: 0 4px;
 }
-.ring-value { font-size: 1.05rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+.ring-value { font-size: .92rem; font-weight: 800; color: var(--text); line-height: 1.1; }
 .ring-value.over { color: var(--red-fg); }
-.ring-unit { font-size: .68rem; color: var(--text-muted); line-height: 1.2; }
-.ring-label { font-weight: 700; font-size: .85rem; margin-top: 8px; }
-.ring-sub { font-size: .76rem; color: var(--text-muted); }
+.ring-unit { font-size: .6rem; color: var(--text-muted); line-height: 1.2; }
+.ring-label { font-weight: 700; font-size: .8rem; margin-top: 6px; }
+.ring-sub { font-size: .72rem; color: var(--text-muted); }
+
+/* ---------- Wasser (in dieselbe Karte wie die Nährwertringe integriert) ---------- */
+.water-section { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+.card h2.water-label { color: var(--water-fg); }
+.progress-fill.water { background: var(--water-fg); }
 
 /* ---------- Trend-Diagramm (Auswertung: Netto-KH-Verlauf) ---------- */
 .trend-svg { display: block; overflow: visible; }
