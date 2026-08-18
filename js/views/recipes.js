@@ -1,6 +1,6 @@
 // views/recipes.js — Rezepte: Liste, Editor, Zutatensuche, Bild-/Text-Import mit Review.
 import { Store } from "../store.js";
-import { lookupProduct, searchProductsByName } from "../off.js";
+import { lookupProduct, searchProductsByName, searchOwnProducts } from "../off.js";
 import { searchLocalFoods, bestLocalFoodMatch } from "../foods-db.js";
 import { calcNetCarbs, ketoGrade, GRADE_LABEL } from "../keto.js";
 import { calcTargets } from "../profiles.js";
@@ -197,6 +197,7 @@ function renderEditor(container, recipeId) {
 
     <h2 class="section-title">Zutaten</h2>
     <div id="ingredientList"></div>
+    <button class="btn ghost" id="ingToShoppingBtn" style="margin-bottom:14px">🛒 Zutaten auf Einkaufsliste</button>
 
     <div class="card">
       <label for="ingSearchInput">Zutat suchen und hinzufügen</label>
@@ -254,11 +255,31 @@ function renderEditor(container, recipeId) {
     }
   });
 
+  container.querySelector("#ingToShoppingBtn").addEventListener("click", () => {
+    const current = Store.getRecipe(recipeId);
+    if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
+    const added = addIngredientsToShoppingList(current.ingredients);
+    showToast(added > 0 ? `${added} Zutat(en) auf die Einkaufsliste gesetzt` : "Bereits alle auf der Einkaufsliste");
+  });
+
   renderTotals(container, recipeId);
   renderIngredientList(container, recipeId);
   wireIngredientSearch(container, recipeId);
   wireManualIngredient(container, recipeId);
   wireImport(container, recipeId);
+}
+
+/** Fügt Zutatennamen zur Einkaufsliste hinzu, ohne bereits vorhandene Einträge zu duplizieren. */
+function addIngredientsToShoppingList(ingredients) {
+  const existingNames = new Set(Store.get().shoppingList.map(i => i.text.toLowerCase()));
+  let added = 0;
+  for (const ing of ingredients) {
+    if (existingNames.has(ing.name.toLowerCase())) continue;
+    Store.addShoppingItem(ing.name);
+    existingNames.add(ing.name.toLowerCase());
+    added++;
+  }
+  return added;
 }
 
 function renderTotals(container, recipeId) {
@@ -329,15 +350,20 @@ function wireIngredientSearch(container, recipeId) {
     const seq = ++requestSeq;
     if (term.length < 2) { resultsEl.innerHTML = ""; return; }
 
-    const local = searchLocalFoods(term);
-    renderIngSearchResults(local, false);
+    const own = searchOwnProducts(term);
+    const local = searchLocalFoods(term).filter(p => !own.some(o => o.name.toLowerCase() === p.name.toLowerCase()));
+    const offline = [...own, ...local];
+    renderIngSearchResults(offline, false);
 
     const online = await searchProductsByName(term);
     if (seq !== requestSeq) return;
-    const localNames = new Set(local.map(p => p.name.toLowerCase()));
-    const combined = [...local, ...online.filter(p => !localNames.has(p.name.toLowerCase()))];
+    const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
+    const combined = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
     renderIngSearchResults(combined, true);
   };
+
+  const SOURCE_ICON = { local: "🥑", own: "📝" };
+  const SOURCE_LABEL = { local: "Grundnahrungsmittel", own: "Eigenes Produkt" };
 
   function renderIngSearchResults(items, isFinal) {
     if (items.length === 0) {
@@ -346,10 +372,10 @@ function wireIngredientSearch(container, recipeId) {
     }
     resultsEl.innerHTML = items.map((p, i) => `
       <div class="list-item" data-idx="${i}" style="cursor:pointer">
-        <span style="flex-shrink:0">${p.source === "local" ? "🥑" : "🏷️"}</span>
+        <span style="flex-shrink:0">${SOURCE_ICON[p.source] || "🏷️"}</span>
         <div class="info">
           <div class="name">${esc(p.name)}</div>
-          <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${p.source === "local" ? "Grundnahrungsmittel" : "Open Food Facts"}</div>
+          <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
         </div>
       </div>
     `).join("") + (!isFinal ? `<p class="hint">Suche weitere Online-Treffer …</p>` : "");
@@ -634,10 +660,12 @@ function renderReview(container, recipeId) {
         t = setTimeout(async () => {
           const term = rInput.value.trim();
           if (term.length < 2) { rResults.innerHTML = ""; return; }
-          const local = searchLocalFoods(term);
+          const own = searchOwnProducts(term);
+          const local = searchLocalFoods(term).filter(p => !own.some(o => o.name.toLowerCase() === p.name.toLowerCase()));
+          const offline = [...own, ...local];
           const online = await searchProductsByName(term);
-          const localNames = new Set(local.map(p => p.name.toLowerCase()));
-          const items = [...local, ...online.filter(p => !localNames.has(p.name.toLowerCase()))];
+          const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
+          const items = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
           rResults.innerHTML = items.map((p, i) => `
             <div class="list-item" data-idx="${i}" style="cursor:pointer">
               <div class="info"><div class="name">${esc(p.name)}</div></div>

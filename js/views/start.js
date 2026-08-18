@@ -8,6 +8,7 @@ import {
   getConsumptionForDate, sumConsumption, openQuantityModal, openEditConsumptionModal,
   getActiveDateKey, resetActiveDateToToday, shiftActiveDate,
   isViewingToday, dateLabel, MEAL_LABELS,
+  logWater, getWaterForDate, sumWater, undoLastWater,
 } from "../consumption.js";
 import { esc, showToast, shareOrDownloadFile } from "../ui.js";
 
@@ -80,6 +81,8 @@ export async function renderStart(container, goToTab) {
       <div class="ring-grid" id="ringGrid"></div>
     </div>
 
+    <div class="card" id="waterCard" style="margin-top:14px"></div>
+
     <div id="consumptionList" style="margin-top:14px"></div>
 
     <button class="btn" id="startScanBtn" style="margin-top:20px">📷 Produkt scannen</button>
@@ -100,8 +103,43 @@ export async function renderStart(container, goToTab) {
   });
 
   const entries = renderRings(container, profile, targets, dateKey);
+  renderWaterCard(container, profile, dateKey, refresh);
   renderConsumptionList(container, entries, refresh);
   renderRecent(container, targets, refresh);
+}
+
+const WATER_STEPS = [200, 330, 500];
+
+function renderWaterCard(container, profile, dateKey, refresh) {
+  const el = container.querySelector("#waterCard");
+  const consumedMl = sumWater(getWaterForDate(profile.id, dateKey));
+  const target = profile.waterTargetMl || 2500;
+  const pct = target > 0 ? Math.min((consumedMl / target) * 100, 100) : 0;
+
+  el.innerHTML = `
+    <div class="btn-row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h2 style="margin:0">💧 Wasser</h2>
+      <span class="hint" style="margin:0">${consumedMl} / ${target} ml</span>
+    </div>
+    <div class="progress-track" style="height:10px">
+      <div class="progress-fill" style="width:${pct}%"></div>
+    </div>
+    <div class="btn-row" style="margin-top:12px;flex-wrap:wrap;gap:8px">
+      ${WATER_STEPS.map(ml => `<button type="button" class="btn secondary water-add" data-ml="${ml}" style="width:auto;flex:none;padding:0 14px">+${ml} ml</button>`).join("")}
+      ${consumedMl > 0 ? `<button type="button" class="btn ghost water-undo" style="width:auto;flex:none;padding:0 14px">↩️ Rückgängig</button>` : ""}
+    </div>
+  `;
+
+  el.querySelectorAll(".water-add").forEach(btn => {
+    btn.addEventListener("click", () => {
+      logWater(Number(btn.dataset.ml));
+      refresh();
+    });
+  });
+  el.querySelector(".water-undo")?.addEventListener("click", () => {
+    undoLastWater(profile.id, dateKey);
+    refresh();
+  });
 }
 
 function renderRings(container, profile, targets, dateKey) {

@@ -262,6 +262,13 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .ring-label { font-weight: 700; font-size: .85rem; margin-top: 8px; }
 .ring-sub { font-size: .76rem; color: var(--text-muted); }
 
+/* ---------- Trend-Diagramm (Auswertung: Netto-KH-Verlauf) ---------- */
+.trend-svg { display: block; overflow: visible; }
+.trend-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.trend-target-line { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.trend-dot { fill: var(--accent); }
+.trend-dot.over { fill: var(--red-fg); }
+
 /* ---------- Datumsnavigation (Startseite: Essensplanung) ---------- */
 .date-nav {
   display: flex; align-items: center; justify-content: space-between;

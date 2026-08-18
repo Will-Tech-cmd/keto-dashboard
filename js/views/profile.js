@@ -30,6 +30,17 @@ export function renderProfile(container, onProfileChanged) {
     </div>
 
     <div class="card">
+      <h2>Nur Rezepte teilen</h2>
+      <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
+      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
+        <button class="btn secondary" id="exportRecipesBtn">⬇️ Exportieren</button>
+        <button class="btn secondary" id="importRecipesBtn">⬆️ Importieren</button>
+        <button class="btn ghost" id="shareRecipesBtn" style="display:none">📤 Teilen</button>
+      </div>
+      <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+    </div>
+
+    <div class="card">
       <h2>KI-Erkennung (optional)</h2>
       <p class="hint" style="margin-top:0">Mit einem eigenen, kostenlosen Gemini-API-Schlüssel kann der Rezept-Import schwierige Fälle (unbekannte Zutaten, schlecht lesbare Fotos) zusätzlich an eine KI schicken. Ohne Schlüssel funktioniert alles wie bisher — die KI-Knöpfe erscheinen dann einfach nicht.</p>
       <p class="hint">Schlüssel erstellen (kostenlos, keine Kreditkarte nötig): <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/app/apikey</a></p>
@@ -158,6 +169,9 @@ function renderProfileForm(container, onProfileChanged) {
         </div>
       </div>
 
+      <label>Trinkziel /Tag (ml)</label>
+      <input type="number" step="100" min="0" id="fWaterTarget" value="${profile.waterTargetMl ?? 2500}">
+
       <div class="divider"></div>
 
       <label>Ernährungsform</label>
@@ -221,6 +235,7 @@ function renderProfileForm(container, onProfileChanged) {
       deficitPct: parseInt(val("#fDeficit"), 10) || profile.deficitPct,
       netCarbLimitG: parseInt(val("#fCarbLimit"), 10),
       proteinFactor: parseFloat(val("#fProteinFactor")) || profile.proteinFactor,
+      waterTargetMl: parseInt(val("#fWaterTarget"), 10) || profile.waterTargetMl,
       dietType: val("#fDietType"),
       gradeThresholds: {
         green: parseFloat(val("#fGradeGreen")) || profile.gradeThresholds.green,
@@ -241,15 +256,22 @@ const BACKUP_MIME = "text/plain";
 function backupFilename(ext = "txt") {
   return `keto-dashboard-backup-${new Date().toISOString().slice(0, 10)}.${ext}`;
 }
+function recipesFilename(ext = "txt") {
+  return `keto-dashboard-rezepte-${new Date().toISOString().slice(0, 10)}.${ext}`;
+}
 
-function downloadBackup() {
-  const blob = new Blob([Store.exportJSON()], { type: BACKUP_MIME });
+function downloadBlob(text, filename) {
+  const blob = new Blob([text], { type: BACKUP_MIME });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = backupFilename();
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadBackup() {
+  downloadBlob(Store.exportJSON(), backupFilename());
 }
 
 function wireExportImport(container) {
@@ -292,5 +314,43 @@ function wireExportImport(container) {
       showToast("Import fehlgeschlagen: " + e.message);
     }
     fileInput.value = "";
+  });
+
+  container.querySelector("#exportRecipesBtn").addEventListener("click", () => {
+    downloadBlob(Store.exportRecipesJSON(), recipesFilename());
+    showToast("Export gestartet");
+  });
+
+  const shareRecipesBtn = container.querySelector("#shareRecipesBtn");
+  shareRecipesBtn.style.display = "";
+  shareRecipesBtn.addEventListener("click", async () => {
+    const file = new File([Store.exportRecipesJSON()], recipesFilename(), { type: BACKUP_MIME });
+    if (!navigator.canShare?.({ files: [file] })) {
+      downloadBlob(Store.exportRecipesJSON(), recipesFilename());
+      showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
+      return;
+    }
+    try {
+      await navigator.share({ files: [file], title: "Keto-Dashboard Rezepte" });
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      downloadBlob(Store.exportRecipesJSON(), recipesFilename());
+      showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
+    }
+  });
+
+  const recipesFileInput = container.querySelector("#importRecipesFile");
+  container.querySelector("#importRecipesBtn").addEventListener("click", () => recipesFileInput.click());
+  recipesFileInput.addEventListener("change", async () => {
+    const file = recipesFileInput.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const { added, updated } = Store.importRecipesJSON(text);
+      showToast(`${added} neu, ${updated} aktualisiert`);
+    } catch (e) {
+      showToast("Import fehlgeschlagen: " + e.message);
+    }
+    recipesFileInput.value = "";
   });
 }

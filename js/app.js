@@ -2,7 +2,7 @@
 import { Store } from "./store.js";
 import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan } from "./views/scan.js";
-import { renderLists } from "./lists.js";
+import { renderLists, openListsSubtab } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
@@ -91,10 +91,21 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+/** Liest ?tab=/&sub= aus der URL (Homescreen-Shortcuts, siehe manifest.webmanifest) und säubert
+ * die Adressleiste danach, damit ein Neuladen nicht wieder auf denselben Reiter springt. */
+function initialTabFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const tab = params.get("tab");
+  const sub = params.get("sub");
+  if (tab === "lists" && sub) openListsSubtab(sub);
+  if (location.search) history.replaceState(null, "", location.pathname);
+  return tab && RENDERERS[tab] ? tab : "start";
+}
+
 // Init
 if (Store.isOnboarded()) {
   updateProfileSwitchLabel();
-  goToTab("start");
+  goToTab(initialTabFromUrl());
 } else {
   tabbar.style.display = "none";
   profileSwitchBtn.style.display = "none";

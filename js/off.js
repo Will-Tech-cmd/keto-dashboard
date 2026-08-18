@@ -157,6 +157,24 @@ export async function searchProductsByName(term) {
     });
 }
 
+/**
+ * Durchsucht bereits selbst angelegte Produkte nach Name/Marke — damit ein einmal erfasstes
+ * eigenes Produkt (z.B. "Bulletproof Coffee") beim nächsten Mal über die Namenssuche wieder
+ * auftaucht, statt dass man sich den frei erfundenen Barcode merken müsste.
+ */
+export function searchOwnProducts(term) {
+  const q = term.trim().toLowerCase();
+  if (!q) return [];
+  return Object.values(Store.get().ownProducts)
+    .filter(p => p.name.toLowerCase().includes(q) || (p.brand || "").toLowerCase().includes(q))
+    .map(normalizeOwn);
+}
+
+/** Erzeugt einen internen Platzhalter-Barcode für ein eigenes Produkt ohne echten EAN. */
+export function newOwnBarcode() {
+  return `eigen-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 /** Speichert ein von Hand erfasstes Produkt und macht es sofort auffindbar. */
 export function saveOwnProduct(barcode, data) {
   const product = {

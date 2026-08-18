@@ -91,6 +91,43 @@ export function logConsumption(product, grams, meal = null) {
   return entry;
 }
 
+// ---------------------------------------------------------------------------
+// Wasser — bewusst getrennt vom Makro-Verbrauch: kein historisches Einfrieren
+// (das Trinkziel ändert sich kaum und ist keine strenge Nährwert-Buchhaltung).
+// ---------------------------------------------------------------------------
+
+/** Trägt eine getrunkene Menge (ml) fürs aktive Profil am aktiven Planungstag ein. */
+export function logWater(ml) {
+  const amount = Number(ml);
+  if (!amount || amount <= 0) return null;
+  const profile = Store.getActiveProfile();
+  const entry = {
+    id: crypto.randomUUID(),
+    profileId: profile.id,
+    dateKey: getActiveDateKey(),
+    ml: amount,
+    at: Date.now(),
+  };
+  Store.addWater(entry);
+  return entry;
+}
+
+export function getWaterForDate(profileId, dateKey) {
+  return Store.getWater().filter(e => e.profileId === profileId && e.dateKey === dateKey);
+}
+
+export function sumWater(entries) {
+  return entries.reduce((sum, e) => sum + (e.ml || 0), 0);
+}
+
+/** Entfernt den zuletzt eingetragenen Wasser-Eintrag des Tages (einfaches Undo statt eigener Liste). */
+export function undoLastWater(profileId, dateKey) {
+  const entries = getWaterForDate(profileId, dateKey);
+  if (entries.length === 0) return false;
+  Store.removeWater(entries[0].id); // neueste zuerst (Store.addWater fügt vorne ein)
+  return true;
+}
+
 /** Alle Verbrauchs-Einträge eines Profils an einem bestimmten Tag (dateKey "YYYY-MM-DD"). */
 export function getConsumptionForDate(profileId, dateKey) {
   return Store.getConsumption().filter(e => e.profileId === profileId && e.dateKey === dateKey);

@@ -13,8 +13,16 @@ let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
 let listFilter = "";       // Suchbegriff für Favoriten/No-Go
 let historyFilter = "";    // Suchbegriff für den Verlauf
+let pendingSubtab = null;  // von App-Shortcuts gesetzter Ziel-Reiter, einmalig beim nächsten Aufruf
+
+/** Legt den Reiter fest, der beim nächsten renderLists() zuerst gezeigt wird (z.B. aus einem
+ * Homescreen-Shortcut). Wird nach Gebrauch zurückgesetzt, spätere normale Aufrufe sind unberührt. */
+export function openListsSubtab(sub) {
+  pendingSubtab = sub;
+}
 
 export function renderLists(container, goToTab) {
+  if (pendingSubtab) { activeSubtab = pendingSubtab; pendingSubtab = null; }
   container.innerHTML = `
     <h1 class="section-title">Listen</h1>
     <div class="subtabs">
@@ -327,7 +335,9 @@ function renderEvaluation(body, goToTab) {
       <div class="stat"><div class="val">${daysInTarget}/${withData.length}</div><div class="lbl">Tage im Netto-KH-Ziel</div></div>
       <div class="stat"><div class="val">${maxStreak}</div><div class="lbl">Längste Serie im Ziel</div></div>
     </div>
-    ${withData.length === 0 ? `<p class="hint" style="text-align:center;margin-bottom:10px">Noch keine Einträge in den letzten 30 Tagen.</p>` : ""}
+    ${withData.length === 0
+      ? `<p class="hint" style="text-align:center;margin-bottom:10px">Noch keine Einträge in den letzten 30 Tagen.</p>`
+      : trendChartHtml(days)}
     <button class="btn secondary" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
     <div id="evalDays"></div>
   `;
@@ -343,6 +353,56 @@ function renderEvaluation(body, goToTab) {
       goToTab?.("start");
     });
   });
+}
+
+/**
+ * Kleines SVG-Liniendiagramm des täglichen Netto-KH-Verbrauchs über den 30-Tage-Zeitraum.
+ * Tage ohne Eintrag reißen die Linie ab statt sie auf 0 zu ziehen (sonst sähe "nichts
+ * gegessen" wie "perfekt eingehalten" aus). Referenzlinie zeigt das HEUTIGE Ziel — frühere
+ * Tage können (durch die Zielwert-Einfrierung) ein anderes gehabt haben, siehe Punktfarbe.
+ */
+function trendChartHtml(days) {
+  const withData = days.filter(d => d.hasEntries);
+  if (withData.length < 2) return "";
+
+  const W = 640, H = 140, PAD = 10;
+  const todayTarget = days[days.length - 1].targets.netCarbG;
+  const maxVal = Math.max(todayTarget, ...withData.map(d => d.totals.netCarbs)) * 1.15 || 1;
+  const n = days.length;
+  const x = (i) => PAD + (i / (n - 1)) * (W - PAD * 2);
+  const y = (v) => H - PAD - (Math.min(v, maxVal) / maxVal) * (H - PAD * 2);
+
+  const segments = [];
+  let current = [];
+  days.forEach((d, i) => {
+    if (d.hasEntries) {
+      current.push(`${x(i).toFixed(1)},${y(d.totals.netCarbs).toFixed(1)}`);
+    } else if (current.length) {
+      segments.push(current);
+      current = [];
+    }
+  });
+  if (current.length) segments.push(current);
+
+  const dots = days.map((d, i) => {
+    if (!d.hasEntries) return "";
+    const over = d.totals.netCarbs > d.targets.netCarbG;
+    return `<circle cx="${x(i).toFixed(1)}" cy="${y(d.totals.netCarbs).toFixed(1)}" r="3" class="trend-dot ${over ? "over" : ""}"></circle>`;
+  }).join("");
+
+  const targetY = y(todayTarget).toFixed(1);
+
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <h2 style="margin-bottom:2px">Netto-KH-Verlauf</h2>
+      <p class="hint" style="margin-top:0">Gestrichelt: heutiges Ziel (${todayTarget} g). Frühere Tage können ein anderes Ziel gehabt haben — rote Punkte lagen über ihrem jeweiligen Ziel.</p>
+      <svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="none" style="width:100%;height:120px">
+        <line x1="${PAD}" y1="${targetY}" x2="${W - PAD}" y2="${targetY}" class="trend-target-line"></line>
+        ${segments.map(seg => `<polyline points="${seg.join(" ")}" class="trend-line"></polyline>`).join("")}
+        ${dots}
+      </svg>
+    </div>
+  `;
 }
 
 function evalDayRowHtml(d) {

@@ -20,6 +20,7 @@ function defaultProfile(name) {
     netCarbLimitG: 20,      // Tagesbudget Netto-KH (frei editierbar)
     dietType: "keto",       // "keto" | "lowcarb" | "other" -> steuert Ampel-Standardwerte
     gradeThresholds: { green: 5, yellow: 10 }, // g Netto-KH je 100g, frei editierbar
+    waterTargetMl: 2500,    // Tagesziel Trinkmenge (frei editierbar), unabhängig von den Makro-Zielen
   };
 }
 
@@ -40,6 +41,7 @@ function defaultState() {
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
     history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
     consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at }
+    water: [],          // { id, profileId, dateKey, ml, at }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
     fiberOverrides: {},  // barcode -> true|false, überschreibt die automatische EU/US-Erkennung (Ballaststoff-Schalter)
     dayTargets: {},      // profileId -> { dateKey -> { kcal, netCarbG, fatG, proteinG } }, friert vergangene Tage ein
@@ -70,6 +72,7 @@ function migrate(parsed) {
   merged.profiles = merged.profiles.map(p => ({
     dietType: "keto",
     gradeThresholds: { green: 5, yellow: 10 },
+    waterTargetMl: 2500,
     ...p,
   }));
   // Verbrauchs-Einträge von vor Tagesplanung/Mahlzeiten: dateKey aus dem Zeitstempel
@@ -217,6 +220,19 @@ export const Store = {
     if (i >= 0) { state.consumption[i] = entry; persist(); }
   },
 
+  // --- Wasser (getrennt vom Makro-Verbrauch, kein historisches Einfrieren nötig) ---
+  addWater(entry) {
+    state.water = [entry, ...state.water].slice(0, 2000);
+    persist();
+  },
+  getWater() {
+    return state.water;
+  },
+  removeWater(id) {
+    state.water = state.water.filter(e => e.id !== id);
+    persist();
+  },
+
   // --- Rezepte ---
   saveRecipe(recipe) {
     const i = state.recipes.findIndex(r => r.id === recipe.id);
@@ -288,6 +304,34 @@ export const Store = {
     }
     state = migrate(parsed);
     persist();
+  },
+
+  /**
+   * Schlanker Export nur der Rezepte (ohne Profile, Verlauf, Listen) zum gezielten Teilen
+   * einzelner Rezepte, statt des kompletten Backups. Nährwerte stecken bereits in jeder
+   * Zutat (per100), die Datei ist also für sich allein importierbar.
+   */
+  exportRecipesJSON() {
+    return JSON.stringify({ schemaVersion: SCHEMA_VERSION, recipes: state.recipes }, null, 2);
+  },
+  /**
+   * Fügt Rezepte HINZU statt das ganze Backup zu ersetzen — anders als importJSON().
+   * Rezepte mit bereits vorhandener id werden aktualisiert (z.B. beim erneuten Teilen einer
+   * Änderung), alle anderen werden neu angelegt. Bestehende Rezepte bleiben unangetastet.
+   */
+  importRecipesJSON(json) {
+    const parsed = JSON.parse(json);
+    if (!parsed || !Array.isArray(parsed.recipes)) {
+      throw new Error("Ungültige Datei: keine Keto-Dashboard-Rezeptdatei.");
+    }
+    let added = 0, updated = 0;
+    for (const r of parsed.recipes) {
+      if (!r || !r.id || !r.name || !Array.isArray(r.ingredients)) continue;
+      const i = state.recipes.findIndex(x => x.id === r.id);
+      if (i >= 0) { state.recipes[i] = r; updated++; } else { state.recipes.unshift(r); added++; }
+    }
+    persist();
+    return { added, updated };
   },
 
   raw: () => state,

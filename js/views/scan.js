@@ -1,7 +1,7 @@
 // views/scan.js — Scan-Tab: Kamera, Ergebniskarte, manuelle Eingabe, "Produkt selbst anlegen".
 import { Store } from "../store.js";
 import { calcTargets } from "../profiles.js";
-import { lookupProduct, saveOwnProduct, searchProductsByName } from "../off.js";
+import { lookupProduct, saveOwnProduct, searchProductsByName, searchOwnProducts, newOwnBarcode } from "../off.js";
 import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
@@ -114,13 +114,16 @@ function wireSearchForm(container) {
       return;
     }
 
-    const local = searchLocalFoods(term);
-    renderSearchResults(container, resultsEl, local, false, term);
+    // Eigene Produkte zuerst (sofort verfügbar, kein Netz nötig), dann Grundnahrungsmittel.
+    const own = searchOwnProducts(term);
+    const local = searchLocalFoods(term).filter(p => !own.some(o => o.name.toLowerCase() === p.name.toLowerCase()));
+    const offline = [...own, ...local];
+    renderSearchResults(container, resultsEl, offline, false, term);
 
     const online = await searchProductsByName(term);
     if (seq !== requestSeq) return; // Nutzer hat weitergetippt, veraltete Antwort verwerfen
-    const localNames = new Set(local.map(p => p.name.toLowerCase()));
-    const combined = [...local, ...online.filter(p => !localNames.has(p.name.toLowerCase()))];
+    const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
+    const combined = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
     renderSearchResults(container, resultsEl, combined, true, term);
   };
 
@@ -130,19 +133,28 @@ function wireSearchForm(container) {
   });
 }
 
+const SOURCE_ICON = { local: "🥑", own: "📝" };
+const SOURCE_LABEL = { local: "Grundnahrungsmittel", own: "Eigenes Produkt" };
+
 function renderSearchResults(container, resultsEl, items, isFinal, term) {
   if (items.length === 0) {
     resultsEl.innerHTML = isFinal
-      ? `<p class="hint">Keine Treffer für „${esc(term)}". Du kannst es unten als eigenes Produkt anlegen (Barcode z.B. frei erfinden, etwa <code>eigen-${Date.now().toString().slice(-6)}</code>).</p>`
+      ? `
+        <p class="hint">Keine Treffer für „${esc(term)}".</p>
+        <button class="btn secondary" id="addOwnFromSearchBtn" style="margin-top:6px">➕ „${esc(term)}" als eigenes Produkt anlegen</button>
+      `
       : `<p class="hint">Suche …</p>`;
+    resultsEl.querySelector("#addOwnFromSearchBtn")?.addEventListener("click", () => {
+      startOwnProductFromSearch(container, term);
+    });
     return;
   }
   resultsEl.innerHTML = items.map((p, i) => `
     <div class="list-item" data-idx="${i}" style="cursor:pointer">
-      <span style="flex-shrink:0">${p.source === "local" ? "🥑" : "🏷️"}</span>
+      <span style="flex-shrink:0">${SOURCE_ICON[p.source] || "🏷️"}</span>
       <div class="info">
         <div class="name">${esc(p.name)}</div>
-        <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${p.source === "local" ? "Grundnahrungsmittel" : "Open Food Facts"}</div>
+        <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
       </div>
     </div>
   `).join("") + (!isFinal ? `<p class="hint">Suche weitere Online-Treffer …</p>` : "");
@@ -153,6 +165,18 @@ function renderSearchResults(container, resultsEl, items, isFinal, term) {
       handleSearchSelect(container, item);
     });
   });
+}
+
+/** Öffnet das "Neues Produkt"-Formular direkt aus einer erfolglosen Namenssuche heraus, mit
+ * dem Suchbegriff als Namensvorschlag — ohne den Umweg über einen frei erfundenen Barcode. */
+function startOwnProductFromSearch(container, term) {
+  const searchWrap = container.querySelector("#searchFormWrap");
+  if (searchWrap) searchWrap.style.display = "none";
+  const resultWrap = container.querySelector("#resultWrap");
+  const barcode = newOwnBarcode();
+  resultWrap.innerHTML = ownProductFormHtml(barcode, null, term);
+  wireOwnProductForm(container, resultWrap, barcode);
+  scrollToResult(container);
 }
 
 function handleSearchSelect(container, product) {
@@ -354,14 +378,15 @@ function renderNotFound(container, barcode) {
   });
 }
 
-/** existing: Produkt mit aktuellen Werten (aus Scan/OFF), wenn als Korrektur geöffnet. */
-function ownProductFormHtml(barcode, existing = null) {
+/** existing: Produkt mit aktuellen Werten (aus Scan/OFF), wenn als Korrektur geöffnet.
+ * prefillName: Namensvorschlag für ein wirklich neues Produkt (z.B. aus der Namenssuche). */
+function ownProductFormHtml(barcode, existing = null, prefillName = "") {
   const p = existing?.per100 || {};
   return `
     <div class="card">
       <h2>${existing ? "Werte korrigieren" : "Neues Produkt"} · ${esc(barcode)}</h2>
       ${existing ? `<p class="hint" style="margin-top:0">Deine Angaben haben ab jetzt immer Vorrang vor Open Food Facts für dieses Produkt.</p>` : ""}
-      <label>Name</label><input type="text" id="opName" required value="${esc(existing?.name || "")}">
+      <label>Name</label><input type="text" id="opName" required value="${esc(existing?.name || prefillName)}">
       <label>Marke</label><input type="text" id="opBrand" value="${esc(existing?.brand || "")}">
       <div class="field-row">
         <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
