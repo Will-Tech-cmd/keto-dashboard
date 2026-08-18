@@ -283,7 +283,7 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .scan-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 3/4;
+  aspect-ratio: 3/2;
   background: #000;
   border-radius: var(--radius);
   overflow: hidden;

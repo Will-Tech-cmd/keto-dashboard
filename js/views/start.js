@@ -1,7 +1,7 @@
 // views/start.js — Startseite: Datumsnavigation, Ziel-/Verbrauchsringe, Mahlzeiten,
 // zuletzt gescannte Produkte.
 import { Store } from "../store.js";
-import { calcTargets } from "../profiles.js";
+import { getTargetsForDate } from "../profiles.js";
 import { lookupProduct } from "../off.js";
 import { evaluateProduct } from "../keto.js";
 import {
@@ -15,8 +15,9 @@ const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
 export async function renderStart(container, goToTab) {
   const profile = Store.getActiveProfile();
-  const targets = calcTargets(profile);
   const dateKey = getActiveDateKey();
+  // Zielwerte des angezeigten Tages: heute/Zukunft live, vergangene Tage eingefroren.
+  const targets = getTargetsForDate(profile, dateKey);
   const refresh = () => renderStart(container, goToTab);
 
   container.innerHTML = `
@@ -138,11 +139,14 @@ function renderConsumptionList(container, entries, refresh) {
 }
 
 function entryRowHtml(e) {
+  // Alle vier Nährwerte in einer Zeile — kurze Kürzel (KH/F/E) statt ausgeschriebener
+  // Bezeichnungen, damit es auch auf schmalen Displays ohne Umbruch passt.
+  const n = (v) => v ?? "–";
   return `
     <div class="list-item" data-id="${e.id}" style="cursor:pointer">
       <div class="info">
         <div class="name">${esc(e.name)} · ${e.servings != null ? `${e.servings} Portion(en)` : `${e.grams} g`}</div>
-        <div class="meta">${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g Netto-KH · ${new Date(e.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</div>
+        <div class="meta">${n(e.kcal)} kcal · KH ${n(e.netCarbs)} · F ${n(e.fat)} · E ${n(e.protein)}</div>
       </div>
       <button class="icon-btn" data-action="undo" title="Entfernen">↩️</button>
     </div>

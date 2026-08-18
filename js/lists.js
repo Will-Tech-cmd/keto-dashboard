@@ -1,15 +1,17 @@
 // lists.js — Rendering & Interaktion für den "Listen"-Tab (Favoriten / No-Go / Einkauf /
 // Verlauf / Auswertung).
 import { Store, dateKeyOf } from "./store.js";
-import { calcTargets } from "./profiles.js";
+import { getTargetsForDate } from "./profiles.js";
 import { lookupProduct } from "./off.js";
 import {
   openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
 } from "./consumption.js";
+import { openAnalysisModal } from "./analysis.js";
 import { showToast } from "./ui.js";
 
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
+let listFilter = "";       // Suchbegriff für Favoriten/No-Go
 
 export function renderLists(container, goToTab) {
   container.innerHTML = `
@@ -27,6 +29,7 @@ export function renderLists(container, goToTab) {
   container.querySelectorAll(".subtab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       activeSubtab = btn.dataset.sub;
+      listFilter = ""; // Suchbegriff gilt nicht über Reiter hinweg
       renderSubtabs(container);
       renderBody(container, goToTab);
     });
@@ -56,9 +59,8 @@ function renderBody(container, goToTab) {
 }
 
 function renderProductList(body, listName) {
-  const state = Store.get();
-  const items = state[listName];
-  if (items.length === 0) {
+  const all = Store.get()[listName];
+  if (all.length === 0) {
     body.innerHTML = emptyState(
       listName === "favorites" ? "⭐" : "🚫",
       listName === "favorites"
@@ -68,7 +70,32 @@ function renderProductList(body, listName) {
     return;
   }
 
-  body.innerHTML = items.map(item => `
+  body.innerHTML = `
+    <input type="text" id="listSearch" placeholder="🔎 Suchen …" autocomplete="off"
+      value="${esc(listFilter)}" style="margin-bottom:12px">
+    <div id="listRows"></div>
+  `;
+  const search = body.querySelector("#listSearch");
+  search.addEventListener("input", () => {
+    listFilter = search.value;
+    renderProductRows(body, listName);
+  });
+  renderProductRows(body, listName);
+}
+
+function renderProductRows(body, listName) {
+  const rowsEl = body.querySelector("#listRows");
+  const q = listFilter.trim().toLowerCase();
+  const items = Store.get()[listName].filter(item =>
+    !q || item.name.toLowerCase().includes(q) || (item.brand || "").toLowerCase().includes(q)
+  );
+
+  if (items.length === 0) {
+    rowsEl.innerHTML = emptyState("🔎", `Kein Eintrag passt zu „${listFilter}".`);
+    return;
+  }
+
+  rowsEl.innerHTML = items.map(item => `
     <div class="list-item" data-barcode="${esc(item.barcode)}" style="cursor:pointer">
       <span class="badge ${item.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(item.grade)}</span>
       <div class="info">
@@ -80,11 +107,12 @@ function renderProductList(body, listName) {
     </div>
   `).join("");
 
-  body.querySelectorAll(".list-item").forEach(row => {
+  rowsEl.querySelectorAll(".list-item").forEach(row => {
     const barcode = row.dataset.barcode;
     row.querySelector('[data-action="remove"]').addEventListener("click", (e) => {
       e.stopPropagation();
       Store.removeFromList(listName, barcode);
+      // Komplett neu zeichnen, damit beim letzten Eintrag auch das Suchfeld verschwindet.
       renderProductList(body, listName);
       showToast("Entfernt");
     });
@@ -247,23 +275,28 @@ function renderHistoryList(el, items) {
 /** 30-Tage-Auswertung: Tag-für-Tag-Verlauf, Durchschnitte, Zielquote, längste Serie. */
 function renderEvaluation(body, goToTab) {
   const profile = Store.getActiveProfile();
-  const targets = calcTargets(profile);
 
   const days = [];
   for (let i = 29; i >= 0; i--) {
     const key = dateKeyOf(Date.now() - i * 86400000);
     const entries = getConsumptionForDate(profile.id, key);
-    days.push({ key, hasEntries: entries.length > 0, totals: sumConsumption(entries) });
+    // Jeder Tag wird gegen die Zielwerte bewertet, die an diesem Tag galten.
+    days.push({
+      key,
+      hasEntries: entries.length > 0,
+      totals: sumConsumption(entries),
+      targets: getTargetsForDate(profile, key),
+    });
   }
 
   const withData = days.filter(d => d.hasEntries);
   const avgKcal = withData.length ? Math.round(withData.reduce((s, d) => s + d.totals.kcal, 0) / withData.length) : null;
   const avgCarbs = withData.length ? round1(withData.reduce((s, d) => s + d.totals.netCarbs, 0) / withData.length) : null;
-  const daysInTarget = withData.filter(d => d.totals.netCarbs <= targets.netCarbG).length;
+  const daysInTarget = withData.filter(d => d.totals.netCarbs <= d.targets.netCarbG).length;
 
   let streak = 0, maxStreak = 0;
   for (const d of days) {
-    if (d.hasEntries && d.totals.netCarbs <= targets.netCarbG) { streak++; maxStreak = Math.max(maxStreak, streak); }
+    if (d.hasEntries && d.totals.netCarbs <= d.targets.netCarbG) { streak++; maxStreak = Math.max(maxStreak, streak); }
     else streak = 0;
   }
 
@@ -275,11 +308,14 @@ function renderEvaluation(body, goToTab) {
       <div class="stat"><div class="val">${maxStreak}</div><div class="lbl">Längste Serie im Ziel</div></div>
     </div>
     ${withData.length === 0 ? `<p class="hint" style="text-align:center;margin-bottom:10px">Noch keine Einträge in den letzten 30 Tagen.</p>` : ""}
+    <button class="btn secondary" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
     <div id="evalDays"></div>
   `;
 
+  body.querySelector("#analyzeBtn").addEventListener("click", openAnalysisModal);
+
   const daysEl = body.querySelector("#evalDays");
-  daysEl.innerHTML = [...days].reverse().map(d => evalDayRowHtml(d, targets)).join("");
+  daysEl.innerHTML = [...days].reverse().map(evalDayRowHtml).join("");
 
   daysEl.querySelectorAll(".list-item[data-daykey]").forEach(row => {
     row.addEventListener("click", () => {
@@ -289,7 +325,8 @@ function renderEvaluation(body, goToTab) {
   });
 }
 
-function evalDayRowHtml(d, targets) {
+function evalDayRowHtml(d) {
+  const targets = d.targets;
   const [y, m, dd] = d.key.split("-").map(Number);
   const ts = new Date(y, m - 1, dd).getTime();
   const label = dayLabel(ts);

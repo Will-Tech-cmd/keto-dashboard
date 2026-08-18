@@ -161,6 +161,20 @@ function handleSearchSelect(container, product) {
   Store.pushRecent(product.barcode);
   logHistory(product);
   renderResult(container, product);
+  scrollToResult(container);
+}
+
+/**
+ * Holt die Ergebniskarte in den sichtbaren Bereich, damit nach einem Treffer nicht erst
+ * am Kamerabild vorbeigescrollt werden muss. Bewusst nur bei *neuen* Treffern aufgerufen,
+ * nicht bei jedem Neuzeichnen (z.B. Favorit umschalten), sonst springt die Seite ständig.
+ */
+function scrollToResult(container) {
+  const resultWrap = container.querySelector("#resultWrap");
+  if (!resultWrap) return;
+  requestAnimationFrame(() => {
+    resultWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 /** Protokolliert einen Such-/Scan-Treffer im Verlauf (nur Log, keine Mengen/Kalorien). */
@@ -224,6 +238,7 @@ async function handleBarcode(container, barcode) {
       resultWrap.innerHTML = `<div class="card"><p>⚠️ ${esc(err.message)}</p></div>`;
     }
   }
+  scrollToResult(container);
 }
 
 function renderResult(container, product) {

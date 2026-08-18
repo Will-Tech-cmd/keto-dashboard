@@ -25,7 +25,7 @@ export function renderProfile(container, onProfileChanged) {
         <button class="btn secondary" id="importBtn">⬆️ Importieren</button>
         <button class="btn ghost" id="shareBtn" style="display:none">📤 Backup teilen</button>
       </div>
-      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
     </div>
     <p class="hint" style="text-align:center;margin-top:8px">
       Richtwerte auf Basis gängiger Formeln (Mifflin-St Jeor / Katch-McArdle) — keine medizinische Beratung.
@@ -183,36 +183,50 @@ function renderProfileForm(container, onProfileChanged) {
   });
 }
 
-function backupFilename() {
-  return `keto-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+// Chrome erlaubt beim Teilen nur eine Positivliste von Dateitypen (Audio, Bild, Text, Video)
+// — application/json gehört NICHT dazu, weshalb canShare() dafür immer false liefert. Der
+// Inhalt bleibt JSON, wir deklarieren ihn aber als Textdatei, damit das Teilen funktioniert.
+const BACKUP_MIME = "text/plain";
+
+function backupFilename(ext = "txt") {
+  return `keto-dashboard-backup-${new Date().toISOString().slice(0, 10)}.${ext}`;
+}
+
+function downloadBackup() {
+  const blob = new Blob([Store.exportJSON()], { type: BACKUP_MIME });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = backupFilename();
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function wireExportImport(container) {
   container.querySelector("#exportBtn").addEventListener("click", () => {
-    const blob = new Blob([Store.exportJSON()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = backupFilename();
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBackup();
     showToast("Export gestartet");
   });
 
-  // "Teilen" nur anzeigen, wenn die Plattform Dateien wirklich teilen kann (Android/iOS-
-  // Browser meist ja, Desktop meist nein) — sonst lieber gar nicht erst anbieten.
+  // Teilen-Knopf bleibt immer sichtbar: kann das Gerät keine Dateien teilen, wird
+  // stattdessen der Download ausgelöst, statt den Knopf kommentarlos zu verstecken.
   const shareBtn = container.querySelector("#shareBtn");
-  const shareFile = () => new File([Store.exportJSON()], backupFilename(), { type: "application/json" });
-  if (navigator.canShare?.({ files: [shareFile()] })) {
-    shareBtn.style.display = "";
-    shareBtn.addEventListener("click", async () => {
-      try {
-        await navigator.share({ files: [shareFile()], title: "Keto-Dashboard Backup" });
-      } catch (e) {
-        if (e.name !== "AbortError") showToast("Teilen fehlgeschlagen: " + e.message);
-      }
-    });
-  }
+  shareBtn.style.display = "";
+  shareBtn.addEventListener("click", async () => {
+    const file = new File([Store.exportJSON()], backupFilename(), { type: BACKUP_MIME });
+    if (!navigator.canShare?.({ files: [file] })) {
+      downloadBackup();
+      showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
+      return;
+    }
+    try {
+      await navigator.share({ files: [file], title: "Keto-Dashboard Backup" });
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      downloadBackup();
+      showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
+    }
+  });
 
   const fileInput = container.querySelector("#importFile");
   container.querySelector("#importBtn").addEventListener("click", () => fileInput.click());

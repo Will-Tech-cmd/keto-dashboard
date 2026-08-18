@@ -42,6 +42,7 @@ function defaultState() {
     consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
     fiberOverrides: {},  // barcode -> true|false, überschreibt die automatische EU/US-Erkennung (Ballaststoff-Schalter)
+    dayTargets: {},      // profileId -> { dateKey -> { kcal, netCarbG, fatG, proteinG } }, friert vergangene Tage ein
   };
 }
 
@@ -153,6 +154,21 @@ export const Store = {
     persist();
   },
 
+  // --- Zielwert-Schnappschüsse je Tag (damit Profiländerungen die Historie nicht rückwirkend verfälschen) ---
+  setDayTargets(profileId, dateKey, targets) {
+    if (!state.dayTargets[profileId]) state.dayTargets[profileId] = {};
+    const existing = state.dayTargets[profileId][dateKey];
+    // Nur schreiben, wenn sich wirklich etwas ändert — spart unnötige persist()-Aufrufe
+    // beim häufigen Neuzeichnen der Startseite.
+    if (existing && existing.kcal === targets.kcal && existing.netCarbG === targets.netCarbG
+      && existing.fatG === targets.fatG && existing.proteinG === targets.proteinG) return;
+    state.dayTargets[profileId][dateKey] = targets;
+    persist();
+  },
+  getDayTargets(profileId, dateKey) {
+    return state.dayTargets[profileId]?.[dateKey] || null;
+  },
+
   // --- eigene, manuell angelegte Produkte ---
   saveOwnProduct(barcode, product) {
     state.ownProducts[barcode] = product;
@@ -256,8 +272,14 @@ export const Store = {
   },
 
   // --- Export / Import ---
+  /**
+   * Backup ohne den Produkt-Cache: der macht ~68% der Dateigröße aus, lässt sich aber
+   * jederzeit neu von Open Food Facts laden. Ohne ihn schrumpft ein typisches Backup von
+   * ~640 KB auf ~45 KB — wichtig fürs Teilen. Beim Import ergänzt migrate() das Feld wieder.
+   */
   exportJSON() {
-    return JSON.stringify(state, null, 2);
+    const { cache, ...withoutCache } = state;
+    return JSON.stringify(withoutCache, null, 2);
   },
   importJSON(json) {
     const parsed = JSON.parse(json);

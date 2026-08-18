@@ -1,4 +1,5 @@
 // profiles.js — Berechnung der individuellen Keto-Zielwerte aus Körperdaten.
+import { Store, dateKeyOf } from "./store.js";
 
 /**
  * Grundumsatz (BMR).
@@ -71,6 +72,37 @@ export function calcTargets(p) {
     dietType: p.dietType,
     gradeThresholds: p.gradeThresholds,
   };
+}
+
+/**
+ * Zielwerte für einen bestimmten Tag.
+ *
+ * Profildaten ändern sich (Gewicht, Ziel, Aktivität) — ohne Schnappschuss würden dadurch
+ * rückwirkend auch alle vergangenen Tage und die 30-Tage-Auswertung neu bewertet, was die
+ * Historie verfälscht. Deshalb:
+ *   - heute/Zukunft  -> aktuelle Berechnung, und der Schnappschuss wird nachgeführt
+ *   - Vergangenheit  -> eingefrorener Schnappschuss (Rückfall: aktuelle Werte, falls der
+ *                       Tag noch aus der Zeit vor dieser Funktion stammt)
+ *
+ * Der Schnappschuss wird beim Eintragen und bei jedem Anzeigen des heutigen Tages
+ * nachgeführt, sodass am Tagesende der zuletzt gültige Stand festgehalten ist.
+ */
+export function getTargetsForDate(profile, dateKey) {
+  const live = calcTargets(profile);
+  const todayKey = dateKeyOf(Date.now());
+
+  if (dateKey >= todayKey) {
+    Store.setDayTargets(profile.id, dateKey, {
+      kcal: live.kcal, netCarbG: live.netCarbG, fatG: live.fatG, proteinG: live.proteinG,
+    });
+    return live;
+  }
+
+  const frozen = Store.getDayTargets(profile.id, dateKey);
+  if (!frozen) return live;
+  // Nur die Mengen sind historisch; Ampelgrenzen/Ernährungsform bleiben die aktuellen,
+  // damit die Bewertung überall nach denselben Maßstäben erfolgt.
+  return { ...live, ...frozen, isFrozen: true };
 }
 
 export const Goals = GOAL_LABELS;

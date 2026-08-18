@@ -29,12 +29,18 @@ export function renderRecipes(container) {
   }
 }
 
+let recipeFilter = "";
+
 function renderList(container) {
   const recipes = Store.getRecipes();
   container.innerHTML = `
     <h1 class="section-title">Rezepte</h1>
     <button class="btn" id="newRecipeBtn">➕ Neues Rezept</button>
-    <div id="recipeListBody" style="margin-top:14px"></div>
+    ${recipes.length > 0 ? `
+      <input type="text" id="recipeSearch" placeholder="🔎 Rezept oder Zutat suchen …"
+        autocomplete="off" value="${esc(recipeFilter)}" style="margin-top:12px">
+    ` : ""}
+    <div id="recipeListBody" style="margin-top:12px"></div>
   `;
 
   container.querySelector("#newRecipeBtn").addEventListener("click", () => {
@@ -43,9 +49,36 @@ function renderList(container) {
     renderEditor(container, recipe.id);
   });
 
+  const search = container.querySelector("#recipeSearch");
+  search?.addEventListener("input", () => {
+    recipeFilter = search.value;
+    renderRecipeRows(container);
+  });
+
+  renderRecipeRows(container);
+}
+
+/** Sucht in Rezeptnamen UND Zutaten, damit z.B. "Hack" den Cheeseburger-Auflauf findet. */
+function matchesRecipe(recipe, query) {
+  if (!query) return true;
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (recipe.name.toLowerCase().includes(q)) return true;
+  return recipe.ingredients.some(i => i.name.toLowerCase().includes(q));
+}
+
+function renderRecipeRows(container) {
   const body = container.querySelector("#recipeListBody");
-  if (recipes.length === 0) {
+  const all = Store.getRecipes();
+
+  if (all.length === 0) {
     body.innerHTML = `<div class="empty-state"><span class="emoji">🍳</span>Noch keine Rezepte angelegt.</div>`;
+    return;
+  }
+
+  const recipes = all.filter(r => matchesRecipe(r, recipeFilter));
+  if (recipes.length === 0) {
+    body.innerHTML = `<div class="empty-state"><span class="emoji">🔎</span>Kein Rezept passt zu „${esc(recipeFilter)}".</div>`;
     return;
   }
 
@@ -53,38 +86,36 @@ function renderList(container) {
     const perServing = calcPerServing(r);
     const grade = ketoGrade(perServing.netCarbs, activeThresholds());
     return `
-      <div class="card" data-id="${r.id}">
-        <div class="btn-row" style="align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span class="badge ${grade}">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]} ${esc(GRADE_LABEL[grade])}</span>
-          <button class="icon-btn" data-action="delete" title="Löschen">🗑️</button>
+      <div class="list-item" data-id="${r.id}" style="cursor:pointer">
+        <span class="badge ${grade}" style="flex-shrink:0">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]}</span>
+        <div class="info">
+          <div class="name">${esc(r.name)}</div>
+          <div class="meta" title="${r.ingredients.length} Zutaten, ${r.servings} Portionen">${perServing.kcal != null ? Math.round(perServing.kcal) : "–"} kcal · ${perServing.netCarbs ?? "–"} g KH</div>
         </div>
-        <div class="name" style="font-size:1.05rem;cursor:pointer" data-action="open">${esc(r.name)}</div>
-        <p class="hint">${r.ingredients.length} Zutaten · ${r.servings} Portionen</p>
-        <div class="grid-2" style="margin-top:8px">
-          <div class="stat"><div class="val">${perServing.kcal ?? "–"}</div><div class="lbl">kcal/Portion</div></div>
-          <div class="stat"><div class="val">${perServing.netCarbs ?? "–"} g</div><div class="lbl">Netto-KH/Portion</div></div>
-        </div>
-        <button class="btn secondary" data-action="addToday" style="margin-top:10px">🍽️ Zum Tag hinzufügen</button>
+        <button class="icon-btn" data-action="addToday" title="Zum Tag hinzufügen">🍽️</button>
+        <button class="icon-btn" data-action="delete" title="Löschen">🗑️</button>
       </div>
     `;
   }).join("");
 
-  body.querySelectorAll(".card").forEach(card => {
-    const id = card.dataset.id;
-    card.querySelector('[data-action="open"]').addEventListener("click", () => {
-      openRecipeId = id;
-      renderEditor(container, id);
-    });
-    card.querySelector('[data-action="delete"]').addEventListener("click", () => {
+  body.querySelectorAll(".list-item").forEach(row => {
+    const id = row.dataset.id;
+    row.querySelector('[data-action="delete"]').addEventListener("click", (e) => {
+      e.stopPropagation();
       const recipe = Store.getRecipe(id);
       if (confirm(`Rezept „${recipe.name}" wirklich löschen?`)) {
         deleteRecipe(id);
-        renderList(container);
+        renderList(container); // komplett neu, damit das Suchfeld beim letzten Rezept verschwindet
         showToast("Rezept gelöscht");
       }
     });
-    card.querySelector('[data-action="addToday"]').addEventListener("click", () => {
+    row.querySelector('[data-action="addToday"]').addEventListener("click", (e) => {
+      e.stopPropagation();
       openServingsModal(Store.getRecipe(id));
+    });
+    row.addEventListener("click", () => {
+      openRecipeId = id;
+      renderEditor(container, id);
     });
   });
 }
