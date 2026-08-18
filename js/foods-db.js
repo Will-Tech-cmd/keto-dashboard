@@ -132,35 +132,91 @@ export function searchLocalFoods(term) {
   return [...starts, ...contains].slice(0, 12).map(toLocalProduct);
 }
 
+/** Normalisiert für den Vergleich: Umlaute, Kleinschreibung, Satzzeichen raus, Leerraum glätten. */
+function normalizeForMatch(s) {
+  return s
+    .toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Levenshtein-Distanz (Anzahl Einfüge-/Lösch-/Ersetz-Schritte zwischen zwei Wörtern). */
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  let cur = new Array(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[b.length];
+}
+
+// Wie viele Tippfehler toleriert werden, gestaffelt nach Wortlänge — bei kurzen Wörtern
+// bedeutet 1 falscher Buchstabe schon ein anderes Wort, bei langen ist mehr Toleranz sicher.
+function maxTypoDistance(wordLen) {
+  if (wordLen >= 8) return 2;
+  if (wordLen >= 4) return 1;
+  return 0; // unter 4 Zeichen: keine Toleranz, sonst zu viele Fehlalarme
+}
+// Teilwort-Treffer erst ab dieser Länge zulassen. Das ist die zentrale Korrektur gegen die
+// "Ei"-Katastrophe: der 2-Zeichen-Alias "Ei" darf nicht mehr jedes Wort mit "ei" treffen
+// ("Heidelbeeren", "Reis", "Feigen" wurden vorher alle fälschlich zu "Eier").
+const MIN_SUBSTRING_LEN = 5;
+
 /**
- * Unscharfe Zutaten-Erkennung für den Rezept-Import: prüft in beide Richtungen
- * (Zutatenname enthält Lebensmittel-Namen ODER umgekehrt), z.B. "Gewürzgurkenscheiben"
- * → "Gurke". Liefert den längsten (spezifischsten) Treffer, oder null.
+ * Unscharfe Zutaten-Erkennung für den Rezept-Import, mit Trefferqualität für die Prüfansicht:
+ *   "exact"     — Name/Alias entspricht der Zutat exakt (nach Normalisierung)
+ *   "word"      — Name/Alias ist eines der Wörter in der Zutatenbezeichnung
+ *   "substring" — Name/Alias steckt als Teilstring in der Zutat oder umgekehrt (ab 5 Zeichen)
+ *   "fuzzy"     — ein Wort der Zutat unterscheidet sich nur durch 1-2 Tippfehler von Name/Alias
+ * Liefert { product, quality } oder null.
  */
 export function bestLocalFoodMatch(ingredientName) {
-  const q = ingredientName.trim().toLowerCase();
+  const q = normalizeForMatch(ingredientName);
   if (!q) return null;
+  const qWords = q.split(" ");
 
   let exact = null;
-  let bestContains = null, bestContainsLen = 0;         // Zutat enthält Lebensmittel-Namen -> längster gewinnt
-  let bestContainedBy = null, bestContainedByLen = Infinity; // Lebensmittel-Name enthält Zutat -> kürzester gewinnt
+  let word = null;
+  let sub = null, subLen = 0;
+  let fuzzy = null, fuzzyDist = Infinity;
 
+  outer:
   for (const item of FOODS) {
-    for (const n of [item.name, ...item.aliases]) {
-      const nl = n.toLowerCase();
-      if (nl === q) {
-        exact = item;
-      } else if (q.includes(nl) && nl.length > bestContainsLen) {
-        bestContains = item;
-        bestContainsLen = nl.length;
-      } else if (nl.includes(q) && nl.length < bestContainedByLen) {
-        bestContainedBy = item;
-        bestContainedByLen = nl.length;
+    for (const cand of [item.name, ...item.aliases]) {
+      const c = normalizeForMatch(cand);
+      if (!c) continue;
+
+      if (c === q) { exact = item; break outer; }
+      if (!word && qWords.includes(c)) word = item;
+      if (c.length >= MIN_SUBSTRING_LEN && (q.includes(c) || c.includes(q)) && c.length > subLen) {
+        sub = item;
+        subLen = c.length;
+      }
+      if (c.length >= 4) {
+        for (const w of qWords) {
+          const dist = levenshtein(w, c);
+          if (dist > 0 && dist <= maxTypoDistance(c.length) && dist < fuzzyDist) {
+            fuzzy = item;
+            fuzzyDist = dist;
+          }
+        }
       }
     }
   }
-  const best = exact || bestContains || bestContainedBy;
-  return best ? toLocalProduct(best) : null;
+
+  const hit = exact || word || sub || fuzzy;
+  if (!hit) return null;
+  const quality = exact ? "exact" : word ? "word" : sub ? "substring" : "fuzzy";
+  return { product: toLocalProduct(hit), quality };
 }
 
 /** Löst einen Pseudo-Barcode "local:<slug>" auf ein lokales Produkt auf, oder null. */

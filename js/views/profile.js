@@ -2,6 +2,7 @@
 import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
+import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
 import { showToast, esc } from "../ui.js";
 
 export function renderProfile(container, onProfileChanged) {
@@ -27,6 +28,22 @@ export function renderProfile(container, onProfileChanged) {
       </div>
       <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
     </div>
+
+    <div class="card">
+      <h2>KI-Erkennung (optional)</h2>
+      <p class="hint" style="margin-top:0">Mit einem eigenen, kostenlosen Gemini-API-Schlüssel kann der Rezept-Import schwierige Fälle (unbekannte Zutaten, schlecht lesbare Fotos) zusätzlich an eine KI schicken. Ohne Schlüssel funktioniert alles wie bisher — die KI-Knöpfe erscheinen dann einfach nicht.</p>
+      <p class="hint">Schlüssel erstellen (kostenlos, keine Kreditkarte nötig): <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/app/apikey</a></p>
+      <label for="aiKeyInput">Gemini-API-Schlüssel</label>
+      <input type="password" id="aiKeyInput" placeholder="AIza…" value="${esc(getApiKey())}" autocomplete="off">
+      <p class="hint" id="aiKeyStatus" style="margin-top:6px"></p>
+      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+        <button class="btn secondary" id="aiKeySaveBtn">Speichern</button>
+        <button class="btn ghost" id="aiKeyTestBtn">Verbindung testen</button>
+        <button class="btn ghost" id="aiKeyClearBtn" style="color:var(--red-fg)">Löschen</button>
+      </div>
+      <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
+    </div>
+
     <p class="hint" style="text-align:center;margin-top:8px">
       Richtwerte auf Basis gängiger Formeln (Mifflin-St Jeor / Katch-McArdle) — keine medizinische Beratung.
       Bei gesundheitlichen Fragen bitte ärztlichen Rat einholen.
@@ -43,6 +60,39 @@ export function renderProfile(container, onProfileChanged) {
 
   renderProfileForm(container, onProfileChanged);
   wireExportImport(container);
+  wireAiKey(container);
+}
+
+function wireAiKey(container) {
+  const input = container.querySelector("#aiKeyInput");
+  const status = container.querySelector("#aiKeyStatus");
+
+  container.querySelector("#aiKeySaveBtn").addEventListener("click", () => {
+    const key = input.value.trim();
+    if (!key) { showToast("Bitte einen Schlüssel eingeben"); return; }
+    setApiKey(key);
+    status.textContent = "";
+    showToast("Gespeichert — KI-Knöpfe erscheinen jetzt beim Rezept-Import");
+  });
+
+  container.querySelector("#aiKeyTestBtn").addEventListener("click", async () => {
+    const key = input.value.trim();
+    if (!key) { showToast("Bitte einen Schlüssel eingeben"); return; }
+    status.textContent = "Prüfe Verbindung …";
+    const result = await testApiKey(key);
+    status.textContent = result.ok
+      ? "✅ Verbindung erfolgreich" + (result.message ? ` — ${result.message}` : "")
+      : `❌ ${result.message}`;
+  });
+
+  container.querySelector("#aiKeyClearBtn").addEventListener("click", () => {
+    if (!getApiKey()) { showToast("Kein Schlüssel hinterlegt"); return; }
+    if (!confirm("Gemini-API-Schlüssel von diesem Gerät löschen?")) return;
+    clearApiKey();
+    input.value = "";
+    status.textContent = "";
+    showToast("Schlüssel gelöscht");
+  });
 }
 
 function renderProfileForm(container, onProfileChanged) {

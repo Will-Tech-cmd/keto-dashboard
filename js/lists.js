@@ -12,6 +12,7 @@ import { showToast } from "./ui.js";
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
 let listFilter = "";       // Suchbegriff für Favoriten/No-Go
+let historyFilter = "";    // Suchbegriff für den Verlauf
 
 export function renderLists(container, goToTab) {
   container.innerHTML = `
@@ -29,7 +30,8 @@ export function renderLists(container, goToTab) {
   container.querySelectorAll(".subtab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       activeSubtab = btn.dataset.sub;
-      listFilter = ""; // Suchbegriff gilt nicht über Reiter hinweg
+      listFilter = ""; // Suchbegriffe gelten nicht über Reiter hinweg
+      historyFilter = "";
       renderSubtabs(container);
       renderBody(container, goToTab);
     });
@@ -187,10 +189,12 @@ function renderShopping(body) {
 function renderHistory(body) {
   const all = Store.getHistory();
   const cutoff = historyPeriodDays ? Date.now() - historyPeriodDays * 86400000 : null;
-  const items = cutoff ? all.filter(e => e.at >= cutoff) : all;
+  const periodItems = cutoff ? all.filter(e => e.at >= cutoff) : all;
 
+  // Statistik bezieht sich bewusst nur auf den Zeitraum, nicht auf den Suchbegriff — die
+  // Suche dient zum schnellen Wiederfinden, soll die Kennzahlen aber nicht verzerren.
   const counts = { green: 0, yellow: 0, red: 0, gray: 0 };
-  items.forEach(e => { counts[e.grade || "gray"] = (counts[e.grade || "gray"] || 0) + 1; });
+  periodItems.forEach(e => { counts[e.grade || "gray"] = (counts[e.grade || "gray"] || 0) + 1; });
 
   const periodBtn = (days, label) => `
     <button class="subtab-btn ${historyPeriodDays === days ? "active" : ""}" data-days="${days ?? ""}" type="button">${label}</button>
@@ -203,19 +207,27 @@ function renderHistory(body) {
       ${periodBtn(90, "90 Tage")}
       ${periodBtn(null, "Alle")}
     </div>
-    ${items.length > 0 ? `
+    ${periodItems.length > 0 ? `
+      <input type="text" id="historySearch" placeholder="🔎 Suchen …" autocomplete="off" value="${esc(historyFilter)}" style="margin-bottom:14px">
       <div class="grid-2" style="margin-bottom:14px">
         <div class="stat"><div class="val">🟢 ${counts.green}</div><div class="lbl">Keto-tauglich</div></div>
         <div class="stat"><div class="val">🟡 ${counts.yellow}</div><div class="lbl">In Maßen</div></div>
         <div class="stat"><div class="val">🔴 ${counts.red}</div><div class="lbl">Nicht keto</div></div>
-        <div class="stat"><div class="val">${items.length}</div><div class="lbl">Gesamt geprüft</div></div>
+        <div class="stat"><div class="val">${periodItems.length}</div><div class="lbl">Gesamt geprüft</div></div>
       </div>
     ` : ""}
     <div id="historyList"></div>
     ${all.length > 0 ? `<button class="btn ghost" id="clearHistoryBtn" style="margin-top:10px">Verlauf löschen</button>` : ""}
   `;
 
-  renderHistoryList(body.querySelector("#historyList"), items);
+  renderHistoryList(body.querySelector("#historyList"), filterHistoryItems(periodItems));
+
+  // Nur die Liste neu zeichnen, nicht den gesamten Block — sonst verliert das Suchfeld
+  // bei jedem Tastendruck den Fokus.
+  body.querySelector("#historySearch")?.addEventListener("input", (e) => {
+    historyFilter = e.target.value;
+    renderHistoryList(body.querySelector("#historyList"), filterHistoryItems(periodItems));
+  });
 
   body.querySelectorAll(".subtabs .subtab-btn[data-days]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -233,9 +245,17 @@ function renderHistory(body) {
   });
 }
 
+function filterHistoryItems(items) {
+  const q = historyFilter.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter(e => e.name.toLowerCase().includes(q) || (e.brand || "").toLowerCase().includes(q));
+}
+
 function renderHistoryList(el, items) {
   if (items.length === 0) {
-    el.innerHTML = emptyState("🕘", "Noch nichts im gewählten Zeitraum gescannt oder gesucht.");
+    el.innerHTML = historyFilter.trim()
+      ? emptyState("🔎", `Kein Eintrag passt zu „${historyFilter}".`)
+      : emptyState("🕘", "Noch nichts im gewählten Zeitraum gescannt oder gesucht.");
     return;
   }
 

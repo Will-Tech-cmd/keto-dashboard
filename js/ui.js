@@ -16,6 +16,62 @@ export function esc(s) {
 }
 
 /**
+ * Teilt eine Datei über den systemeigenen Teilen-Dialog, falls verfügbar — sonst wird sie
+ * heruntergeladen. Gibt zurück, was tatsächlich passiert ist, damit der Aufrufer eine passende
+ * Rückmeldung zeigen kann (bei Abbruch durch den Nutzer z.B. keine).
+ */
+export async function shareOrDownloadFile(file, { title } = {}) {
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title });
+      return "shared";
+    } catch (e) {
+      if (e.name === "AbortError") return "cancelled";
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  URL.revokeObjectURL(url);
+  return "downloaded";
+}
+
+/**
+ * Verkleinert ein übergroßes Bild (z.B. ein sehr langer Scrolling-Screenshot) vor
+ * Texterkennung/Upload. Unauffällig für normal große Bilder — gibt die Datei unverändert
+ * zurück, wenn sie bereits innerhalb der Grenzen liegt oder der Browser sie nicht direkt
+ * decodieren kann (z.B. ungewöhnliches Format). Ohne diese Begrenzung können sehr hohe Bilder
+ * je nach Gerät an Canvas-Größen- oder Speichergrenzen scheitern (Tab-Absturz statt
+ * Fehlermeldung) oder unnötig riesige Uploads erzeugen.
+ */
+export async function downscaleImageIfNeeded(file, { maxSide = 8000, maxPixels = 20_000_000 } = {}) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file;
+  }
+
+  const { width, height } = bitmap;
+  const scale = Math.min(1, maxSide / Math.max(width, height), Math.sqrt(maxPixels / (width * height)));
+  if (scale >= 1) {
+    bitmap.close?.();
+    return file;
+  }
+
+  const targetW = Math.max(1, Math.round(width * scale));
+  const targetH = Math.max(1, Math.round(height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, targetW, targetH);
+  bitmap.close?.();
+  return (await new Promise(resolve => canvas.toBlob(resolve, "image/png"))) || file;
+}
+
+/**
  * Koppelt einen Dialog/Vollbild-Zustand (Modal, Rezept-Editor, …) an die Browser-History,
  * damit die Zurück-Geste am Handy zuerst diesen Zustand schließt, statt die App zu
  * verlassen. `closeImmediate` entfernt den Zustand rein visuell (z.B. Overlay aus dem DOM

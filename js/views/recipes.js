@@ -11,6 +11,7 @@ import {
 } from "../recipes.js";
 import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel } from "../consumption.js";
 import { showToast, esc, bindBackClose } from "../ui.js";
+import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
 let openRecipeId = null;
 let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-Phase
@@ -207,7 +208,7 @@ function renderEditor(container, recipeId) {
 
     <h2 class="section-title">Aus Bild oder Text importieren</h2>
     <div class="card">
-      <p class="hint" style="margin-top:0">Foto einer Zutatenliste (z.B. Screenshot) einlesen, oder Text direkt einfügen. Ergebnis kannst du danach prüfen und korrigieren.</p>
+      <p class="hint" style="margin-top:0">Foto einer Zutatenliste (z.B. Screenshot) einlesen, oder Text direkt einfügen. Ergebnis kannst du danach prüfen und korrigieren.${hasApiKey() ? " Optional per KI (Gemini) erkennen lassen — genauer bei unbekannten Zutaten, braucht aber Internet." : ""}</p>
       <input type="file" id="recipeImageInput" accept="image/*" style="display:none">
       <div class="btn-row">
         <button class="btn secondary" id="importImageBtn">📷 Bild wählen</button>
@@ -429,6 +430,7 @@ function wireManualIngredient(container, recipeId) {
 function wireImport(container, recipeId) {
   const statusEl = container.querySelector("#importStatus");
   const fileInput = container.querySelector("#recipeImageInput");
+  const withAi = hasApiKey();
 
   container.querySelector("#importImageBtn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", async () => {
@@ -459,7 +461,10 @@ function wireImport(container, recipeId) {
     wrap.innerHTML = `
       <label for="pasteText">Zutatenliste einfügen (eine Zutat pro Zeile)</label>
       <textarea id="pasteText" rows="6" style="width:100%;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);padding:10px;font:inherit"></textarea>
-      <button class="btn" id="pasteParseBtn" style="margin-top:10px">Zeilen prüfen</button>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn" id="pasteParseBtn">Zeilen prüfen</button>
+        ${withAi ? `<button class="btn secondary" id="pasteAiBtn">🤖 Mit KI erkennen</button>` : ""}
+      </div>
     `;
     wrap.querySelector("#pasteParseBtn").addEventListener("click", () => {
       const text = wrap.querySelector("#pasteText").value;
@@ -467,24 +472,107 @@ function wireImport(container, recipeId) {
       wrap.style.display = "none";
       startReview(container, recipeId, text);
     });
+    wrap.querySelector("#pasteAiBtn")?.addEventListener("click", async () => {
+      const text = wrap.querySelector("#pasteText").value;
+      if (!text.trim()) { showToast("Bitte Text einfügen"); return; }
+      statusEl.textContent = "🤖 Gemini analysiert den Text …";
+      try {
+        const ingredients = await recognizeIngredientsFromText(text);
+        statusEl.textContent = "";
+        if (!ingredients.length) { showToast("KI hat keine Zutaten erkannt"); return; }
+        wrap.style.display = "none";
+        startReviewFromAI(container, recipeId, ingredients);
+      } catch (err) {
+        statusEl.textContent = "";
+        showToast(describeAiError(err));
+      }
+    });
   });
+
+  if (withAi) wireAiImageImport(container, recipeId, statusEl);
+}
+
+function wireAiImageImport(container, recipeId, statusEl) {
+  const card = container.querySelector("#importTextBtn").closest(".card");
+  const btn = document.createElement("button");
+  btn.className = "btn ghost";
+  btn.id = "importAiImageBtn";
+  btn.style.marginTop = "8px";
+  btn.textContent = "🤖 Bild direkt mit KI auswerten";
+  card.querySelector(".btn-row").insertAdjacentElement("afterend", btn);
+
+  const aiFileInput = document.createElement("input");
+  aiFileInput.type = "file";
+  aiFileInput.accept = "image/*";
+  aiFileInput.style.display = "none";
+  card.appendChild(aiFileInput);
+
+  btn.addEventListener("click", () => aiFileInput.click());
+  aiFileInput.addEventListener("change", async () => {
+    const file = aiFileInput.files[0];
+    aiFileInput.value = "";
+    if (!file) return;
+    statusEl.textContent = "🤖 Gemini liest das Bild …";
+    try {
+      const ingredients = await recognizeIngredientsFromImage(file);
+      statusEl.textContent = "";
+      if (!ingredients.length) { showToast("KI hat keine Zutaten im Bild erkannt"); return; }
+      startReviewFromAI(container, recipeId, ingredients);
+    } catch (err) {
+      statusEl.textContent = "";
+      showToast(describeAiError(err));
+    }
+  });
+}
+
+/** Baut die Prüfansicht direkt aus den von der KI gelieferten, bereits fertigen Werten auf. */
+function startReviewFromAI(container, recipeId, ingredients) {
+  reviewRows = ingredients.map(i => ({
+    id: crypto.randomUUID(),
+    raw: i.name,
+    name: i.name,
+    grams: i.grams > 0 ? i.grams : null,
+    per100: i.per100,
+    likelyUsLabel: false,
+    matchedName: i.name,
+    matchQuality: "ai",
+  }));
+  renderReview(container, recipeId);
 }
 
 function startReview(container, recipeId, text) {
   const parsed = parseIngredientText(text);
   reviewRows = parsed.map(p => {
     const match = bestLocalFoodMatch(p.name);
+    const product = match?.product;
     return {
       id: crypto.randomUUID(),
       raw: p.raw,
       name: p.name,
-      grams: p.grams ?? (match && p.quantity != null ? guessGrams(match) * p.quantity : null),
-      per100: match ? match.per100 : null,
-      likelyUsLabel: match ? match.likelyUsLabel : false,
-      matchedName: match ? match.name : null,
+      grams: p.grams ?? (product && p.quantity != null ? guessGrams(product) * p.quantity : null),
+      per100: product ? product.per100 : null,
+      likelyUsLabel: product ? product.likelyUsLabel : false,
+      matchedName: product ? product.name : null,
+      // "exact"/"word" = zuverlässig, "substring"/"fuzzy" = Vermutung -> in der Prüfansicht markieren.
+      matchQuality: match ? match.quality : null,
     };
   });
   renderReview(container, recipeId);
+}
+
+const UNCERTAIN_MATCH = new Set(["substring", "fuzzy"]);
+
+function matchLabelText(r) {
+  if (r.matchQuality === "ai") return `🤖 KI-Schätzung — Werte vor dem Übernehmen prüfen`;
+  if (!r.matchedName) return "Keine Zuordnung gefunden — Menge/Nährwerte manuell prüfen oder Zeile entfernen";
+  if (UNCERTAIN_MATCH.has(r.matchQuality)) return `⚠️ Unsichere Zuordnung: ${esc(r.matchedName)} — bitte prüfen`;
+  return `Zuordnung: ${esc(r.matchedName)}`;
+}
+
+function matchLabelStyle(r) {
+  if (r.matchQuality === "ai") return "color:var(--accent)";
+  if (UNCERTAIN_MATCH.has(r.matchQuality)) return "color:var(--yellow-fg)";
+  return "";
 }
 
 function renderReview(container, recipeId) {
@@ -510,7 +598,7 @@ function renderReview(container, recipeId) {
         <div><label>Name</label><input type="text" class="rv-name" value="${esc(r.name)}"></div>
         <div><label>Menge (g)</label><input type="number" class="rv-grams" value="${r.grams ?? ""}"></div>
       </div>
-      <p class="hint rv-match-label" style="margin-top:6px">${r.matchedName ? `Zuordnung: ${esc(r.matchedName)}` : "Keine Zuordnung gefunden — Menge/Nährwerte manuell prüfen oder Zeile entfernen"}</p>
+      <p class="hint rv-match-label" style="margin-top:6px;${matchLabelStyle(r)}">${matchLabelText(r)}</p>
       <div class="btn-row" style="margin-top:6px">
         <button class="btn ghost rv-research" style="width:auto">🔎 Neu zuordnen</button>
         <button class="btn ghost rv-remove" style="width:auto;color:var(--red-fg)">Entfernen</button>
@@ -561,6 +649,7 @@ function renderReview(container, recipeId) {
               row.per100 = p.per100;
               row.likelyUsLabel = p.likelyUsLabel;
               row.matchedName = p.name;
+              row.matchQuality = "manual"; // von Hand bestätigt -> kein Unsicher-Hinweis mehr
               if (row.grams == null) row.grams = guessGrams(p);
               renderReview(container, recipeId);
             });

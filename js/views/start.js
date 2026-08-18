@@ -9,9 +9,56 @@ import {
   getActiveDateKey, resetActiveDateToToday, shiftActiveDate,
   isViewingToday, dateLabel, MEAL_LABELS,
 } from "../consumption.js";
-import { esc, showToast } from "../ui.js";
+import { esc, showToast, shareOrDownloadFile } from "../ui.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
+
+// dom-to-image-more rastert einen DOM-Knoten unabhängig vom sichtbaren Ausschnitt in ein Bild —
+// das umgeht die unzuverlässige "langer Screenshot"-Funktion von Android/iOS bei installierten
+// PWAs, die bei uns immer nur den gerade sichtbaren Bereich erfasst. Lokal vendort (wie
+// Tesseract.js), damit es auch offline funktioniert. Die Datei ist ein klassisches UMD-Skript
+// (kein ESM-Export) und hängt sich beim Laden als <script> an window.domtoimage — ein
+// dynamisches import() würde scheitern, weil "this" im Modul-Kontext undefined ist.
+let domToImagePromise = null;
+function loadDomToImage() {
+  if (window.domtoimage) return Promise.resolve(window.domtoimage);
+  if (!domToImagePromise) {
+    domToImagePromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = new URL("../../vendor/dom-to-image-more/dom-to-image-more.min.js", import.meta.url).href;
+      script.onload = () => resolve(window.domtoimage);
+      script.onerror = () => reject(new Error("dom-to-image-more konnte nicht geladen werden"));
+      document.head.appendChild(script);
+    });
+  }
+  return domToImagePromise;
+}
+
+let savingImage = false;
+async function saveDashboardAsImage(container) {
+  if (savingImage) return;
+  savingImage = true;
+  showToast("Bild wird erstellt …");
+  try {
+    const domtoimage = await loadDomToImage();
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const blob = await domtoimage.toBlob(container, {
+      bgcolor: bg && bg !== "rgba(0, 0, 0, 0)" ? bg : "#0f172a",
+      width: container.scrollWidth,
+      height: container.scrollHeight,
+      filter: (node) => node.id !== "saveImageBtn",
+    });
+    const filename = `keto-dashboard-${new Date().toISOString().slice(0, 10)}.png`;
+    const file = new File([blob], filename, { type: "image/png" });
+    const result = await shareOrDownloadFile(file, { title: "Keto-Dashboard" });
+    if (result !== "cancelled") showToast(result === "shared" ? "Geteilt" : "Bild gespeichert");
+  } catch (e) {
+    console.error(e);
+    showToast("Bild konnte nicht erstellt werden");
+  } finally {
+    savingImage = false;
+  }
+}
 
 export async function renderStart(container, goToTab) {
   const profile = Store.getActiveProfile();
@@ -40,9 +87,12 @@ export async function renderStart(container, goToTab) {
     <h2 class="section-title" style="margin-top:24px">Zuletzt gescannt</h2>
     <p class="hint" style="margin-top:-8px">Zum Eintragen einer Menge auf ein Produkt tippen.</p>
     <div id="recentList"><p class="muted">Lädt …</p></div>
+
+    <button class="btn ghost" id="saveImageBtn" style="margin-top:20px">📸 Dashboard als Bild sichern</button>
   `;
 
   container.querySelector("#startScanBtn").addEventListener("click", () => goToTab("scan"));
+  container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
   container.querySelector("#datePrev").addEventListener("click", () => { shiftActiveDate(-1); refresh(); });
   container.querySelector("#dateNext").addEventListener("click", () => { shiftActiveDate(1); refresh(); });
   container.querySelector("#dateLabelBtn").addEventListener("click", () => {

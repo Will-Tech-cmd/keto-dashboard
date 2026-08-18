@@ -2,6 +2,7 @@
 import { Store } from "./store.js";
 import { calcNetCarbs } from "./keto.js";
 import { getActiveDateKey } from "./consumption.js";
+import { downscaleImageIfNeeded } from "./ui.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -130,14 +131,18 @@ const UNIT_GRAMS = {
   tl: 5, teel: 5, teelöffel: 5,
   zehe: 5, zehen: 5,
   prise: 1, prisen: 1,
+  stück: null, stk: null, // Stückzahl ohne bekanntes Gewicht -> grams bleibt null, quantity zählt
 };
+// Einheiten-Wortmuster für beide Erkennungsrichtungen (deckt sich mit UNIT_GRAMS' Schlüsseln).
+const UNIT_PATTERN = "g|gr|gramm|kg|kilo|kilogramm|ml|milliliter|l|liter|el|essl|esslöffel|tl|teel|teelöffel|zehen?|prisen?|st(?:ü|ue)ck|stk";
 
 const SIZE_QUALIFIERS = /\b(kleine[rs]?|mittlere[rs]?|große[rs]?|groß)\b/gi;
 const LEADING_DESCRIPTORS = /\b(geriebene[rs]?|gehackte[rs]?|frische[rs]?|getrocknete[rs]?|gewürfelte[rs]?|gepresste[rs]?|gemahlene[rs]?|geschmolzene[rs]?|zuckerfreie[rn]?|weiche[rs]?)\b/gi;
 const TRAILING_DESCRIPTORS = /[,\s]+\b(fein gehackt|gehackt|gewürfelt|gepresst|gerieben|geraspelt|in scheiben|zum garnieren|nach geschmack|frisch|getrocknet)\b.*$/i;
 
-// Aufzählungszeichen am Zeilenanfang (Rezept-Vorlagen, OCR): "- 150g Mandeln" -> "150g Mandeln"
-const BULLET_PREFIX = /^\s*[-–—•*·]\s*/;
+// Aufzählungszeichen am Zeilenanfang: nummerierte Listen ("1.", "2)") UND/GEFOLGT VON
+// Bindestrichen ("4. -Eier", "5. - Eier") — beide Präfixe können kombiniert auftreten.
+const BULLET_PREFIX = /^\s*(?:\d+[.)]\s*)?(?:[-–—•*·]+\s*)?/;
 // Abschnittsüberschriften ohne Menge überspringen: "Zutaten:", "Boden:", "Füllung:" …
 const SECTION_HEADER = /^[^\d]*:\s*$/;
 // Klammerzusätze wie "(geschmolzen)" oder "(ggf mehr oder weniger …)" sind keine Zutat.
@@ -146,6 +151,12 @@ const PAREN_CONTENT = /\([^)]*\)/g;
 const QUANTITY_RANGE = /^(\d+(?:[.,]\d+)?)\s*[-–]\s*\d+(?:[.,]\d+)?(?=\s)/;
 // Mengen-Zusatzwörter vor der eigentlichen Einheit: "1 gehäufter EL" -> "1 EL"
 const HEAP_QUALIFIER = /^(gehäufte[rn]?|gestrichene[rn]?)\s+/i;
+
+// "Menge zuerst": "150g Mandeln" / "150 g Mandeln" / "1 EL Öl" — beliebig viel Leerraum
+// zwischen Zahl und Einheit, Einheit optional direkt angehängt oder als eigenes Wort.
+const QTY_FIRST = new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(?:(${UNIT_PATTERN})\\b)?\\.?\\s*(.+)$`, "i");
+// "Name zuerst": "Eier 100g" / "Eier 100 g" / "Eier, 2 Stück" / "Butter 1 EL"
+const NAME_FIRST = new RegExp(`^(.+?)[,\\s]+(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_PATTERN})?\\.?\\s*$`, "i");
 
 function parseIngredientLine(rawLine) {
   const raw = rawLine.trim();
@@ -160,21 +171,47 @@ function parseIngredientLine(rawLine) {
   cleaned = cleaned.replace(QUANTITY_RANGE, "$1");
   cleaned = cleaned.replace(TRAILING_DESCRIPTORS, "").trim() || cleaned;
 
-  const m = cleaned.match(/^(\d+(?:[.,]\d+)?)\s*(.+)$/);
-  if (!m) {
-    return { raw, quantity: null, unit: null, grams: null, name: cleanName(cleaned) };
+  // 1) "Menge zuerst" — nur wenn dahinter noch ein eigenständiger Name folgt (mind. 1 Buchstabe),
+  // sonst würde "150g" allein (ohne Namen) fälschlich hier hängen bleiben.
+  let m = cleaned.match(QTY_FIRST);
+  if (m && /[a-zA-ZäöüÄÖÜß]/.test(m[3])) {
+    const quantity = parseFloat(m[1].replace(",", "."));
+    let rest = m[3].trim().replace(HEAP_QUALIFIER, "");
+    // Die Einheit wurde entweder schon direkt an der Zahl erkannt (m[2], z.B. "150g") — dann NICHT
+    // nochmal aus "rest" stripped werden (sonst frisst "gemahlene" fälschlich sein führendes "g").
+    // Nur wenn m[2] leer blieb, nach einer separat stehenden Einheit am Anfang von "rest" suchen
+    // (z.B. "1 gehäufter EL Kakao" -> nach Entfernen von "gehäufter" beginnt rest mit "EL").
+    let unit = (m[2] || "").toLowerCase();
+    if (!unit) {
+      const detected = detectLeadingUnit(rest);
+      if (detected) { unit = detected; rest = stripLeadingUnit(rest, detected); }
+    }
+    const name = cleanName(rest);
+    const grams = unit && UNIT_GRAMS[unit] != null ? Math.round(quantity * UNIT_GRAMS[unit]) : null;
+    if (name) return { raw, quantity, unit: unit || null, grams, name };
   }
-  const quantity = parseFloat(m[1].replace(",", "."));
-  const rest = m[2].trim().replace(HEAP_QUALIFIER, "");
 
-  const unitMatch = rest.match(/^([a-zA-ZäöüÄÖÜß]+)\.?\s+(.+)$/);
-  if (unitMatch && UNIT_GRAMS[unitMatch[1].toLowerCase()] != null) {
-    const unit = unitMatch[1].toLowerCase();
-    const name = cleanName(unitMatch[2]);
-    return { raw, quantity, unit, grams: +(quantity * UNIT_GRAMS[unit]).toFixed(0), name };
+  // 2) "Name zuerst" — Menge/Einheit stehen am Zeilenende.
+  m = cleaned.match(NAME_FIRST);
+  if (m) {
+    const name = cleanName(m[1].replace(/[,\s]+$/, ""));
+    const quantity = parseFloat(m[2].replace(",", "."));
+    const unit = (m[3] || "").toLowerCase() || null;
+    const grams = unit && UNIT_GRAMS[unit] != null ? Math.round(quantity * UNIT_GRAMS[unit]) : null;
+    if (name) return { raw, quantity, unit, grams, name };
   }
 
-  return { raw, quantity, unit: null, grams: null, name: cleanName(rest) };
+  // 3) Kein erkennbares Zahlen/Einheiten-Muster — z.B. "Salz, Pfeffer nach Geschmack".
+  return { raw, quantity: null, unit: null, grams: null, name: cleanName(cleaned) };
+}
+
+function detectLeadingUnit(rest) {
+  const m = rest.match(new RegExp(`^(${UNIT_PATTERN})\\b`, "i"));
+  return m ? m[1].toLowerCase() : null;
+}
+
+function stripLeadingUnit(rest, unit) {
+  return rest.replace(new RegExp(`^${unit}\\.?\\s*`, "i"), "");
 }
 
 function cleanName(name) {
@@ -224,7 +261,9 @@ function getWorker(onStatus) {
 /** Erkennt Text aus einer Bilddatei (File/Blob). Wirft bei Fehlern, UI fängt das ab. */
 export async function recognizeImageText(file, onStatus) {
   const worker = await getWorker(onStatus);
+  onStatus?.("Bild wird vorbereitet …");
+  const prepared = await downscaleImageIfNeeded(file);
   onStatus?.("Text wird erkannt …");
-  const { data } = await worker.recognize(file);
+  const { data } = await worker.recognize(prepared);
   return data.text;
 }
