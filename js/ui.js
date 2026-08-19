@@ -136,13 +136,29 @@ export async function downscaleImageIfNeeded(file, { maxSide = 8000, maxPixels =
  * Speichern, Klick daneben) — sie räumt zusätzlich den History-Eintrag auf, damit der
  * Verlauf nicht mit toten Einträgen vollläuft.
  */
+let modalDepth = 0;
+
 export function bindBackClose(closeImmediate) {
-  history.pushState({ modal: true }, "");
-  const onPop = () => {
+  // Verschachtelungstiefe im History-Eintrag mitführen (Rezept-Editor -> Zutaten-Scanner sind
+  // z.B. zwei Ebenen). Ohne sie würde der innere Dialog beim Schließen die äußeren mitreißen:
+  // sein history.back() löst ein popstate aus, das auch deren Listener erreicht.
+  const depth = ++modalDepth;
+  history.pushState({ modal: true, depth }, "");
+
+  const detach = () => {
     window.removeEventListener("popstate", onPop);
-    closeImmediate();
+    modalDepth = Math.min(modalDepth, depth - 1);
   };
+
+  function onPop() {
+    // Nur schließen, wenn wirklich hinter DIESEN Dialog zurückgesprungen wurde.
+    const current = history.state?.modal ? history.state.depth : 0;
+    if (current >= depth) return;
+    detach();
+    closeImmediate();
+  }
   window.addEventListener("popstate", onPop);
+
   /**
    * `afterHistorySync` für alle Schließwege, die anschließend selbst navigieren (z.B. der
    * Eintragen-Sheet, der auf den Scan-Tab wechselt). history.back() wirkt erst asynchron beim
@@ -151,9 +167,9 @@ export function bindBackClose(closeImmediate) {
    * History-Eintrag des Dialogs wirklich weg ist.
    */
   return function closeAndSync(afterHistorySync) {
-    window.removeEventListener("popstate", onPop);
+    detach();
     closeImmediate();
-    if (history.state?.modal) {
+    if (history.state?.modal && history.state.depth >= depth) {
       if (afterHistorySync) {
         const onSynced = () => {
           window.removeEventListener("popstate", onSynced);

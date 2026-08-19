@@ -10,6 +10,7 @@ import {
   parseIngredientText, recognizeImageText,
 } from "../recipes.js";
 import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel } from "../consumption.js";
+import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { showToast, esc, bindBackClose } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
@@ -203,6 +204,7 @@ function renderEditor(container, recipeId) {
       <label for="ingSearchInput">Zutat suchen und hinzufügen</label>
       <input type="text" id="ingSearchInput" placeholder="z.B. Rinderhackfleisch, Bacon …" autocomplete="off">
       <div id="ingSearchResults" style="margin-top:8px"></div>
+      ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">📷 Zutat scannen</button>` : ""}
       <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">✏️ Zutat manuell eintragen</button>
       <div id="manualIngWrap" style="display:none;margin-top:10px"></div>
     </div>
@@ -253,6 +255,13 @@ function renderEditor(container, recipeId) {
       closeEditor();
       showToast("Rezept gelöscht");
     }
+  });
+
+  container.querySelector("#scanIngBtn")?.addEventListener("click", () => {
+    openIngredientScanner(recipeId, () => {
+      renderIngredientList(container, recipeId);
+      renderTotals(container, recipeId);
+    });
   });
 
   container.querySelector("#ingToShoppingBtn").addEventListener("click", () => {
@@ -403,6 +412,93 @@ function wireIngredientSearch(container, recipeId) {
 function guessGrams(product) {
   const m = String(product.servingSize || "").match(/(\d+(?:[.,]\d+)?)\s*g/i);
   return m ? parseFloat(m[1].replace(",", ".")) : 100;
+}
+
+/**
+ * Zutaten per Barcode einscannen. Bleibt nach jedem Treffer offen und startet den Scanner neu,
+ * damit man beim Kochen mehrere Packungen hintereinander durchziehen kann, ohne den Dialog
+ * jedes Mal neu zu öffnen. Die Mengen sind Schätzwerte (Portionsangabe der Packung, sonst
+ * 100 g) und werden anschließend in der Zutatenliste angepasst — genau wie bei der Textsuche.
+ */
+function openIngredientScanner(recipeId, onAdded) {
+  const added = [];
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Zutat scannen</h2>
+      <p class="hint">Barcode ins Bild halten. Nach jedem Treffer geht es direkt weiter — mehrere Zutaten nacheinander sind kein Problem.</p>
+      <div class="scan-wrap" style="margin-top:12px">
+        <video id="ingScanVideo" playsinline muted></video>
+        <div class="scan-frame"></div>
+        <div class="scan-status" id="ingScanStatus">Kamera wird gestartet …</div>
+      </div>
+      <div id="ingScanAdded"></div>
+      <button type="button" class="btn" id="ingScanDone" style="margin-top:4px">Fertig</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const video = overlay.querySelector("#ingScanVideo");
+  const statusEl = overlay.querySelector("#ingScanStatus");
+  const addedEl = overlay.querySelector("#ingScanAdded");
+  const setStatus = (text) => { statusEl.textContent = text; };
+
+  const close = bindBackClose(() => { stopScanner(); overlay.remove(); });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#ingScanDone").addEventListener("click", () => {
+    close();
+    if (added.length > 0) showToast(`${added.length} Zutat(en) hinzugefügt`);
+  });
+
+  const renderAdded = () => {
+    if (added.length === 0) { addedEl.innerHTML = ""; return; }
+    addedEl.innerHTML = `
+      <p class="hint" style="margin-top:12px">Hinzugefügt:</p>
+      ${added.map(a => `
+        <div class="list-item" style="padding:8px 12px">
+          <div class="info">
+            <div class="name">${esc(a.name)}</div>
+            <div class="meta">${a.grams} g — Menge später in der Liste anpassen</div>
+          </div>
+        </div>
+      `).join("")}
+    `;
+  };
+
+  const scanNext = () => {
+    startScanner(video, handleCode, setStatus).catch(err => {
+      console.error("Zutaten-Scanner konnte nicht gestartet werden:", err);
+      setStatus("Kamerazugriff fehlgeschlagen — Berechtigung prüfen.");
+    });
+  };
+
+  async function handleCode(barcode) {
+    setStatus("Produkt wird gesucht …");
+    try {
+      const product = await lookupProduct(barcode);
+      const grams = guessGrams(product);
+      addIngredient(recipeId, {
+        name: product.name,
+        grams,
+        per100: product.per100,
+        likelyUsLabel: product.likelyUsLabel,
+      });
+      added.push({ name: product.name, grams });
+      renderAdded();
+      onAdded?.();
+      setStatus(`${product.name} hinzugefügt — nächsten Barcode scannen`);
+    } catch (err) {
+      setStatus(err.notFound
+        ? "Produkt nicht gefunden — nächsten Barcode scannen oder unten von Hand suchen."
+        : "Produktsuche fehlgeschlagen (offline?) — nächsten Barcode scannen.");
+    }
+    // Scanner stoppt sich nach jedem Treffer selbst (siehe scanner.js) — für die nächste
+    // Zutat neu starten, solange der Dialog offen ist.
+    if (document.body.contains(overlay)) scanNext();
+  }
+
+  scanNext();
 }
 
 function wireManualIngredient(container, recipeId) {
