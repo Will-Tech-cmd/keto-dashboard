@@ -149,10 +149,11 @@ function openEntrySheet() {
     overlay.querySelectorAll(".klar-entry-way").forEach(btn => {
       btn.addEventListener("click", () => {
         const way = btn.dataset.way;
-        close();
-        if (way === "recipe") goToTab("recipes");
-        else if (way === "search") { goToTab("scan"); openScanSearch(view); }
-        else goToTab("scan");
+        close(() => {
+          if (way === "recipe") goToTab("recipes");
+          else if (way === "search") { goToTab("scan"); openScanSearch(view); }
+          else goToTab("scan");
+        });
       });
     });
     overlay.querySelectorAll(".klar-chip").forEach(chip => {

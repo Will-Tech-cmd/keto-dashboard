@@ -143,9 +143,27 @@ export function bindBackClose(closeImmediate) {
     closeImmediate();
   };
   window.addEventListener("popstate", onPop);
-  return function closeAndSync() {
+  /**
+   * `afterHistorySync` für alle Schließwege, die anschließend selbst navigieren (z.B. der
+   * Eintragen-Sheet, der auf den Scan-Tab wechselt). history.back() wirkt erst asynchron beim
+   * nächsten popstate — wer direkt danach pushState aufruft, wird von diesem popstate wieder
+   * zurückgeworfen und landet dort, wo er herkam. Deshalb erst navigieren, wenn der
+   * History-Eintrag des Dialogs wirklich weg ist.
+   */
+  return function closeAndSync(afterHistorySync) {
     window.removeEventListener("popstate", onPop);
     closeImmediate();
-    if (history.state?.modal) history.back();
+    if (history.state?.modal) {
+      if (afterHistorySync) {
+        const onSynced = () => {
+          window.removeEventListener("popstate", onSynced);
+          afterHistorySync();
+        };
+        window.addEventListener("popstate", onSynced);
+      }
+      history.back();
+    } else {
+      afterHistorySync?.();
+    }
   };
 }
