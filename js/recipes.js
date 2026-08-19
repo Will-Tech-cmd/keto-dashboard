@@ -98,12 +98,16 @@ export function calcPerServing(recipe) {
 export function logRecipeConsumption(recipe, servings, meal = null) {
   const perServing = calcPerServing(recipe);
   const profile = Store.getActiveProfile();
+  // Portionsgewicht als Schnappschuss mitschreiben: spätere Rezeptänderungen sollen den
+  // bereits eingetragenen Tag nicht rückwirkend verändern — genauso wie die Nährwerte unten.
+  const totalGrams = recipe.ingredients.reduce((sum, i) => sum + (i.grams || 0), 0);
   const entry = {
     id: crypto.randomUUID(),
     profileId: profile.id,
     barcode: `recipe:${recipe.id}`,
     name: recipe.name,
     servings,
+    servingG: totalGrams > 0 ? Math.round(totalGrams / (recipe.servings || 1)) : null,
     meal,
     dateKey: getActiveDateKey(),
     kcal: round1(perServing.kcal * servings),

@@ -21,8 +21,6 @@ function defaultProfile(name) {
     dietType: "keto",       // "keto" | "lowcarb" | "other" -> steuert Ampel-Standardwerte
     gradeThresholds: { green: 5, yellow: 10 }, // g Netto-KH je 100g, frei editierbar
     waterTargetMl: 2500,    // Tagesziel Trinkmenge (frei editierbar), unabhängig von den Makro-Zielen
-    design: "klassisch",    // "klassisch" | "klar" — Bestandsprofile bleiben auf "klassisch",
-                            // Onboarding setzt für neu angelegte Profile explizit "klar"
     appearance: "system",   // "system" | "light" | "dark" — schlägt bei explizitem Wert die Systemeinstellung
   };
 }
@@ -76,7 +74,6 @@ function migrate(parsed) {
     dietType: "keto",
     gradeThresholds: { green: 5, yellow: 10 },
     waterTargetMl: 2500,
-    design: "klassisch",
     appearance: "system",
     ...p,
   }));

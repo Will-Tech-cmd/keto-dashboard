@@ -1,13 +1,13 @@
 // ui.js — kleine, geteilte UI-Helfer.
 import { Store } from "./store.js";
 
-/** Setzt Design ("klassisch"/"klar") und Erscheinungsbild ("system"/"light"/"dark") des aktiven
- * Profils als Attribute am <body> — steuert in app.css sämtliche Farb-/Schrift-Tokens sowie
- * Tabbar und FAB. Aufrufen beim Start, nach Profilwechsel und nach Änderung im Profil-Tab. */
+/** Setzt das Erscheinungsbild ("system"/"light"/"dark") des aktiven Profils als Attribut am
+ * <body> — steuert in app.css sämtliche Farb-Tokens. Aufrufen beim Start, nach Profilwechsel
+ * und nach Änderung im Profil-Tab. */
 export function applyDesignTheme() {
-  const profile = Store.getActiveProfile();
-  document.body.dataset.design = profile.design;
-  document.body.dataset.theme = profile.appearance;
+  // Es gibt nur noch das Design "Klar" — das Attribut bleibt als CSS-Aufhänger bestehen.
+  document.body.dataset.design = "klar";
+  document.body.dataset.theme = Store.getActiveProfile().appearance;
 }
 
 let toastTimer = null;
@@ -22,7 +22,7 @@ export function showToast(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Snackbar mit Rückgängig (nur Design "Klar") — Ersatz für die einzelnen ↩️-Buttons
+// Snackbar mit Rückgängig — Ersatz für die einzelnen ↩️-Buttons
 // in jeder Zeile. Mehrere Aktionen kurz hintereinander ersetzen die sichtbare Snackbar,
 // bleiben aber als Stapel bestehen: Rückgängig macht immer zuerst die zuletzt gezeigte
 // Aktion rückgängig (LIFO), bis der Stapel leer ist. Jede Aktion verfällt nach 5s eigenständig
@@ -166,7 +166,10 @@ export function bindBackClose(closeImmediate) {
    * zurückgeworfen und landet dort, wo er herkam. Deshalb erst navigieren, wenn der
    * History-Eintrag des Dialogs wirklich weg ist.
    */
-  return function closeAndSync(afterHistorySync) {
+  return function closeAndSync(maybeCallback) {
+    // Viele Aufrufer hängen close() direkt als Klick-Handler ein — dann kommt hier das
+    // Click-Event an, kein Callback. Nur echte Funktionen als Fortsetzung behandeln.
+    const afterHistorySync = typeof maybeCallback === "function" ? maybeCallback : null;
     detach();
     closeImmediate();
     if (history.state?.modal && history.state.depth >= depth) {

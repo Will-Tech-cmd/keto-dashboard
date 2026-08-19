@@ -667,3 +667,28 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
 .klar-result-unit { font-size: 15px; font-weight: 700; color: rgba(255,255,255,.6); }
 .klar-result-macros { font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.75); margin-top: 10px; }
 .klar-result-total { font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.5); margin-top: 6px; }
+
+/* ---------- „Klar": Ringraster auf der Startseite (4 Zielwerte + Wasser in einer Karte) ---------- */
+.klar-head-actions { display: flex; gap: 8px; align-items: center; flex: none; }
+.klar-pill-btn.icon-only { padding: 6px 10px; font-size: 14px; }
+
+.klar-ring-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 10px; margin-top: 14px; }
+.klar-ring-tile { text-align: center; }
+.klar-ring-tile .klar-ring-wrap { width: 96px; height: 96px; margin: 0 auto; }
+.klar-ring-label { font-weight: 700; font-size: 13px; margin-top: 8px; }
+.klar-ring-total { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-top: 1px; }
+.klar-ring-tile .klar-ring-value { font-size: 20px; }
+.klar-ring-tile .klar-ring-sub { font-size: 10px; margin-top: 1px; }
+
+/* Trennlinien zwischen den Mahlzeiten-Gruppen deutlicher — bei mehreren Mahlzeiten am Tag
+   war die frühere, sehr helle Linie kaum zu sehen. */
+.klar-meal-group-title + .klar-meal-row { border-top: 1px solid var(--divider); }
+.klar-meal-group-title:not(:first-child) {
+  border-top: 2px solid var(--border); margin-top: 6px; padding-top: 14px;
+}
+
+/* Fußzeile: FAB tiefer, damit er weniger über der Leiste schwebt; Listen/Rezepte weiter
+   nach außen, damit sie nicht am FAB kleben. */
+body[data-design="klar"] .fab-btn { top: -14px; }
+body[data-design="klar"] .tab-btn[data-tab="lists"] { margin-right: 34px; }
+body[data-design="klar"] .tab-btn[data-tab="recipes"] { margin-left: 34px; }

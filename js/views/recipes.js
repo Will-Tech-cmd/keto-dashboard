@@ -87,12 +87,13 @@ function renderRecipeRows(container) {
   body.innerHTML = recipes.map(r => {
     const perServing = calcPerServing(r);
     const grade = ketoGrade(perServing.netCarbs, activeThresholds());
+    const gramsPer = gramsPerServing(r);
     return `
       <div class="list-item" data-id="${r.id}" style="cursor:pointer">
         <span class="badge ${grade}" style="flex-shrink:0">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]}</span>
         <div class="info">
           <div class="name">${esc(r.name)}</div>
-          <div class="meta" title="${r.ingredients.length} Zutaten, ${r.servings} Portionen">${perServing.kcal != null ? Math.round(perServing.kcal) : "–"} kcal · ${perServing.netCarbs ?? "–"} g KH</div>
+          <div class="meta" title="${r.ingredients.length} Zutaten, ${r.servings} Portionen">1 P.${gramsPer ? ` (${gramsPer} g)` : ""} · ${perServing.kcal != null ? Math.round(perServing.kcal) : "–"} kcal · ${perServing.netCarbs ?? "–"} g KH</div>
         </div>
         <button class="icon-btn" data-action="addToday" title="Zum Tag hinzufügen">🍽️</button>
         <button class="icon-btn" data-action="delete" title="Löschen">🗑️</button>
@@ -124,6 +125,7 @@ function renderRecipeRows(container) {
 
 function openServingsModal(recipe) {
   const perServing = calcPerServing(recipe);
+  const gramsPer = gramsPerServing(recipe);
   let selectedMeal = suggestMeal();
   const dayLabel = dateLabel(getActiveDateKey());
   const overlay = document.createElement("div");
@@ -131,7 +133,7 @@ function openServingsModal(recipe) {
   overlay.innerHTML = `
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(recipe.name)}</h2>
-      <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${perServing.kcal ?? "–"} kcal. Wie viele davon zu „${esc(dayLabel)}" hinzufügen?</p>
+      <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal. Wie viele davon zu „${esc(dayLabel)}" hinzufügen?</p>
       <label for="servingsInput">Portionen</label>
       <input type="number" id="servingsInput" value="1" min="0.25" step="0.25">
       <p class="hint" id="servingsPreview" style="margin-top:8px"></p>
@@ -150,7 +152,8 @@ function openServingsModal(recipe) {
   const updatePreview = () => {
     const val = parseFloat(input.value);
     if (!val || val <= 0) { preview.textContent = ""; return; }
-    preview.textContent = `→ ${round1((perServing.kcal ?? 0) * val)} kcal · ${round1((perServing.netCarbs ?? 0) * val)} g Netto-KH werden eingetragen`;
+    const gramsPart = gramsPer ? `${Math.round(gramsPer * val)} g · ` : "";
+    preview.textContent = `→ ${gramsPart}${round1((perServing.kcal ?? 0) * val)} kcal · ${round1((perServing.netCarbs ?? 0) * val)} g Netto-KH werden eingetragen`;
   };
   input.addEventListener("input", updatePreview);
   updatePreview();
@@ -296,38 +299,35 @@ function renderTotals(container, recipeId) {
   const perServing = calcPerServing(recipe);
   const grade = ketoGrade(perServing.netCarbs, activeThresholds());
   const card = container.querySelector("#totalsCard");
+  const totals = calcRecipeTotals(recipe);
+  const gramsPer = gramsPerServing(recipe);
 
-  // Design "Klar": dunkle Ergebniskarte, die den wichtigsten Wert (Netto-KH pro Portion) groß
-  // herausstellt — der entscheidet, ob das Rezept ins Tagesbudget passt.
-  if (Store.getActiveProfile().design === "klar") {
-    const totals = calcRecipeTotals(recipe);
-    card.className = "klar-result-card";
-    card.innerHTML = `
-      <div class="klar-result-head">
-        <span class="klar-result-eyebrow">Pro Portion</span>
-        <span class="klar-result-badge ${grade}">${esc(GRADE_LABEL[grade])}</span>
-      </div>
-      <div class="klar-result-main">
-        <span class="klar-result-value">${perServing.netCarbs ?? "–"}</span>
-        <span class="klar-result-unit">g Netto-KH</span>
-      </div>
-      <div class="klar-result-macros">${perServing.kcal ?? "–"} kcal · F ${perServing.fat ?? "–"} g · E ${perServing.protein ?? "–"} g</div>
-      <div class="klar-result-total">Gesamt: ${round1(totals.kcal) ?? "–"} kcal · ${round1(totals.netCarbs) ?? "–"} g Netto-KH bei ${recipe.servings} Portion(en)</div>
-    `;
-    return;
-  }
-
-  card.className = "card";
+  // Dunkle Ergebniskarte, die den wichtigsten Wert (Netto-KH pro Portion) groß herausstellt —
+  // der entscheidet, ob das Rezept ins Tagesbudget passt.
+  card.className = "klar-result-card";
   card.innerHTML = `
-    <h2>Pro Portion</h2>
-    <span class="badge ${grade}" style="margin-bottom:8px;display:inline-flex">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]} ${esc(GRADE_LABEL[grade])}</span>
-    <div class="grid-2">
-      <div class="stat"><div class="val">${perServing.kcal ?? "–"}</div><div class="lbl">kcal</div></div>
-      <div class="stat"><div class="val">${perServing.netCarbs ?? "–"} g</div><div class="lbl">Netto-KH</div></div>
-      <div class="stat"><div class="val">${perServing.fat ?? "–"} g</div><div class="lbl">Fett</div></div>
-      <div class="stat"><div class="val">${perServing.protein ?? "–"} g</div><div class="lbl">Eiweiß</div></div>
+    <div class="klar-result-head">
+      <span class="klar-result-eyebrow">Pro Portion${gramsPer ? ` · ${gramsPer} g` : ""}</span>
+      <span class="klar-result-badge ${grade}">${esc(GRADE_LABEL[grade])}</span>
     </div>
+    <div class="klar-result-main">
+      <span class="klar-result-value">${perServing.netCarbs ?? "–"}</span>
+      <span class="klar-result-unit">g Netto-KH</span>
+    </div>
+    <div class="klar-result-macros">${perServing.kcal ?? "–"} kcal · F ${perServing.fat ?? "–"} g · E ${perServing.protein ?? "–"} g</div>
+    <div class="klar-result-total">Gesamt: ${round1(totals.kcal) ?? "–"} kcal · ${round1(totals.netCarbs) ?? "–"} g Netto-KH bei ${recipe.servings} Portion(en)</div>
   `;
+}
+
+/**
+ * Gewicht einer Portion = Summe aller Zutatenmengen / Portionen. Nur eine Näherung (Wasser
+ * verdampft beim Kochen, Fett bleibt in der Pfanne), aber gut genug, um eine Portion greifbar
+ * zu machen. Ohne Zutaten mit Mengenangabe gibt es keinen sinnvollen Wert.
+ */
+export function gramsPerServing(recipe) {
+  const total = recipe.ingredients.reduce((sum, i) => sum + (i.grams || 0), 0);
+  if (total <= 0) return null;
+  return Math.round(total / (recipe.servings || 1));
 }
 
 function renderIngredientList(container, recipeId) {
@@ -350,25 +350,105 @@ function renderIngredientList(container, recipeId) {
         </div>
         <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" style="width:64px;text-align:right;min-height:36px">
         <span class="hint" style="margin:0 4px">g</span>
+        <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
         <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
       </div>
     `;
   }).join("");
+
+  const refresh = () => {
+    renderIngredientList(container, recipeId);
+    renderTotals(container, recipeId);
+  };
 
   el.querySelectorAll(".list-item").forEach(row => {
     const ingId = row.dataset.id;
     row.querySelector(".ing-grams-input").addEventListener("change", (e) => {
       const g = parseFloat(e.target.value);
       updateIngredient(recipeId, ingId, { grams: g >= 0 ? g : 0 });
-      renderIngredientList(container, recipeId);
-      renderTotals(container, recipeId);
+      refresh();
+    });
+    row.querySelector('[data-action="edit"]').addEventListener("click", () => {
+      openIngredientEditor(recipeId, ingId, refresh);
     });
     row.querySelector('[data-action="remove"]').addEventListener("click", () => {
       removeIngredient(recipeId, ingId);
-      renderIngredientList(container, recipeId);
-      renderTotals(container, recipeId);
+      refresh();
     });
   });
+}
+
+/**
+ * Nährwerte einer Zutat nachträglich korrigieren (z.B. wenn Open Food Facts danebenliegt).
+ * Wirkt nur auf das Rezept selbst — bereits eingetragene Tage behalten die Werte, die beim
+ * Eintragen galten, weil logRecipeConsumption sie als Schnappschuss in den Tageseintrag
+ * schreibt. Vergangene Tage ändern sich dadurch nie rückwirkend.
+ */
+function openIngredientEditor(recipeId, ingredientId, onSaved) {
+  const recipe = Store.getRecipe(recipeId);
+  const ing = recipe?.ingredients.find(i => i.id === ingredientId);
+  if (!ing) return;
+  const p = ing.per100 || {};
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Zutat bearbeiten</h2>
+      <p class="hint">Nährwerte pro 100 g. Änderungen gelten ab jetzt — bereits eingetragene Tage bleiben unverändert.</p>
+      <label for="ieName">Name</label>
+      <input type="text" id="ieName" value="${esc(ing.name)}">
+      <label for="ieGrams">Menge im Rezept (g)</label>
+      <input type="number" id="ieGrams" value="${ing.grams ?? ""}" min="0" step="1">
+      <div class="field-row">
+        <div><label for="ieCarbs">Kohlenhydrate (g)</label><input type="number" step="0.1" id="ieCarbs" value="${p.carbs ?? ""}"></div>
+        <div><label for="ieFiber">davon Ballaststoffe (g)</label><input type="number" step="0.1" id="ieFiber" value="${p.fiber ?? ""}"></div>
+      </div>
+      <div class="field-row">
+        <div><label for="ieFat">Fett (g)</label><input type="number" step="0.1" id="ieFat" value="${p.fat ?? ""}"></div>
+        <div><label for="ieProtein">Eiweiß (g)</label><input type="number" step="0.1" id="ieProtein" value="${p.protein ?? ""}"></div>
+      </div>
+      <label for="ieKcal">kcal</label>
+      <input type="number" step="1" id="ieKcal" value="${p.kcal ?? ""}">
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn secondary" id="ieCancel">Abbrechen</button>
+        <button type="button" class="btn" id="ieSave">Speichern</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#ieCancel").addEventListener("click", close);
+
+  overlay.querySelector("#ieSave").addEventListener("click", () => {
+    const num = (id) => {
+      const v = parseFloat(overlay.querySelector(id).value);
+      return Number.isNaN(v) ? null : v;
+    };
+    const name = overlay.querySelector("#ieName").value.trim();
+    if (!name) { showToast("Bitte einen Namen eingeben"); return; }
+    const grams = num("#ieGrams");
+
+    updateIngredient(recipeId, ingredientId, {
+      name,
+      grams: grams != null && grams >= 0 ? grams : ing.grams,
+      per100: {
+        ...p,
+        carbs: num("#ieCarbs"),
+        fiber: num("#ieFiber"),
+        fat: num("#ieFat"),
+        protein: num("#ieProtein"),
+        kcal: num("#ieKcal"),
+      },
+    });
+    close();
+    onSaved?.();
+    showToast("Zutat aktualisiert");
+  });
+
+  overlay.querySelector("#ieName").focus();
 }
 
 function wireIngredientSearch(container, recipeId) {
@@ -443,6 +523,8 @@ function guessGrams(product) {
  * jedes Mal neu zu öffnen. Die Mengen sind Schätzwerte (Portionsangabe der Packung, sonst
  * 100 g) und werden anschließend in der Zutatenliste angepasst — genau wie bei der Textsuche.
  */
+const SCAN_COOLDOWN_MS = 1000;
+
 function openIngredientScanner(recipeId, onAdded) {
   const added = [];
   const overlay = document.createElement("div");
@@ -517,7 +599,9 @@ function openIngredientScanner(recipeId, onAdded) {
         : "Produktsuche fehlgeschlagen (offline?) — nächsten Barcode scannen.");
     }
     // Scanner stoppt sich nach jedem Treffer selbst (siehe scanner.js) — für die nächste
-    // Zutat neu starten, solange der Dialog offen ist.
+    // Zutat neu starten, solange der Dialog offen ist. Die kurze Pause verhindert, dass
+    // dieselbe Packung mehrfach hintereinander erkannt wird, während sie noch im Bild liegt.
+    await new Promise(r => setTimeout(r, SCAN_COOLDOWN_MS));
     if (document.body.contains(overlay)) scanNext();
   }
 

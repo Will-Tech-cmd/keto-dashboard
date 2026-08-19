@@ -56,10 +56,9 @@ export function renderProfile(container, onProfileChanged) {
     </div>
 
     <div class="card">
-      <h2>Design</h2>
-      <p class="hint" style="margin-top:0">Gilt nur für dieses Profil — ${esc(otherProfileName())} kann ein anderes wählen.</p>
-      <div class="klar-design-choices" id="designChoices"></div>
-      <div class="klar-appearance-row">
+      <h2>Erscheinungsbild</h2>
+      <p class="hint" style="margin-top:0">Gilt nur für dieses Profil — ${esc(otherProfileName())} kann es anders einstellen.</p>
+      <div class="klar-appearance-row" style="margin-top:4px;padding-top:0;border-top:none">
         <div>
           <div class="klar-appearance-name">Dunkles Erscheinungsbild</div>
           <div class="klar-appearance-desc" id="appearanceDesc"></div>
@@ -85,7 +84,7 @@ export function renderProfile(container, onProfileChanged) {
   renderProfileForm(container, onProfileChanged);
   wireExportImport(container);
   wireAiKey(container);
-  renderDesignCard(container, onProfileChanged);
+  renderAppearanceCard(container, onProfileChanged);
 }
 
 function otherProfileName() {
@@ -93,37 +92,10 @@ function otherProfileName() {
   return state.profiles.find(p => p.id !== state.activeProfileId)?.name || "das andere Profil";
 }
 
-const DESIGNS = [
-  { key: "klassisch", name: "Klassisch", desc: "Vier Ringe, wie bisher" },
-  { key: "klar", name: "Klar", desc: "Ein Ring, Balken, Chips" },
-];
-
-/** Design- und Erscheinungsbild-Wahl je Profil. Beides wirkt sofort (Attribute am <body>),
- * ohne Neuladen — deshalb wird nach dem Umschalten nur neu gerendert. */
-function renderDesignCard(container, onProfileChanged) {
+/** Erscheinungsbild-Wahl je Profil. Wirkt sofort (Attribut am <body>), ohne Neuladen —
+ * deshalb wird nach dem Umschalten nur neu gerendert. */
+function renderAppearanceCard(container, onProfileChanged) {
   const profile = Store.getActiveProfile();
-  const choicesEl = container.querySelector("#designChoices");
-
-  choicesEl.innerHTML = DESIGNS.map(d => `
-    <div class="klar-design-choice ${d.key === profile.design ? "selected" : ""}" data-design="${d.key}" role="button" tabindex="0">
-      <div class="klar-design-preview">${designPreviewHtml(d.key)}</div>
-      <div class="klar-design-name">
-        <span style="display:inline-flex;width:18px;height:18px;border-radius:50%;border:2px solid ${d.key === profile.design ? "var(--accent)" : "var(--border)"};background:${d.key === profile.design ? "var(--accent)" : "transparent"};flex:none"></span>
-        ${esc(d.name)}
-      </div>
-      <div class="klar-design-desc">${esc(d.desc)}</div>
-    </div>
-  `).join("");
-
-  choicesEl.querySelectorAll(".klar-design-choice").forEach(el => {
-    el.addEventListener("click", () => {
-      Store.updateProfile(profile.id, { design: el.dataset.design });
-      applyDesignTheme();
-      renderProfile(container, onProfileChanged);
-      showToast(`Design: ${DESIGNS.find(d => d.key === el.dataset.design).name}`);
-    });
-  });
-
   const isDark = profile.appearance === "dark";
   const sw = container.querySelector("#appearanceSwitch");
   sw.classList.toggle("on", isDark);
@@ -141,20 +113,6 @@ function renderDesignCard(container, onProfileChanged) {
     applyDesignTheme();
     renderProfile(container, onProfileChanged);
   });
-}
-
-function designPreviewHtml(key) {
-  if (key === "klassisch") {
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-      ${[0, 1, 2, 3].map(() => `<span style="display:block;width:14px;height:14px;border-radius:50%;border:3px solid var(--accent)"></span>`).join("")}
-    </div>`;
-  }
-  return `<div style="display:flex;align-items:center;gap:6px">
-    <span style="display:block;width:22px;height:22px;border-radius:50%;border:3px solid var(--accent)"></span>
-    <span style="display:flex;flex-direction:column;gap:3px">
-      ${[16, 12, 9].map(w => `<span style="display:block;width:${w * 1.6}px;height:3px;border-radius:999px;background:var(--accent)"></span>`).join("")}
-    </span>
-  </div>`;
 }
 
 function wireAiKey(container) {

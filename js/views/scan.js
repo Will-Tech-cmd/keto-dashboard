@@ -307,91 +307,34 @@ function renderResult(container, product) {
     ` : ""}
   `;
 
-  // Design "Klar": Ampel und Stift oben in einer Zeile, Nährwerte als Kacheln, Aktionen
-  // gebündelt darunter — statt der gestapelten Knopfreihe von "Klassisch".
-  if (Store.getActiveProfile().design === "klar") {
-    resultWrap.innerHTML = `
-      <div class="klar-card" style="margin-top:14px">
-        <div class="klar-card-head" style="align-items:center">
-          <span class="badge ${evalResult.grade}">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[evalResult.grade]} ${esc(GRADE_LABEL[evalResult.grade])}</span>
-          <button type="button" class="klar-icon-btn" id="correctBtn" title="Werte korrigieren">✎</button>
-        </div>
-        <div class="klar-product-name">${esc(product.name)}</div>
-        <div class="klar-product-meta">${esc(product.brand || "")}${product.quantity ? " · " + esc(product.quantity) : ""}</div>
-        <div class="klar-tile-grid">
-          <div class="klar-tile"><div class="val">${fmt(evalResult.netCarbs100)}</div><div class="lbl">g Netto-KH /100 g</div></div>
-          <div class="klar-tile"><div class="val">${fmt(product.per100.fat)}</div><div class="lbl">g Fett /100 g</div></div>
-          <div class="klar-tile"><div class="val">${fmt(product.per100.protein)}</div><div class="lbl">g Eiweiß /100 g</div></div>
-          <div class="klar-tile"><div class="val">${fmt(product.per100.kcal)}</div><div class="lbl">kcal /100 g</div></div>
-        </div>
-        ${notes}
-        <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
-        <div class="klar-action-row">
-          <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">⭐ Favorit</button>
-          <button class="klar-action-btn" id="cartBtn">🛒 Einkauf</button>
-          <button class="klar-action-btn ${isNoGo ? "danger" : ""}" id="noGoBtn">🚫 No-Go</button>
-        </div>
-      </div>
-    `;
-    wireResultActions(container, resultWrap, product, evalResult);
-    return;
-  }
-
   resultWrap.innerHTML = `
-    <div class="card">
-      <div class="btn-row" style="align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div class="klar-card" style="margin-top:14px">
+      <div class="klar-card-head" style="align-items:center">
         <span class="badge ${evalResult.grade}">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[evalResult.grade]} ${esc(GRADE_LABEL[evalResult.grade])}</span>
+        <button type="button" class="klar-icon-btn" id="correctBtn" title="Werte korrigieren">✎</button>
       </div>
-      <h2 style="text-transform:none;color:var(--text);font-size:1.15rem;font-weight:800">${esc(product.name)}</h2>
-      <p class="muted" style="margin-top:-6px">${esc(product.brand || "")} ${product.quantity ? "· " + esc(product.quantity) : ""}</p>
-
-      <div class="grid-2" style="margin-top:12px">
-        <div class="stat"><div class="val">${fmt(evalResult.netCarbs100)}</div><div class="lbl">g Netto-KH /100g</div></div>
-        <div class="stat"><div class="val">${fmt(product.per100.fat)}</div><div class="lbl">g Fett /100g</div></div>
-        <div class="stat"><div class="val">${fmt(product.per100.protein)}</div><div class="lbl">g Eiweiß /100g</div></div>
-        <div class="stat"><div class="val">${fmt(product.per100.kcal)}</div><div class="lbl">kcal /100g</div></div>
+      <div class="klar-product-name">${esc(product.name)}</div>
+      <div class="klar-product-meta">${esc(product.brand || "")}${product.quantity ? " · " + esc(product.quantity) : ""}</div>
+      <div class="klar-tile-grid">
+        <div class="klar-tile"><div class="val">${fmt(evalResult.netCarbs100)}</div><div class="lbl">g Netto-KH /100 g</div></div>
+        <div class="klar-tile"><div class="val">${fmt(product.per100.fat)}</div><div class="lbl">g Fett /100 g</div></div>
+        <div class="klar-tile"><div class="val">${fmt(product.per100.protein)}</div><div class="lbl">g Eiweiß /100 g</div></div>
+        <div class="klar-tile"><div class="val">${fmt(product.per100.kcal)}</div><div class="lbl">kcal /100 g</div></div>
       </div>
-
-      ${evalResult.netCarbsServing != null ? `
-        <p class="hint" style="margin-top:10px">
-          Portion (${evalResult.servingGrams} g): <strong>${evalResult.netCarbsServing} g Netto-KH</strong>
-          ${evalResult.pctOfDailyLimit != null ? ` — das sind ${evalResult.pctOfDailyLimit}% deines Tageslimits (${targets.netCarbG} g).` : ""}
-        </p>` : ""}
-
-      ${hasFiber ? `
-        <label class="btn-row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer">
-          <input type="checkbox" id="fiberToggle" ${subtractFiber ? "checked" : ""} style="width:auto;min-height:auto;flex:none">
-          <span class="hint" style="margin:0">Ballaststoffe abziehen (${fmt(product.per100.fiber)} g)</span>
-        </label>
-      ` : ""}
-      ${!evalResult.fiberAvailable ? `<p class="hint">ℹ️ Keine Ballaststoff-Angabe verfügbar.</p>` : ""}
-      ${evalResult.sugarAlcohols ? `<p class="hint">ℹ️ Enthält Zuckeralkohole (z.B. Erythrit/Xylit) — wirken sich meist kaum auf den Blutzucker aus.</p>` : ""}
-
-      ${evalResult.plausibility ? `
-        <p class="hint" style="margin-top:8px;color:var(--red-fg)">
-          ⚠️ Die kcal-Angabe (${fmt(product.per100.kcal)}) passt nicht zu den übrigen Werten — aus Kohlenhydraten/Fett/Eiweiß errechnen sich ca. <strong>${evalResult.plausibility.calculatedKcal} kcal</strong> (${evalResult.plausibility.deviationPct}% Abweichung). Vermutlich ein Fehler in der Datenbank — unten mit „Werte korrigieren" anpassen.
-        </p>
-      ` : ""}
-
-      ${evalResult.warnings.length ? `
-        <ul class="warn-list">${evalResult.warnings.map(w => `<li>⚠️ ${esc(w)}</li>`).join("")}</ul>
-      ` : ""}
-
-      <button class="btn" id="eatBtn" style="margin-top:14px">🍽️ Als gegessen eintragen</button>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn ${isFav ? "" : "secondary"}" id="favBtn">⭐ ${isFav ? "Favorit" : "Favorisieren"}</button>
-        <button class="btn ${isNoGo ? "danger" : "secondary"}" id="noGoBtn">🚫 ${isNoGo ? "No-Go" : "No-Go"}</button>
+      ${notes}
+      <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
+      <div class="klar-action-row">
+        <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">⭐ Favorit</button>
+        <button class="klar-action-btn" id="cartBtn">🛒 Einkauf</button>
+        <button class="klar-action-btn ${isNoGo ? "danger" : ""}" id="noGoBtn">🚫 No-Go</button>
       </div>
-      <button class="btn ghost" id="cartBtn" style="margin-top:8px">🛒 Auf Einkaufsliste</button>
-      <button class="btn ghost" id="correctBtn" style="margin-top:8px">✏️ Werte korrigieren</button>
     </div>
   `;
 
   wireResultActions(container, resultWrap, product, evalResult);
 }
 
-/** Knöpfe der Ergebniskarte verdrahten — identisch für beide Designs, nur das Markup drumherum
- * unterscheidet sich. Die IDs sind in beiden Varianten dieselben. */
+/** Knöpfe der Ergebniskarte verdrahten — auch aus dem Korrektur-Formular heraus wiederverwendet. */
 function wireResultActions(container, resultWrap, product, evalResult) {
   resultWrap.querySelector("#fiberToggle")?.addEventListener("change", (e) => {
     Store.setFiberOverride(product.barcode, e.target.checked);
