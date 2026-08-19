@@ -58,6 +58,9 @@ export function dateKeyOf(timestamp) {
 
 const HISTORY_LIMIT = 500;
 const CONSUMPTION_LIMIT = 1000;
+// Sicherung des Stands unmittelbar vor einem Import/Abgleich — bewusst ein eigener Schlüssel,
+// damit sie nicht selbst wieder überschrieben oder mitexportiert wird.
+const PREMERGE_KEY = "keto-dashboard-premerge";
 
 let state = load();
 
@@ -106,6 +109,44 @@ function persist() {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
+/** Prüft eine Backup-Datei und gibt den Inhalt zurück. Wirft mit klarer Meldung bei Unfug. */
+function parseBackup(json) {
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error("Datei ist keine gültige JSON-Datei.");
+  }
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.profiles)) {
+    throw new Error("Ungültige Datei: kein gültiges Keto-Dashboard-Backup.");
+  }
+  return parsed;
+}
+
+/** Legt den aktuellen Stand als Sicherung ab, damit ein Import rückgängig gemacht werden kann. */
+function savePreMergeBackup() {
+  try {
+    const { cache, ...withoutCache } = state;
+    localStorage.setItem(PREMERGE_KEY, JSON.stringify({ at: Date.now(), snapshot: withoutCache }));
+  } catch (e) {
+    // Kein Platz mehr im Speicher: der Import soll trotzdem laufen, nur eben ohne Netz.
+    console.warn("Sicherung vor dem Zusammenführen konnte nicht angelegt werden.", e);
+  }
+}
+
+/** Felder, in denen sich zwei Fassungen desselben Profils unterscheiden (ohne updatedAt). */
+function diffProfiles(mine, theirs) {
+  const out = [];
+  for (const t of theirs || []) {
+    const m = (mine || []).find(p => p.id === t.id);
+    if (!m) continue;
+    const fields = Object.keys({ ...m, ...t })
+      .filter(k => k !== "updatedAt" && JSON.stringify(m[k]) !== JSON.stringify(t[k]));
+    if (fields.length) out.push({ id: t.id, name: m.name, fields, local: m, file: t });
+  }
+  return out;
+}
+
 export const Store = {
   get() {
     return state;
@@ -131,7 +172,9 @@ export const Store = {
   updateProfile(id, patch) {
     const p = state.profiles.find(pr => pr.id === id);
     if (!p) return;
-    Object.assign(p, patch);
+    // Zeitstempel mitführen, damit ein späterer Abgleich zwischen zwei Geräten selbst
+    // entscheiden kann, welche Fassung der Einstellungen die neuere ist.
+    Object.assign(p, patch, { updatedAt: Date.now() });
     persist();
   },
 
@@ -300,12 +343,147 @@ export const Store = {
     return JSON.stringify(withoutCache, null, 2);
   },
   importJSON(json) {
-    const parsed = JSON.parse(json);
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.profiles)) {
-      throw new Error("Ungültige Datei: kein gültiges Keto-Dashboard-Backup.");
-    }
+    const parsed = parseBackup(json);
+    savePreMergeBackup();
     state = migrate(parsed);
     persist();
+  },
+
+  /** Prüft eine Backup-Datei und liefert den geparsten Inhalt — für die Vorschau im Dialog. */
+  parseBackup(json) {
+    return parseBackup(json);
+  },
+
+  /**
+   * Was würde ein Zusammenführen mit dieser Datei bewirken? Reine Vorschau, ändert nichts.
+   * Damit kann der Dialog echte Zahlen zeigen statt allgemeiner Warnungen.
+   */
+  previewMerge(incoming) {
+    const countNew = (mine, theirs, key) => {
+      const known = new Set((mine || []).map(key));
+      return (theirs || []).filter(x => !known.has(key(x))).length;
+    };
+    const byId = x => x.id;
+    const myRecipeNames = new Set(state.recipes.map(r => r.name.trim().toLowerCase()));
+    const myRecipeIds = new Set(state.recipes.map(r => r.id));
+
+    return {
+      consumption: countNew(state.consumption, incoming.consumption, byId),
+      water: countNew(state.water, incoming.water, byId),
+      history: countNew(state.history, incoming.history, byId),
+      recipes: countNew(state.recipes, incoming.recipes, byId),
+      favorites: countNew(state.favorites, incoming.favorites, f => f.barcode),
+      noGo: countNew(state.noGo, incoming.noGo, f => f.barcode),
+      shoppingList: countNew(state.shoppingList, incoming.shoppingList, byId),
+      // Rezepte mit gleicher id werden aktualisiert statt doppelt angelegt.
+      recipesUpdated: (incoming.recipes || []).filter(r => myRecipeIds.has(r.id)).length,
+      // Gleicher Name, andere id = unabhängig voneinander angelegt. Lässt sich nicht
+      // automatisch zusammenlegen, ohne zu raten — deshalb nur ankündigen.
+      recipeNameClashes: [...new Set((incoming.recipes || [])
+        .filter(r => !myRecipeIds.has(r.id) && myRecipeNames.has(r.name.trim().toLowerCase()))
+        .map(r => r.name.trim()))],
+      // Was ein "Datei gewinnt" kosten würde.
+      losesOnReplace: {
+        consumption: countNew(incoming.consumption, state.consumption, byId),
+        recipes: countNew(incoming.recipes, state.recipes, byId),
+        favorites: countNew(incoming.favorites, state.favorites, f => f.barcode),
+        shoppingList: countNew(incoming.shoppingList, state.shoppingList, byId),
+      },
+      profileDiffs: diffProfiles(state.profiles, incoming.profiles),
+    };
+  },
+
+  /**
+   * Führt eine Backup-Datei mit dem lokalen Stand zusammen, statt ihn zu ersetzen.
+   *
+   * Die IDs sind Zufalls-UUIDs — zwei Geräte erzeugen nie dieselbe. Eine Vereinigung über die
+   * ID ist deshalb verlustfrei: was auf beiden Geräten liegt, stammt aus demselben Ursprung und
+   * ist identisch; alles andere ist neu und kommt dazu.
+   *
+   * `profileChoice` bestimmt je Profil-ID, wessen Einstellungen gelten sollen ("local" oder
+   * "file"). Profile tragen erst seit Kurzem ein `updatedAt`; wo beide Seiten eines haben,
+   * entscheidet das neuere automatisch, sonst bleibt es bei der Wahl aus dem Dialog.
+   */
+  mergeJSON(json, { profileChoice = {} } = {}) {
+    const incoming = parseBackup(json);
+    savePreMergeBackup();
+
+    const unionById = (mine, theirs) => {
+      const map = new Map((mine || []).map(x => [x.id, x]));
+      for (const x of theirs || []) if (!map.has(x.id)) map.set(x.id, x);
+      return [...map.values()];
+    };
+    const byTimeDesc = (a, b) => (b.at || 0) - (a.at || 0);
+
+    state.consumption = unionById(state.consumption, incoming.consumption)
+      .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
+    state.history = unionById(state.history, incoming.history)
+      .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
+    state.water = unionById(state.water, incoming.water).sort(byTimeDesc);
+    state.shoppingList = unionById(state.shoppingList, incoming.shoppingList);
+
+    // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen.
+    const recipes = new Map(state.recipes.map(r => [r.id, r]));
+    for (const r of incoming.recipes || []) {
+      const mine = recipes.get(r.id);
+      if (!mine || (r.updatedAt || 0) > (mine.updatedAt || 0)) recipes.set(r.id, r);
+    }
+    state.recipes = [...recipes.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt.
+    for (const listName of ["favorites", "noGo"]) {
+      const map = new Map(state[listName].map(e => [e.barcode, e]));
+      for (const e of incoming[listName] || []) {
+        const mine = map.get(e.barcode);
+        if (!mine || (e.addedAt || 0) > (mine.addedAt || 0)) map.set(e.barcode, e);
+      }
+      state[listName] = [...map.values()];
+    }
+
+    // Eigene Produkte und Ballaststoff-Schalter sind eigene Korrekturen: bei Kollision
+    // behält das Gerät seine Fassung, Fehlendes kommt dazu.
+    state.ownProducts = { ...(incoming.ownProducts || {}), ...state.ownProducts };
+    state.fiberOverrides = { ...(incoming.fiberOverrides || {}), ...state.fiberOverrides };
+
+    // Eingefrorene Tagesziele je Profil und Tag — lokal gewinnt (sollte ohnehin gleich sein).
+    for (const [profileId, days] of Object.entries(incoming.dayTargets || {})) {
+      state.dayTargets[profileId] = { ...days, ...(state.dayTargets[profileId] || {}) };
+    }
+
+    // Profile: je Profil entscheidet updatedAt, sonst die Wahl aus dem Dialog.
+    for (const incomingProfile of incoming.profiles || []) {
+      const i = state.profiles.findIndex(p => p.id === incomingProfile.id);
+      if (i < 0) { state.profiles.push(incomingProfile); continue; }
+      const mine = state.profiles[i];
+      const bothStamped = mine.updatedAt != null && incomingProfile.updatedAt != null;
+      const takeFile = bothStamped
+        ? incomingProfile.updatedAt > mine.updatedAt
+        : profileChoice[incomingProfile.id] === "file";
+      if (takeFile) state.profiles[i] = incomingProfile;
+    }
+
+    persist();
+  },
+
+  // --- Sicherung vor dem letzten Zusammenführen ---
+  hasPreMergeBackup() {
+    return !!localStorage.getItem(PREMERGE_KEY);
+  },
+  getPreMergeInfo() {
+    try {
+      const raw = localStorage.getItem(PREMERGE_KEY);
+      return raw ? { at: JSON.parse(raw).at } : null;
+    } catch { return null; }
+  },
+  /** Stellt den Stand von unmittelbar vor dem letzten Import/Abgleich wieder her. */
+  restorePreMergeBackup() {
+    const raw = localStorage.getItem(PREMERGE_KEY);
+    if (!raw) return false;
+    const { snapshot } = JSON.parse(raw);
+    state = migrate(snapshot);
+    persist();
+    localStorage.removeItem(PREMERGE_KEY);
+    return true;
   },
 
   /**

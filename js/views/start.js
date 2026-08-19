@@ -116,17 +116,18 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
     const day = new Date(monday);
     day.setDate(monday.getDate() + i);
     const key = dateKeyOf(day.getTime());
+    // Zukünftige Tage sind wählbar (Essensplanung für morgen), nur optisch zurückgenommen.
     const isFuture = key > todayKey;
     cells.push(`
       <button type="button" class="klar-week-cell ${key === activeKey ? "today" : ""} ${isFuture ? "future" : ""}"
-        data-key="${key}" ${isFuture ? "disabled" : ""}>
+        data-key="${key}">
         ${KLAR_WEEKDAYS[day.getDay()]}<div class="dom">${day.getDate()}</div>
       </button>
     `);
   }
   el.innerHTML = cells.join("");
 
-  el.querySelectorAll(".klar-week-cell:not([disabled])").forEach(btn => {
+  el.querySelectorAll(".klar-week-cell").forEach(btn => {
     btn.addEventListener("click", () => { setActiveDateKey(btn.dataset.key); refresh(); });
   });
 
@@ -164,7 +165,6 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
     settle();
     if (Math.abs(dx) < 50) return;
     shiftActiveDate(dx < 0 ? 7 : -7);
-    if (getActiveDateKey() > todayKey) setActiveDateKey(todayKey);
     refresh();
   }, { passive: true });
 

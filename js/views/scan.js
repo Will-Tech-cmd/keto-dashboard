@@ -400,19 +400,21 @@ function ownProductFormHtml(barcode, existing = null, prefillName = "") {
       <div class="field-row">
         <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
       </div>
-      <p class="hint" style="margin-top:12px">Nährwerte pro 100 g:</p>
+      <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
+      <label>Energie (kcal)</label><input type="number" step="1" id="opKcal" value="${p.kcal ?? ""}">
+      <div class="field-row">
+        <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat" value="${p.fat ?? ""}"></div>
+        <div><label>davon gesättigte Fettsäuren (g)</label><input type="number" step="0.1" id="opSatFat" value="${p.saturatedFat ?? ""}"></div>
+      </div>
       <div class="field-row">
         <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="opCarbs" value="${p.carbs ?? ""}"></div>
-        <div><label>davon Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber" value="${p.fiber ?? ""}"></div>
+        <div><label>davon Zucker (g)</label><input type="number" step="0.1" id="opSugars" value="${p.sugars ?? ""}"></div>
       </div>
       <div class="field-row">
-        <div><label>Zucker (g)</label><input type="number" step="0.1" id="opSugars" value="${p.sugars ?? ""}"></div>
-        <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat" value="${p.fat ?? ""}"></div>
-      </div>
-      <div class="field-row">
+        <div><label>Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber" value="${p.fiber ?? ""}"></div>
         <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="opProtein" value="${p.protein ?? ""}"></div>
-        <div><label>kcal</label><input type="number" step="1" id="opKcal" value="${p.kcal ?? ""}"></div>
       </div>
+      <label>Salz (g)</label><input type="number" step="0.01" id="opSalt" value="${p.salt ?? ""}">
       <label>Zutaten (optional, für Warnhinweise)</label>
       <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">
       <button class="btn" id="opSave" style="margin-top:14px">Speichern</button>
@@ -435,12 +437,14 @@ function wireOwnProductForm(container, resultWrap, barcode, onCancel) {
       name,
       brand: val("#opBrand").trim(),
       servingSize: val("#opServing").trim(),
-      carbs: numOrNull(val("#opCarbs")),
-      fiber: numOrNull(val("#opFiber")),
-      sugars: numOrNull(val("#opSugars")),
-      fat: numOrNull(val("#opFat")),
-      protein: numOrNull(val("#opProtein")),
       kcal: numOrNull(val("#opKcal")),
+      fat: numOrNull(val("#opFat")),
+      saturatedFat: numOrNull(val("#opSatFat")),
+      carbs: numOrNull(val("#opCarbs")),
+      sugars: numOrNull(val("#opSugars")),
+      fiber: numOrNull(val("#opFiber")),
+      protein: numOrNull(val("#opProtein")),
+      salt: numOrNull(val("#opSalt")),
       ingredientsText: val("#opIngredients").trim(),
     });
     Store.clearFiberOverride(barcode); // eigene Werte sind jetzt maßgeblich, kein doppeltes Abziehen mehr

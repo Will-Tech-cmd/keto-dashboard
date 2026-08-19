@@ -343,7 +343,10 @@ export function openQuantityModal(product, onLogged) {
 export function openEditConsumptionModal(entry, onDone) {
   const isRecipe = entry.servings != null;
   const currentAmount = isRecipe ? entry.servings : entry.grams;
-  const servingG = !isRecipe ? entry.servingG : null;
+  // servingG ist bei Produkten das Packungsgewicht einer Portion, bei Rezepten das beim
+  // Eintragen festgehaltene Gewicht einer Portion. In beiden Fällen der Umrechnungsfaktor
+  // zwischen Portionen und Gramm — deshalb hier für beide dasselbe Feldpaar.
+  const servingG = entry.servingG || null;
   let selectedMeal = entry.meal;
 
   const overlay = document.createElement("div");
@@ -352,9 +355,18 @@ export function openEditConsumptionModal(entry, onDone) {
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(entry.name)}</h2>
       <p class="hint">Menge anpassen — Nährwerte werden automatisch neu berechnet.</p>
+      ${servingG ? `
+        <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
+          ${[1, 2, 3].map(n => `<button type="button" class="btn secondary qty-chip" data-portions="${n}" style="width:auto;flex:none;padding:0 14px">${n}× (${Math.round(servingG * n)} g)</button>`).join("")}
+        </div>
+      ` : ""}
       ${isRecipe ? `
-        <label for="editAmountInput">Menge in Portionen</label>
+        <label for="editAmountInput">Portionen</label>
         <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
+        ${servingG ? `
+          <label for="editGramsInput">Menge in Gramm</label>
+          <input type="number" id="editGramsInput" value="${Math.round(currentAmount * servingG)}" min="1" inputmode="numeric">
+        ` : ""}
       ` : servingG ? `
         <label for="editPortionsInput">Portionen</label>
         <input type="number" id="editPortionsInput" value="${round1(currentAmount / servingG)}" min="0.1" step="0.25" inputmode="decimal">
@@ -374,9 +386,15 @@ export function openEditConsumptionModal(entry, onDone) {
   `;
   document.body.appendChild(overlay);
 
+  // input trägt immer die maßgebliche Einheit des Eintrags (Portionen bei Rezepten, Gramm bei
+  // Produkten) — rescaleConsumption rechnet damit. Das zweite Feld ist die gekoppelte Anzeige.
   const input = overlay.querySelector("#editAmountInput");
   const portionsInput = overlay.querySelector("#editPortionsInput");
-  if (!isRecipe && servingG) wireCoupledAmountFields(portionsInput, input, servingG);
+  const gramsInput = overlay.querySelector("#editGramsInput");
+  if (servingG) {
+    if (isRecipe) wireCoupledAmountFields(input, gramsInput, servingG);
+    else wireCoupledAmountFields(portionsInput, input, servingG);
+  }
   wireMealChips(overlay, (meal) => { selectedMeal = meal; });
 
   const preview = overlay.querySelector("#editPreview");
@@ -386,10 +404,24 @@ export function openEditConsumptionModal(entry, onDone) {
     const ratio = val / currentAmount;
     const k = entry.kcal != null ? round1(entry.kcal * ratio) : "–";
     const nc = entry.netCarbs != null ? round1(entry.netCarbs * ratio) : "–";
-    preview.textContent = `→ ${k} kcal · ${nc} g Netto-KH`;
+    const gramsPart = servingG && isRecipe ? `${Math.round(val * servingG)} g · ` : "";
+    preview.textContent = `→ ${gramsPart}${k} kcal · ${nc} g Netto-KH`;
   };
   input.addEventListener("input", updatePreview);
+  gramsInput?.addEventListener("input", updatePreview);
   updatePreview();
+
+  overlay.querySelectorAll(".qty-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const n = Number(chip.dataset.portions);
+      // Bei Produkten ist die Portionsanzahl das Nebenfeld, bei Rezepten das Hauptfeld.
+      const target = isRecipe ? input : portionsInput;
+      if (!target) return;
+      target.value = n;
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      updatePreview();
+    });
+  });
 
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });

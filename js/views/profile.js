@@ -3,7 +3,7 @@ import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
-import { showToast, esc, applyDesignTheme } from "../ui.js";
+import { showToast, esc, applyDesignTheme, bindBackClose } from "../ui.js";
 
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
@@ -20,22 +20,25 @@ export function renderProfile(container, onProfileChanged) {
     <div class="divider"></div>
     <div class="card">
       <h2>Daten sichern</h2>
-      <p class="hint">Exportiere eure Daten (Profile, Favoriten, Listen) als Datei, oder importiere sie auf dem anderen Handy.</p>
-      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
-        <button class="btn secondary" id="exportBtn">⬇️ Exportieren</button>
-        <button class="btn secondary" id="importBtn">⬆️ Importieren</button>
-        <button class="btn ghost" id="shareBtn" style="display:none">📤 Backup teilen</button>
+      <p class="hint">Exportiere eure Daten (Profile, Favoriten, Listen) als Datei, oder importiere sie auf dem anderen Handy. Beim Importieren fragt die App, ob zusammengeführt oder ersetzt werden soll.</p>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn secondary" id="exportBtn">⬇️ Export</button>
+        <button class="btn secondary" id="shareBtn">📤 Teilen</button>
+        <button class="btn secondary" id="importBtn">⬆️ Import</button>
       </div>
       <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+      ${Store.hasPreMergeBackup() ? `
+        <button class="btn ghost" id="restoreBtn" style="margin-top:8px">↩️ Letzten Import rückgängig machen</button>
+      ` : ""}
     </div>
 
     <div class="card">
       <h2>Nur Rezepte teilen</h2>
       <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
-      <div class="btn-row" style="margin-top:10px;flex-wrap:wrap">
-        <button class="btn secondary" id="exportRecipesBtn">⬇️ Exportieren</button>
-        <button class="btn secondary" id="importRecipesBtn">⬆️ Importieren</button>
-        <button class="btn ghost" id="shareRecipesBtn" style="display:none">📤 Teilen</button>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn secondary" id="exportRecipesBtn">⬇️ Export</button>
+        <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
+        <button class="btn secondary" id="importRecipesBtn">⬆️ Import</button>
       </div>
       <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
     </div>
@@ -315,6 +318,122 @@ function downloadBackup() {
   downloadBlob(Store.exportJSON(), backupFilename());
 }
 
+// Lesbare Namen für die Profilfelder, die im Abgleich-Dialog als abweichend gemeldet werden.
+const PROFILE_FIELD_LABELS = {
+  name: "Name", sex: "Geschlecht", age: "Alter", heightCm: "Größe", weightKg: "Gewicht",
+  bodyFatPct: "Körperfett", activity: "Aktivität", goal: "Ziel", deficitPct: "Kaloriendefizit",
+  proteinFactor: "Eiweißfaktor", netCarbLimitG: "Netto-KH-Limit", dietType: "Ernährungsform",
+  gradeThresholds: "Ampelgrenzen", waterTargetMl: "Trinkziel", appearance: "Erscheinungsbild",
+};
+const fieldLabel = (k) => PROFILE_FIELD_LABELS[k] || k;
+
+/**
+ * Zeigt vor dem Einspielen eines Vollbackups, was genau passieren würde, und lässt die Wahl
+ * zwischen Zusammenführen (nichts geht verloren) und Ersetzen. Die Zahlen kommen aus
+ * Store.previewMerge(), sind also echt gerechnet und keine allgemeine Warnung.
+ */
+function openMergeDialog(container, json) {
+  let incoming;
+  try {
+    incoming = Store.parseBackup(json);
+  } catch (e) {
+    showToast("Import fehlgeschlagen: " + e.message);
+    return;
+  }
+  const p = Store.previewMerge(incoming);
+  // Vorauswahl: die eigenen Einstellungen behalten. Wer sein Profil auf dem anderen Gerät
+  // gepflegt hat, stellt hier gezielt auf "Datei" um.
+  const profileChoice = {};
+  p.profileDiffs.forEach(d => { profileChoice[d.id] = "local"; });
+
+  const added = [
+    [p.consumption, "Tageseinträge"], [p.recipes, "Rezepte"], [p.favorites, "Favoriten"],
+    [p.noGo, "No-Go"], [p.shoppingList, "Einkaufsartikel"], [p.water, "Wasser-Einträge"],
+  ].filter(([n]) => n > 0);
+  const lost = [
+    [p.losesOnReplace.consumption, "Tageseinträge"], [p.losesOnReplace.recipes, "Rezepte"],
+    [p.losesOnReplace.favorites, "Favoriten"], [p.losesOnReplace.shoppingList, "Einkaufsartikel"],
+  ].filter(([n]) => n > 0);
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Backup einspielen</h2>
+      <p class="hint">${added.length
+        ? `Neu dazu: <strong>${added.map(([n, l]) => `${n} ${l}`).join(" · ")}</strong>.`
+        : "Die Datei enthält nichts, was hier fehlt."}
+        ${p.recipesUpdated > 0 ? ` ${p.recipesUpdated} Rezept(e) werden aktualisiert.` : ""}</p>
+
+      ${p.recipeNameClashes.length ? `
+        <p class="hint" style="color:var(--yellow-fg)">⚠️ Gleicher Name, getrennt angelegt — kommt zusätzlich in die Liste:
+        ${esc(p.recipeNameClashes.join(", "))}</p>` : ""}
+
+      ${p.profileDiffs.length ? `
+        <div class="divider"></div>
+        <p class="hint" style="margin-top:0">Die Profileinstellungen unterscheiden sich. Welche sollen gelten?</p>
+        ${p.profileDiffs.map(d => `
+          <div style="margin-top:10px">
+            <div style="font-weight:700;font-size:.9rem">${esc(d.name)}</div>
+            <div class="hint" style="margin-top:0">Abweichend: ${esc(d.fields.map(fieldLabel).join(", "))}</div>
+            <div class="btn-row" style="margin-top:6px">
+              <button type="button" class="btn secondary profile-choice active" data-id="${d.id}" data-choice="local">Dieses Gerät</button>
+              <button type="button" class="btn secondary profile-choice" data-id="${d.id}" data-choice="file">Datei</button>
+            </div>
+          </div>
+        `).join("")}
+      ` : ""}
+
+      <div class="divider"></div>
+      <button type="button" class="btn" id="mergeBtn">🔀 Zusammenführen</button>
+      <p class="hint" style="text-align:center">Nichts geht verloren — beide Stände werden vereinigt.</p>
+      <button type="button" class="btn secondary" id="replaceBtn" style="margin-top:10px">Datei gewinnt (ersetzen)</button>
+      <p class="hint" style="text-align:center;${lost.length ? "color:var(--red-fg)" : ""}">${lost.length
+        ? `Dabei gehen verloren: ${lost.map(([n, l]) => `${n} ${l}`).join(" · ")}`
+        : "Auf diesem Gerät gibt es nichts, was die Datei nicht hätte."}</p>
+      <button type="button" class="btn ghost" id="mergeCancel" style="margin-top:6px">Abbrechen</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#mergeCancel").addEventListener("click", close);
+
+  overlay.querySelectorAll(".profile-choice").forEach(btn => {
+    btn.addEventListener("click", () => {
+      profileChoice[btn.dataset.id] = btn.dataset.choice;
+      overlay.querySelectorAll(`.profile-choice[data-id="${btn.dataset.id}"]`)
+        .forEach(b => b.classList.toggle("active", b === btn));
+    });
+  });
+
+  const finish = (msg) => {
+    close();
+    showToast(msg);
+    renderProfile(container, () => {});
+  };
+
+  overlay.querySelector("#mergeBtn").addEventListener("click", () => {
+    try {
+      Store.mergeJSON(json, { profileChoice });
+      finish("Zusammengeführt");
+    } catch (e) {
+      showToast("Zusammenführen fehlgeschlagen: " + e.message);
+    }
+  });
+
+  overlay.querySelector("#replaceBtn").addEventListener("click", () => {
+    if (!confirm("Wirklich ersetzen? Alles auf diesem Gerät, was nicht in der Datei steht, geht verloren.")) return;
+    try {
+      Store.importJSON(json);
+      finish("Ersetzt");
+    } catch (e) {
+      showToast("Import fehlgeschlagen: " + e.message);
+    }
+  });
+}
+
 function wireExportImport(container) {
   container.querySelector("#exportBtn").addEventListener("click", () => {
     downloadBackup();
@@ -324,7 +443,6 @@ function wireExportImport(container) {
   // Teilen-Knopf bleibt immer sichtbar: kann das Gerät keine Dateien teilen, wird
   // stattdessen der Download ausgelöst, statt den Knopf kommentarlos zu verstecken.
   const shareBtn = container.querySelector("#shareBtn");
-  shareBtn.style.display = "";
   shareBtn.addEventListener("click", async () => {
     const file = new File([Store.exportJSON()], backupFilename(), { type: BACKUP_MIME });
     if (!navigator.canShare?.({ files: [file] })) {
@@ -348,13 +466,22 @@ function wireExportImport(container) {
     if (!file) return;
     try {
       const text = await file.text();
-      Store.importJSON(text);
-      showToast("Import erfolgreich");
-      renderProfile(container, () => {});
+      // Nicht mehr sofort ersetzen: erst zeigen, was passieren würde. Ein Vollbackup vom
+      // anderen Handy enthält dessen kompletten Stand — blind einspielen löscht den eigenen.
+      openMergeDialog(container, text);
     } catch (e) {
       showToast("Import fehlgeschlagen: " + e.message);
     }
     fileInput.value = "";
+  });
+
+  container.querySelector("#restoreBtn")?.addEventListener("click", () => {
+    const info = Store.getPreMergeInfo();
+    const when = info ? new Date(info.at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "";
+    if (!confirm(`Stand von vor dem letzten Import (${when}) wiederherstellen? Alles, was seitdem dazugekommen ist, geht verloren.`)) return;
+    Store.restorePreMergeBackup();
+    showToast("Stand wiederhergestellt");
+    renderProfile(container, () => {});
   });
 
   container.querySelector("#exportRecipesBtn").addEventListener("click", () => {
@@ -363,7 +490,6 @@ function wireExportImport(container) {
   });
 
   const shareRecipesBtn = container.querySelector("#shareRecipesBtn");
-  shareRecipesBtn.style.display = "";
   shareRecipesBtn.addEventListener("click", async () => {
     const file = new File([Store.exportRecipesJSON()], recipesFilename(), { type: BACKUP_MIME });
     if (!navigator.canShare?.({ files: [file] })) {
