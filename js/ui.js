@@ -95,8 +95,8 @@ export function keepActionsInView(overlay) {
       vv.removeEventListener("scroll", apply);
       return;
     }
-    // Von der Tastatur verdeckter Bereich. Je nach Browser schrumpft entweder nur das sichtbare
-    // Fenster (dann > 0) oder auch das Layout (dann 0, siehe interactive-widget in index.html).
+    // Von der Tastatur verdeckter Bereich. Das Layout selbst bleibt bewusst unangetastet
+    // (kein interactive-widget=resizes-content) — sonst wandert die Fußzeile mit nach oben.
     const covered = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
     const keyboardOpen = covered > 120 || vv.height < baseHeight - 120;
 
@@ -111,12 +111,10 @@ export function keepActionsInView(overlay) {
     overlay.style.paddingBottom = `${covered + AUTOFILL_BAR_PX}px`;
     card.style.maxHeight = `${Math.max(160, vv.height - AUTOFILL_BAR_PX - 24)}px`;
 
-    // Bei kurzen Dialogen liegen die Knöpfe durch das Anheben bereits frei. Lange Dialoge
-    // müssen zusätzlich scrollen — dann aber zum bearbeiteten Feld, nicht ans Ende: sonst
-    // würde einem beim Antippen des ersten Feldes gleich der Speichern-Knopf gezeigt.
-    const focused = overlay.contains(document.activeElement) ? document.activeElement : null;
-    if (focused && card.scrollHeight > card.clientHeight) {
-      focused.scrollIntoView({ block: "nearest" });
+    // Die Knöpfe sind das letzte Element im Dialog — ans Ende zu scrollen bringt sie
+    // zuverlässig ins Bild, egal wie viele Felder darüber stehen.
+    if (overlay.contains(document.activeElement) && card.scrollHeight > card.clientHeight) {
+      card.scrollTo({ top: card.scrollHeight, behavior: "smooth" });
     }
   };
 
