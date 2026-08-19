@@ -169,7 +169,7 @@ function openServingsModal(recipe) {
 }
 
 function round1(v) {
-  return Math.round(v * 10) / 10;
+  return v == null ? null : Math.round(v * 10) / 10;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +295,30 @@ function renderTotals(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   const perServing = calcPerServing(recipe);
   const grade = ketoGrade(perServing.netCarbs, activeThresholds());
-  container.querySelector("#totalsCard").innerHTML = `
+  const card = container.querySelector("#totalsCard");
+
+  // Design "Klar": dunkle Ergebniskarte, die den wichtigsten Wert (Netto-KH pro Portion) groß
+  // herausstellt — der entscheidet, ob das Rezept ins Tagesbudget passt.
+  if (Store.getActiveProfile().design === "klar") {
+    const totals = calcRecipeTotals(recipe);
+    card.className = "klar-result-card";
+    card.innerHTML = `
+      <div class="klar-result-head">
+        <span class="klar-result-eyebrow">Pro Portion</span>
+        <span class="klar-result-badge ${grade}">${esc(GRADE_LABEL[grade])}</span>
+      </div>
+      <div class="klar-result-main">
+        <span class="klar-result-value">${perServing.netCarbs ?? "–"}</span>
+        <span class="klar-result-unit">g Netto-KH</span>
+      </div>
+      <div class="klar-result-macros">${perServing.kcal ?? "–"} kcal · F ${perServing.fat ?? "–"} g · E ${perServing.protein ?? "–"} g</div>
+      <div class="klar-result-total">Gesamt: ${round1(totals.kcal) ?? "–"} kcal · ${round1(totals.netCarbs) ?? "–"} g Netto-KH bei ${recipe.servings} Portion(en)</div>
+    `;
+    return;
+  }
+
+  card.className = "card";
+  card.innerHTML = `
     <h2>Pro Portion</h2>
     <span class="badge ${grade}" style="margin-bottom:8px;display:inline-flex">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]} ${esc(GRADE_LABEL[grade])}</span>
     <div class="grid-2">

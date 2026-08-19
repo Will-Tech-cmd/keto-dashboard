@@ -2,11 +2,11 @@
 import { Store } from "./store.js";
 import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan, openScanSearch } from "./views/scan.js";
-import { renderLists, openListsSubtab } from "./lists.js";
+import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
-import { logConsumption, rankFrequentItems, MEAL_LABELS } from "./consumption.js";
+import { logConsumption, rankFrequentItems, MEAL_LABELS, mealShort } from "./consumption.js";
 import { logRecipeConsumption } from "./recipes.js";
 import { lookupProduct } from "./off.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
@@ -26,6 +26,8 @@ const RENDERERS = {
   lists: () => renderLists(view, goToTab),
   recipes: () => renderRecipes(view),
   profile: () => renderProfile(view, updateProfileSwitchLabel),
+  // Unterseite ohne eigenen Reiter (Design "Klar"), erreichbar aus der Nährwertkarte auf Start.
+  evaluation: () => renderEvaluationPage(view, goToTab),
 };
 
 // Jeder Tab-Wechsel bekommt einen eigenen History-Eintrag, damit die Zurück-Geste am Handy
@@ -35,9 +37,14 @@ function goToTab(tab, opts = {}) {
   if (tab !== "scan") cleanupScan();
   if (tab === "lists" && opts.sub) openListsSubtab(opts.sub);
   activeTab = tab;
-  tabbar.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === tab);
-  });
+  // Unterseiten ohne eigenen Reiter (z.B. Auswertung) lassen die Markierung stehen, wo sie
+  // hergekommen sind — sonst wäre in der Tableiste gar nichts hervorgehoben.
+  const hasOwnTab = [...tabbar.querySelectorAll(".tab-btn")].some(btn => btn.dataset.tab === tab);
+  if (hasOwnTab) {
+    tabbar.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.tab === tab);
+    });
+  }
   if (!opts.fromPopstate) {
     if (!historyInitialized) {
       history.replaceState({ nav: "tab", tab }, "");
@@ -213,9 +220,6 @@ function suggestMealNow() {
   if (m < 15) return "lunch";
   if (m < 21.5) return "dinner";
   return "snack";
-}
-function mealShort(key) {
-  return { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" }[key] || "Snack";
 }
 function mealPhrase(key) {
   return { breakfast: "zum Frühstück", lunch: "mittags", dinner: "am Abend", snack: "als Snack" }[key] || "";

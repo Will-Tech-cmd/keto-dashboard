@@ -414,7 +414,7 @@ function renderKlarMacros(container, totals, targets, goToTab) {
     ${bars.map(klarBarHtml).join("")}
   `;
 
-  el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("lists", { sub: "evaluation" }));
+  el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
 }
 
 /**

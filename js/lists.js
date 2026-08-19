@@ -14,6 +14,7 @@ let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
 let listFilter = "";       // Suchbegriff für Favoriten/No-Go
 let historyFilter = "";    // Suchbegriff für den Verlauf
 let pendingSubtab = null;  // von App-Shortcuts gesetzter Ziel-Reiter, einmalig beim nächsten Aufruf
+let subtabChosen = false;  // true, sobald bewusst ein Reiter angetippt wurde (siehe Klar-Standard)
 
 /** Legt den Reiter fest, der beim nächsten renderLists() zuerst gezeigt wird (z.B. aus einem
  * Homescreen-Shortcut). Wird nach Gebrauch zurückgesetzt, spätere normale Aufrufe sind unberührt. */
@@ -21,16 +22,39 @@ export function openListsSubtab(sub) {
   pendingSubtab = sub;
 }
 
+/** True, wenn das aktive Profil auf das Design "Klar" gestellt ist. */
+function isKlar() {
+  return Store.getActiveProfile().design === "klar";
+}
+
+// In "Klar" steht der Einkauf vorn (häufigster Griff) und die Auswertung ist keine Registerkarte
+// mehr, sondern eine eigene Seite über die Nährwertkarte auf Start.
+const KLAR_SUBTABS = [
+  { sub: "shopping", label: "Einkauf" },
+  { sub: "favorites", label: "Favoriten" },
+  { sub: "noGo", label: "No-Go" },
+  { sub: "history", label: "Verlauf" },
+];
+const KLASSISCH_SUBTABS = [
+  { sub: "favorites", label: "⭐ Favoriten" },
+  { sub: "noGo", label: "🚫 No-Go" },
+  { sub: "shopping", label: "🛒 Einkauf" },
+  { sub: "history", label: "🕘 Verlauf" },
+  { sub: "evaluation", label: "📊 Auswertung" },
+];
+
 export function renderLists(container, goToTab) {
   if (pendingSubtab) { activeSubtab = pendingSubtab; pendingSubtab = null; }
+  const klar = isKlar();
+  const subtabs = klar ? KLAR_SUBTABS : KLASSISCH_SUBTABS;
+  // In "Klar" startet der Einkauf vorn — aber nur, solange nicht schon bewusst ein anderer
+  // Reiter gewählt wurde. Und: Auswertung ist dort kein Reiter mehr (Designwechsel).
+  if (klar && (!subtabChosen || !subtabs.some(t => t.sub === activeSubtab))) activeSubtab = "shopping";
+
   container.innerHTML = `
-    <h1 class="section-title">Listen</h1>
+    ${klar ? "" : `<h1 class="section-title">Listen</h1>`}
     <div class="subtabs">
-      <button class="subtab-btn" data-sub="favorites" type="button">⭐ Favoriten</button>
-      <button class="subtab-btn" data-sub="noGo" type="button">🚫 No-Go</button>
-      <button class="subtab-btn" data-sub="shopping" type="button">🛒 Einkauf</button>
-      <button class="subtab-btn" data-sub="history" type="button">🕘 Verlauf</button>
-      <button class="subtab-btn" data-sub="evaluation" type="button">📊 Auswertung</button>
+      ${subtabs.map(t => `<button class="subtab-btn" data-sub="${t.sub}" type="button">${t.label}</button>`).join("")}
     </div>
     <div id="listBody"></div>
   `;
@@ -38,6 +62,7 @@ export function renderLists(container, goToTab) {
   container.querySelectorAll(".subtab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       activeSubtab = btn.dataset.sub;
+      subtabChosen = true;
       listFilter = ""; // Suchbegriffe gelten nicht über Reiter hinweg
       historyFilter = "";
       renderSubtabs(container);
@@ -147,15 +172,38 @@ function renderShopping(body) {
   const state = Store.get();
   const items = state.shoppingList;
 
-  const listHtml = items.length === 0
-    ? emptyState("🛒", "Einkaufsliste ist leer.")
-    : items.map(item => `
-      <label class="list-item checkbox-row ${item.checked ? "checked" : ""}" data-id="${item.id}">
-        <input type="checkbox" ${item.checked ? "checked" : ""}>
-        <div class="info"><div class="name">${esc(item.text)}</div></div>
-        <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
-      </label>
-    `).join("");
+  let listHtml;
+  if (isKlar()) {
+    // Offen zuerst, Erledigtes gesammelt darunter — beim Einkaufen zählt, was noch fehlt.
+    const open = items.filter(i => !i.checked);
+    const done = items.filter(i => i.checked);
+    const group = (title, list) => list.length === 0 ? "" : `
+      <div class="klar-eyebrow" style="margin:0 2px 10px">${title} · ${list.length}</div>
+      <div class="klar-shop-card">
+        ${list.map(item => `
+          <label class="klar-shop-row ${item.checked ? "checked" : ""}" data-id="${item.id}">
+            <input type="checkbox" ${item.checked ? "checked" : ""} hidden>
+            <span class="klar-check ${item.checked ? "on" : ""}">${item.checked ? "✓" : ""}</span>
+            <span class="name">${esc(item.text)}</span>
+            <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
+          </label>
+        `).join("")}
+      </div>
+    `;
+    listHtml = items.length === 0
+      ? `<div class="klar-empty-row" style="margin-top:4px"><span class="plus">🛒</span>Einkaufsliste ist leer</div>`
+      : group("Offen", open) + (done.length ? `<div style="margin-top:20px">${group("Erledigt", done)}</div>` : "");
+  } else {
+    listHtml = items.length === 0
+      ? emptyState("🛒", "Einkaufsliste ist leer.")
+      : items.map(item => `
+        <label class="list-item checkbox-row ${item.checked ? "checked" : ""}" data-id="${item.id}">
+          <input type="checkbox" ${item.checked ? "checked" : ""}>
+          <div class="info"><div class="name">${esc(item.text)}</div></div>
+          <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
+        </label>
+      `).join("");
+  }
 
   body.innerHTML = `
     <form id="addItemForm" class="btn-row" style="margin-bottom:12px">
@@ -163,7 +211,7 @@ function renderShopping(body) {
       <button class="btn" type="submit" style="width:auto;padding:0 18px">+</button>
     </form>
     ${listHtml}
-    ${items.some(i => i.checked) ? `<button class="btn secondary" id="clearChecked" style="margin-top:12px">Erledigte entfernen</button>` : ""}
+    ${items.some(i => i.checked) ? `<button class="btn ${isKlar() ? "ghost" : "secondary"}" id="clearChecked" style="margin-top:14px">Erledigte entfernen</button>` : ""}
   `;
 
   body.querySelector("#addItemForm").addEventListener("submit", (e) => {
@@ -175,7 +223,7 @@ function renderShopping(body) {
     renderShopping(body);
   });
 
-  body.querySelectorAll(".checkbox-row").forEach(row => {
+  body.querySelectorAll(".checkbox-row, .klar-shop-row").forEach(row => {
     const id = row.dataset.id;
     row.querySelector('input[type="checkbox"]').addEventListener("change", () => {
       Store.toggleShoppingItem(id);
@@ -301,6 +349,23 @@ function renderHistoryList(el, items) {
 }
 
 /** 30-Tage-Auswertung: Tag-für-Tag-Verlauf, Durchschnitte, Zielquote, längste Serie. */
+/**
+ * Auswertung als eigene Seite (Design "Klar") statt als Registerkarte unter "Listen" —
+ * erreichbar über den Knopf in der Nährwertkarte auf Start. Nutzt denselben Renderer wie
+ * der klassische Reiter, nur mit eigener Kopfzeile samt Zurück-Knopf.
+ */
+export function renderEvaluationPage(container, goToTab) {
+  container.innerHTML = `
+    <div class="klar-page-head">
+      <button type="button" class="klar-back-btn" id="evalBack" aria-label="Zurück">‹</button>
+      <span class="klar-page-title">Auswertung</span>
+    </div>
+    <div id="listBody"></div>
+  `;
+  container.querySelector("#evalBack").addEventListener("click", () => goToTab("start"));
+  renderEvaluation(container.querySelector("#listBody"), goToTab);
+}
+
 function renderEvaluation(body, goToTab) {
   const profile = Store.getActiveProfile();
 

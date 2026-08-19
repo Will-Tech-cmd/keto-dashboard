@@ -578,3 +578,92 @@ body[data-design="klar"] .fab-btn {
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
 .klar-switch.on { background: var(--accent); }
 .klar-switch.on::after { left: 21px; }
+
+/* ---------- „Klar": Listen, Einkauf, Unterseiten ---------- */
+body[data-design="klar"] .subtabs { gap: 7px; margin-bottom: 14px; }
+body[data-design="klar"] .subtab-btn {
+  border-radius: 999px; padding: 9px 0; min-height: 0;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  color: var(--text-muted); font-size: 12.5px; font-weight: 700;
+}
+body[data-design="klar"] .subtab-btn.active {
+  background: var(--text); color: var(--bg-elevated); border-color: var(--text);
+}
+body[data-design="klar"] #newItemText {
+  min-height: 48px; border-radius: 16px; background: var(--bg-elevated);
+}
+body[data-design="klar"] #addItemForm .btn {
+  width: 48px; min-width: 48px; min-height: 48px; border-radius: 16px;
+  padding: 0; font-size: 20px; font-weight: 800;
+}
+
+.klar-shop-card {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 20px; overflow: hidden; box-shadow: var(--shadow);
+}
+.klar-shop-row {
+  display: flex; align-items: center; gap: 12px; padding: 15px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--divider);
+}
+.klar-shop-row:last-child { border-bottom: none; }
+.klar-shop-row .name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; }
+.klar-shop-row.checked .name { color: var(--text-muted-2); text-decoration: line-through; }
+.klar-check {
+  flex: none; width: 22px; height: 22px; border-radius: 7px;
+  border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: transparent;
+}
+.klar-check.on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+.klar-page-head { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.klar-back-btn {
+  width: 34px; height: 34px; flex: none; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  color: var(--text-muted); font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.klar-page-title { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+
+/* ---------- „Klar": Scan-Ergebnis ---------- */
+.klar-icon-btn {
+  width: 38px; height: 38px; flex: none; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  color: var(--text-muted); font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+}
+.klar-product-name { font-size: 21px; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; margin-top: 10px; }
+.klar-product-meta { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+.klar-tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.klar-tile { background: var(--bg); border-radius: 16px; padding: 14px; text-align: center; }
+.klar-tile .val { font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
+.klar-tile .lbl { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
+.klar-primary-btn {
+  display: block; width: 100%; min-height: 52px; border-radius: 16px; border: none;
+  background: var(--accent); color: var(--accent-contrast); font-size: 15px; font-weight: 800;
+}
+.klar-action-row { display: flex; gap: 8px; margin-top: 8px; }
+.klar-action-btn {
+  flex: 1; min-height: 48px; border-radius: 16px;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+  color: var(--text); font-size: 13.5px; font-weight: 700;
+}
+.klar-action-btn.on { border-color: var(--accent-soft-border); background: var(--accent-soft); color: var(--accent-ink); }
+.klar-action-btn.danger { border-color: var(--red-border); background: var(--red-bg); color: var(--red-fg); }
+
+/* ---------- „Klar": Rezept-Ergebniskarte (bewusst dunkel als Blickfang) ---------- */
+.klar-result-card {
+  background: #12201a; color: #fff; border-radius: 22px; padding: 20px; margin-bottom: 14px;
+}
+body[data-design="klar"][data-theme="dark"] .klar-result-card,
+body[data-design="klar"] .klar-result-card { background: #12201a; }
+.klar-result-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.klar-result-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+.klar-result-badge { font-size: 11.5px; font-weight: 800; border-radius: 999px; padding: 5px 11px; }
+.klar-result-badge.green { background: #103322; color: #5fe0a4; }
+.klar-result-badge.yellow { background: #3a2f10; color: #ffd66b; }
+.klar-result-badge.red { background: #3a1614; color: #ff9a92; }
+.klar-result-badge.gray { background: rgba(255,255,255,.12); color: rgba(255,255,255,.7); }
+.klar-result-main { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+.klar-result-value { font-size: 40px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.klar-result-unit { font-size: 15px; font-weight: 700; color: rgba(255,255,255,.6); }
+.klar-result-macros { font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.75); margin-top: 10px; }
+.klar-result-total { font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.5); margin-top: 6px; }

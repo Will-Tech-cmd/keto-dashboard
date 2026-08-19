@@ -12,6 +12,11 @@ export const MEAL_LABELS = {
   snack: "🍎 Snack",
 };
 
+/** Mahlzeitenname ohne Emoji — für Fließtext und knappe Knopfbeschriftungen. */
+export function mealShort(key) {
+  return { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" }[key] || "Snack";
+}
+
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
 }
