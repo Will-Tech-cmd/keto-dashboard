@@ -68,38 +68,82 @@ export function showSnackbar({ title, subtitle, onUndo }) {
   renderSnackbarStack();
 }
 
-/**
- * Hält die Aktionsknöpfe eines Dialogs sichtbar, sobald ein Eingabefeld den Fokus bekommt.
- * Auf dem Handy schiebt sich die Tastatur über die untere Hälfte — ohne das hier steht man
- * im Bearbeiten-Dialog vor dem Zahlenfeld und muss erst blind nach unten wischen, um
- * „Speichern" zu erreichen. Die Verzögerung wartet die Einblend-Animation der Tastatur ab.
- */
-export function keepActionsInView(overlay, actionsSelector = ".btn-row:last-of-type") {
-  const card = overlay.querySelector(".modal-card");
-  const actions = overlay.querySelector(actionsSelector);
-  if (!card || !actions) return;
+// Chrome blendet über der Tastatur eine Autofill-Leiste ein, die NICHT zu dem Bereich zählt,
+// den visualViewport als verdeckt meldet. Ohne diesen Zuschlag landen die Dialog-Knöpfe exakt
+// dahinter — gemessener Wert, kein Browser gibt die Höhe der Leiste preis.
+const AUTOFILL_BAR_PX = 56;
 
-  // Bewusst direkt scrollen statt scrollIntoView: Letzteres entscheidet je nach Browser
-  // unterschiedlich, ob überhaupt gescrollt werden muss. Die Knöpfe sind das letzte Element
-  // im Dialog, ans Ende scrollen bringt sie also zuverlässig ins Bild.
-  const reveal = () => setTimeout(() => {
-    if (card.scrollHeight > card.clientHeight) {
-      card.scrollTo({ top: card.scrollHeight, behavior: "smooth" });
-    }
-  }, 300);
-  overlay.querySelectorAll("input, select, textarea").forEach(el => {
-    el.addEventListener("focus", reveal);
-  });
-  // Manche Browser melden das Erscheinen der Tastatur nur als Größenänderung des sichtbaren
-  // Bereichs — dann ebenfalls nachführen, solange der Dialog offen ist.
-  const onResize = () => {
+/**
+ * Hält die Aktionsknöpfe eines Dialogs erreichbar, solange die Tastatur offen ist.
+ *
+ * Reines Scrollen im Dialog reicht nicht: kurze Dialoge haben nichts zu scrollen, ihre Karte
+ * klebt am unteren Rand und liegt damit hinter der Tastatur. Deshalb wird der ganze Dialog
+ * angehoben und seine Höhe auf den verbleibenden Platz begrenzt.
+ */
+export function keepActionsInView(overlay) {
+  const card = overlay.querySelector(".modal-card");
+  const vv = window.visualViewport;
+  if (!card || !vv) return;
+
+  // Fensterhöhe beim Öffnen — als Vergleichswert dafür, ob später wirklich eine Tastatur
+  // aufgegangen ist. Auf dem Desktop passiert damit gar nichts.
+  const baseHeight = vv.height;
+
+  const apply = () => {
     if (!document.body.contains(overlay)) {
-      visualViewport?.removeEventListener("resize", onResize);
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
       return;
     }
-    if (overlay.contains(document.activeElement)) reveal();
+    // Von der Tastatur verdeckter Bereich. Je nach Browser schrumpft entweder nur das sichtbare
+    // Fenster (dann > 0) oder auch das Layout (dann 0, siehe interactive-widget in index.html).
+    const covered = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+    const keyboardOpen = covered > 120 || vv.height < baseHeight - 120;
+
+    if (!keyboardOpen) {
+      overlay.classList.remove("kb-lifted");
+      overlay.style.paddingBottom = "";
+      card.style.maxHeight = "";
+      return;
+    }
+
+    overlay.classList.add("kb-lifted");
+    overlay.style.paddingBottom = `${covered + AUTOFILL_BAR_PX}px`;
+    card.style.maxHeight = `${Math.max(160, vv.height - AUTOFILL_BAR_PX - 24)}px`;
+
+    // Bei kurzen Dialogen liegen die Knöpfe durch das Anheben bereits frei. Lange Dialoge
+    // müssen zusätzlich scrollen — dann aber zum bearbeiteten Feld, nicht ans Ende: sonst
+    // würde einem beim Antippen des ersten Feldes gleich der Speichern-Knopf gezeigt.
+    const focused = overlay.contains(document.activeElement) ? document.activeElement : null;
+    if (focused && card.scrollHeight > card.clientHeight) {
+      focused.scrollIntoView({ block: "nearest" });
+    }
   };
-  visualViewport?.addEventListener("resize", onResize);
+
+  // Die Tastatur fährt animiert ein; direkt nach dem Fokus meldet der Browser noch die alten
+  // Maße. Beim Verlassen eines Feldes genauso, deshalb in beide Richtungen verzögert messen.
+  const applySoon = () => setTimeout(apply, 300);
+  overlay.querySelectorAll("input, select, textarea").forEach(el => {
+    el.addEventListener("focus", applySoon);
+    el.addEventListener("blur", applySoon);
+  });
+  vv.addEventListener("resize", apply);
+  vv.addEventListener("scroll", apply);
+}
+
+/**
+ * Fragt den aktiven Service Worker, welche Fassung er ausliefert. Gibt null zurück, solange
+ * keiner die Seite bedient (erster Aufruf einer frischen Installation).
+ */
+export function getAppVersion() {
+  const sw = navigator.serviceWorker?.controller;
+  if (!sw) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(null), 1500);
+    channel.port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data?.version || null); };
+    sw.postMessage({ type: "version" }, [channel.port2]);
+  });
 }
 
 export function esc(s) {

@@ -2,7 +2,9 @@
 // Verlauf) sowie die Auswertungsseite.
 import { Store, dateKeyOf } from "./store.js";
 import { getTargetsForDate } from "./profiles.js";
-import { lookupProduct } from "./off.js";
+import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
+import { ketoGrade } from "./keto.js";
+import { openProductEditor } from "./product-editor.js";
 import {
   openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
 } from "./consumption.js";
@@ -22,19 +24,19 @@ export function openListsSubtab(sub) {
   pendingSubtab = sub;
 }
 
-// Der Einkauf steht vorn (häufigster Griff). Die Auswertung ist kein Reiter, sondern eine
-// eigene Seite über die Nährwertkarte auf Start.
+// Favoriten stehen vorn (häufigster Griff), der Einkauf ganz rechts. Die Auswertung ist kein
+// Reiter, sondern eine eigene Seite über die Nährwertkarte auf Start.
 const SUBTABS = [
-  { sub: "shopping", label: "Einkauf" },
   { sub: "favorites", label: "Favoriten" },
   { sub: "noGo", label: "No-Go" },
   { sub: "history", label: "Verlauf" },
+  { sub: "shopping", label: "Einkauf" },
 ];
 
 export function renderLists(container, goToTab) {
   if (pendingSubtab) { activeSubtab = pendingSubtab; pendingSubtab = null; }
-  // Einkauf ist der Startreiter, solange nicht bewusst ein anderer gewählt wurde.
-  if (!subtabChosen || !SUBTABS.some(t => t.sub === activeSubtab)) activeSubtab = "shopping";
+  // Favoriten sind der Startreiter, solange nicht bewusst ein anderer gewählt wurde.
+  if (!subtabChosen || !SUBTABS.some(t => t.sub === activeSubtab)) activeSubtab = "favorites";
 
   container.innerHTML = `
     <div class="subtabs">
@@ -114,42 +116,139 @@ function renderProductRows(body, listName) {
     return;
   }
 
-  rowsEl.innerHTML = items.map(item => `
-    <div class="list-item" data-barcode="${esc(item.barcode)}" style="cursor:pointer">
-      <span class="badge ${item.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(item.grade)}</span>
-      <div class="info">
-        <div class="name">${esc(item.name)}</div>
-        <div class="meta">${esc(item.brand || "")}${item.netCarbs100 != null ? ` · ${item.netCarbs100} g Netto-KH/100g` : ""}</div>
+  rowsEl.innerHTML = items.map(item => {
+    const nutri = nutriOf(item, listName);
+    const meta = [item.brand || "", metaLine(nutri)].filter(Boolean).join(" · ");
+    return `
+      <div class="list-entry" data-barcode="${esc(item.barcode)}">
+        <div class="list-item" style="cursor:pointer">
+          <span class="badge ${item.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(item.grade)}</span>
+          <div class="info">
+            <div class="name">${esc(item.name)}</div>
+            <div class="meta">${esc(meta)}</div>
+          </div>
+          <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
+          <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
+        </div>
+        <div class="list-detail" hidden>
+          ${tileGridHtml(nutri)}
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn secondary" data-action="edit">✎ Werte</button>
+            <button class="btn" data-action="eat">Eintragen</button>
+          </div>
+        </div>
       </div>
-      <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
-      <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 
-  rowsEl.querySelectorAll(".list-item").forEach(row => {
-    const barcode = row.dataset.barcode;
-    row.querySelector('[data-action="remove"]').addEventListener("click", (e) => {
+  rowsEl.querySelectorAll(".list-entry").forEach(entry => {
+    const barcode = entry.dataset.barcode;
+    entry.querySelector('[data-action="remove"]').addEventListener("click", (e) => {
       e.stopPropagation();
       Store.removeFromList(listName, barcode);
       // Komplett neu zeichnen, damit beim letzten Eintrag auch das Suchfeld verschwindet.
       renderProductList(body, listName);
       showToast("Entfernt");
     });
-    row.querySelector('[data-action="cart"]').addEventListener("click", (e) => {
+    entry.querySelector('[data-action="cart"]').addEventListener("click", (e) => {
       e.stopPropagation();
       const item = Store.get()[listName].find(e2 => e2.barcode === barcode);
       Store.addShoppingItem(item.name, barcode);
       showToast("Auf Einkaufsliste gesetzt");
     });
-    row.addEventListener("click", async () => {
-      try {
-        const product = await lookupProduct(barcode);
-        openQuantityModal(product);
-      } catch {
-        showToast("Produkt nicht verfügbar (offline?)");
-      }
+    entry.querySelector(".list-item").addEventListener("click", () => toggleDetail(entry));
+    entry.querySelector('[data-action="eat"]').addEventListener("click", async () => {
+      const product = await resolveProduct(barcode);
+      if (product) openQuantityModal(product);
+    });
+    entry.querySelector('[data-action="edit"]').addEventListener("click", async () => {
+      const product = await resolveProduct(barcode);
+      if (!product) return;
+      openProductEditor(product, (saved) => {
+        applyCorrectionToLists(saved);
+        renderProductRows(body, listName);
+      });
     });
   });
+}
+
+/** Klappt die Nährwertkacheln einer Zeile auf/zu — immer nur eine gleichzeitig. */
+function toggleDetail(entry) {
+  const detail = entry.querySelector(".list-detail");
+  const open = detail.hidden;
+  entry.parentElement.querySelectorAll(".list-entry.open").forEach(other => {
+    if (other === entry) return;
+    other.classList.remove("open");
+    other.querySelector(".list-detail").hidden = true;
+  });
+  detail.hidden = !open;
+  entry.classList.toggle("open", open);
+}
+
+/**
+ * Die vier Kennwerte einer Zeile. Bevorzugt der beim Anlegen gespeicherte Schnappschuss;
+ * bei Bestandseinträgen wird er einmalig aus dem nachgefüllt, was das Gerät ohnehin hat, und
+ * dann mitgespeichert — so wandert er beim nächsten Abgleich auf das andere Handy mit.
+ */
+function nutriOf(item, listName) {
+  if (item.nutri100) return item.nutri100;
+  const product = getProductOffline(item.barcode);
+  if (!product) return null;
+  const snapshot = nutriSnapshot(product);
+  if (listName === "favorites" || listName === "noGo") {
+    Store.updateListEntry(listName, item.barcode, { nutri100: snapshot });
+  }
+  return snapshot;
+}
+
+/** Kurze Fassung für die Zeile — bewusst nur zwei Werte, damit sie einzeilig lesbar bleibt. */
+function metaLine(nutri) {
+  if (!nutri) return "";
+  return [
+    nutri.kcal != null ? `${Math.round(nutri.kcal)} kcal` : null,
+    nutri.netCarbs != null ? `${round1(nutri.netCarbs)} g KH` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+/** Vier Kacheln wie in der Scan-Ergebniskarte, je 100 g. */
+function tileGridHtml(nutri) {
+  const v = (x) => x == null ? "–" : round1(x);
+  return `
+    <div class="klar-tile-grid" style="margin-top:0">
+      <div class="klar-tile"><div class="val">${v(nutri?.kcal)}</div><div class="lbl">kcal /100 g</div></div>
+      <div class="klar-tile"><div class="val">${v(nutri?.netCarbs)}</div><div class="lbl">g Netto-KH /100 g</div></div>
+      <div class="klar-tile"><div class="val">${v(nutri?.fat)}</div><div class="lbl">g Fett /100 g</div></div>
+      <div class="klar-tile"><div class="val">${v(nutri?.protein)}</div><div class="lbl">g Eiweiß /100 g</div></div>
+    </div>
+    ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
+  `;
+}
+
+/** Produkt zu einem Barcode holen: erst offline, sonst über das Netz. */
+async function resolveProduct(barcode) {
+  const offline = getProductOffline(barcode);
+  if (offline) return offline;
+  try {
+    return await lookupProduct(barcode);
+  } catch {
+    showToast("Produkt nicht verfügbar (offline?)");
+    return null;
+  }
+}
+
+/** Nach einer Wertekorrektur: Ampelfarbe und Kennwerte in allen Listen nachziehen. */
+function applyCorrectionToLists(product) {
+  const snapshot = nutriSnapshot(product);
+  const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds);
+  for (const listName of ["favorites", "noGo"]) {
+    Store.updateListEntry(listName, product.barcode, {
+      name: product.name,
+      brand: product.brand,
+      netCarbs100: snapshot.netCarbs,
+      grade,
+      nutri100: snapshot,
+    });
+  }
 }
 
 function renderShopping(body) {
@@ -295,26 +394,45 @@ function renderHistoryList(el, items) {
       lastLabel = label;
     }
     const time = new Date(entry.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    // Verlaufseinträge werden nicht nachträglich befüllt (es sind viele) — nur angezeigt.
+    const nutri = nutriOf(entry, null);
+    const meta = [time, metaLine(nutri)].filter(Boolean).join(" · ");
     rows.push(`
-      <div class="list-item" data-barcode="${esc(entry.barcode)}" style="cursor:pointer">
-        <span class="badge ${entry.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(entry.grade)}</span>
-        <div class="info">
-          <div class="name">${esc(entry.name)}</div>
-          <div class="meta">${time} · ${esc(entry.profileName)}${entry.netCarbs100 != null ? ` · ${entry.netCarbs100} g Netto-KH/100g` : ""}</div>
+      <div class="list-entry" data-barcode="${esc(entry.barcode)}">
+        <div class="list-item" style="cursor:pointer">
+          <span class="badge ${entry.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(entry.grade)}</span>
+          <div class="info">
+            <div class="name">${esc(entry.name)}</div>
+            <div class="meta">${esc(meta)}</div>
+          </div>
+        </div>
+        <div class="list-detail" hidden>
+          ${tileGridHtml(nutri)}
+          <p class="hint">${esc(entry.brand || "")}${entry.brand ? " · " : ""}gesucht von ${esc(entry.profileName)}</p>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn secondary" data-action="edit">✎ Werte</button>
+            <button class="btn" data-action="eat">Eintragen</button>
+          </div>
         </div>
       </div>
     `);
   }
   el.innerHTML = rows.join("");
 
-  el.querySelectorAll(".list-item[data-barcode]").forEach(row => {
-    row.addEventListener("click", async () => {
-      try {
-        const product = await lookupProduct(row.dataset.barcode);
-        openQuantityModal(product);
-      } catch {
-        showToast("Produkt nicht verfügbar (offline?)");
-      }
+  el.querySelectorAll(".list-entry").forEach(entry => {
+    const barcode = entry.dataset.barcode;
+    entry.querySelector(".list-item").addEventListener("click", () => toggleDetail(entry));
+    entry.querySelector('[data-action="eat"]').addEventListener("click", async () => {
+      const product = await resolveProduct(barcode);
+      if (product) openQuantityModal(product);
+    });
+    entry.querySelector('[data-action="edit"]').addEventListener("click", async () => {
+      const product = await resolveProduct(barcode);
+      if (!product) return;
+      openProductEditor(product, (saved) => {
+        applyCorrectionToLists(saved);
+        renderHistoryList(el, items);
+      });
     });
   });
 }

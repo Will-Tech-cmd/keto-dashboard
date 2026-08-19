@@ -305,6 +305,13 @@ export const Store = {
     state[other] = state[other].filter(e => e.barcode !== entry.barcode);
     persist();
   },
+  /** Ergänzt/ändert einzelne Felder eines Listeneintrags (z.B. nachgefüllte Nährwerte). */
+  updateListEntry(listName, barcode, patch) {
+    const item = state[listName].find(e => e.barcode === barcode);
+    if (!item) return;
+    Object.assign(item, patch);
+    persist();
+  },
   removeFromList(listName, barcode) {
     state[listName] = state[listName].filter(e => e.barcode !== barcode);
     persist();

@@ -1,7 +1,8 @@
 // views/scan.js — Scan-Tab: Kamera, Ergebniskarte, manuelle Eingabe, "Produkt selbst anlegen".
 import { Store } from "../store.js";
 import { calcTargets } from "../profiles.js";
-import { lookupProduct, saveOwnProduct, searchProductsByName, searchOwnProducts, newOwnBarcode } from "../off.js";
+import { lookupProduct, searchProductsByName, searchOwnProducts, newOwnBarcode, nutriSnapshot } from "../off.js";
+import { ownProductFormHtml, wireOwnProductForm } from "../product-editor.js";
 import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
@@ -181,7 +182,7 @@ function startOwnProductFromSearch(container, term) {
   const resultWrap = container.querySelector("#resultWrap");
   const barcode = newOwnBarcode();
   resultWrap.innerHTML = ownProductFormHtml(barcode, null, term);
-  wireOwnProductForm(container, resultWrap, barcode);
+  wireOwnProductForm(resultWrap, barcode, { onSaved: (product) => afterOwnProductSaved(container, product) });
   scrollToResult(container);
 }
 
@@ -219,6 +220,7 @@ function logHistory(product) {
     brand: product.brand,
     grade: evalResult.grade,
     netCarbs100: evalResult.netCarbs100,
+    nutri100: nutriSnapshot(product),
     source: product.source,
     profileName: profile.name,
     at: Date.now(),
@@ -342,7 +344,10 @@ function wireResultActions(container, resultWrap, product, evalResult) {
   });
   resultWrap.querySelector("#correctBtn").addEventListener("click", () => {
     resultWrap.innerHTML = ownProductFormHtml(product.barcode, product);
-    wireOwnProductForm(container, resultWrap, product.barcode, () => renderResult(container, product));
+    wireOwnProductForm(resultWrap, product.barcode, {
+      onSaved: (saved) => afterOwnProductSaved(container, saved),
+      onCancel: () => renderResult(container, product),
+    });
   });
 
   const entry = () => ({
@@ -352,6 +357,9 @@ function wireResultActions(container, resultWrap, product, evalResult) {
     addedAt: Date.now(),
     netCarbs100: evalResult.netCarbs100,
     grade: evalResult.grade,
+    // Vier Kennwerte mitspeichern: der Produkt-Cache wird nicht exportiert, sonst stünde die
+    // Liste auf dem anderen Handy nach einem Abgleich ohne Werte da.
+    nutri100: nutriSnapshot(product),
   });
 
   resultWrap.querySelector("#eatBtn").addEventListener("click", () => {
@@ -383,75 +391,14 @@ function renderNotFound(container, barcode) {
   `;
   resultWrap.querySelector("#addOwnBtn").addEventListener("click", () => {
     resultWrap.innerHTML = ownProductFormHtml(barcode);
-    wireOwnProductForm(container, resultWrap, barcode);
+    wireOwnProductForm(resultWrap, barcode, { onSaved: (product) => afterOwnProductSaved(container, product) });
   });
 }
 
-/** existing: Produkt mit aktuellen Werten (aus Scan/OFF), wenn als Korrektur geöffnet.
- * prefillName: Namensvorschlag für ein wirklich neues Produkt (z.B. aus der Namenssuche). */
-function ownProductFormHtml(barcode, existing = null, prefillName = "") {
-  const p = existing?.per100 || {};
-  return `
-    <div class="card">
-      <h2>${existing ? "Werte korrigieren" : "Neues Produkt"} · ${esc(barcode)}</h2>
-      ${existing ? `<p class="hint" style="margin-top:0">Deine Angaben haben ab jetzt immer Vorrang vor Open Food Facts für dieses Produkt.</p>` : ""}
-      <label>Name</label><input type="text" id="opName" required value="${esc(existing?.name || prefillName)}">
-      <label>Marke</label><input type="text" id="opBrand" value="${esc(existing?.brand || "")}">
-      <div class="field-row">
-        <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
-      </div>
-      <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
-      <label>Energie (kcal)</label><input type="number" step="1" id="opKcal" value="${p.kcal ?? ""}">
-      <div class="field-row">
-        <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat" value="${p.fat ?? ""}"></div>
-        <div><label>davon gesättigte Fettsäuren (g)</label><input type="number" step="0.1" id="opSatFat" value="${p.saturatedFat ?? ""}"></div>
-      </div>
-      <div class="field-row">
-        <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="opCarbs" value="${p.carbs ?? ""}"></div>
-        <div><label>davon Zucker (g)</label><input type="number" step="0.1" id="opSugars" value="${p.sugars ?? ""}"></div>
-      </div>
-      <div class="field-row">
-        <div><label>Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber" value="${p.fiber ?? ""}"></div>
-        <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="opProtein" value="${p.protein ?? ""}"></div>
-      </div>
-      <label>Salz (g)</label><input type="number" step="0.01" id="opSalt" value="${p.salt ?? ""}">
-      <label>Zutaten (optional, für Warnhinweise)</label>
-      <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">
-      <button class="btn" id="opSave" style="margin-top:14px">Speichern</button>
-      ${existing ? `<button class="btn ghost" id="opCancel" style="margin-top:8px">Abbrechen</button>` : ""}
-    </div>
-  `;
-}
-
-function wireOwnProductForm(container, resultWrap, barcode, onCancel) {
-  resultWrap.querySelector("#opCancel")?.addEventListener("click", () => onCancel?.());
-  resultWrap.querySelector("#opSave").addEventListener("click", () => {
-    const val = (id) => resultWrap.querySelector(id).value;
-    const name = val("#opName").trim();
-    if (!name) { showToast("Bitte einen Namen eingeben"); return; }
-    const numOrNull = (raw) => {
-      const n = parseFloat(raw);
-      return Number.isNaN(n) ? null : n;
-    };
-    const product = saveOwnProduct(barcode, {
-      name,
-      brand: val("#opBrand").trim(),
-      servingSize: val("#opServing").trim(),
-      kcal: numOrNull(val("#opKcal")),
-      fat: numOrNull(val("#opFat")),
-      saturatedFat: numOrNull(val("#opSatFat")),
-      carbs: numOrNull(val("#opCarbs")),
-      sugars: numOrNull(val("#opSugars")),
-      fiber: numOrNull(val("#opFiber")),
-      protein: numOrNull(val("#opProtein")),
-      salt: numOrNull(val("#opSalt")),
-      ingredientsText: val("#opIngredients").trim(),
-    });
-    Store.clearFiberOverride(barcode); // eigene Werte sind jetzt maßgeblich, kein doppeltes Abziehen mehr
-    showToast("Produkt gespeichert");
-    logHistory(product);
-    renderResult(container, product);
-  });
+/** Nach dem Speichern eigener Werte: in den Verlauf schreiben und die Ergebniskarte zeigen. */
+function afterOwnProductSaved(container, product) {
+  logHistory(product);
+  renderResult(container, product);
 }
 
 function fmt(v) {

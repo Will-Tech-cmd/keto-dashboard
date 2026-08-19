@@ -1,7 +1,11 @@
 // sw.js — cached die App-Shell für Offline-Start, holt Open-Food-Facts-Daten network-first
 // (mit Cache-Fallback, damit bereits gescannte Produkte auch offline funktionieren).
+//
+// Code (HTML/CSS/JS) ebenfalls network-first: sonst liefert der Cache beim Neuladen die alte
+// Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
+// Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v18";
+const CACHE_NAME = "keto-dashboard-v19";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -22,6 +26,7 @@ const APP_SHELL = [
   "./js/analysis.js",
   "./js/ai.js",
   "./js/ui.js",
+  "./js/product-editor.js",
   "./js/views/start.js",
   "./js/views/scan.js",
   "./js/views/profile.js",
@@ -73,20 +78,66 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isAppShell) {
-    // Cache-first. Bei Cache-Miss (z.B. lazy geladene Tesseract-Dateien beim ersten
-    // Bild-Import) wird die Antwort zusätzlich in den Cache geschrieben, damit sie
-    // danach auch offline verfügbar ist.
-    event.respondWith(
-      caches.match(request).then(cached => {
-        if (cached) return cached;
-        return fetch(request).then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
-          }
-          return res;
-        });
+    event.respondWith(isCode(url) ? networkFirst(request) : cacheFirst(request));
+  }
+});
+
+/** Ändert sich diese Datei mit jedem Update? Nur dann lohnt der Umweg übers Netz. */
+function isCode(url) {
+  if (url.pathname.includes("/vendor/")) return false;
+  return url.pathname.endsWith("/")
+    || /\.(html|css|js|webmanifest)$/.test(url.pathname);
+}
+
+/**
+ * Erst das Netz, nach 3 Sekunden oder bei Fehler der Cache. `cache: "no-cache"` erzwingt eine
+ * Rückfrage beim Server statt einer Antwort aus dem HTTP-Cache des Browsers — dank ETag ist das
+ * in der Regel ein 304 ohne Datenübertragung. Jede erfolgreiche Antwort frischt den Cache auf,
+ * auch wenn zwischenzeitlich schon die gecachte Fassung ausgeliefert wurde.
+ */
+function networkFirst(request) {
+  const cached = caches.match(request);
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (res) => { if (res && !settled) { settled = true; resolve(res); } };
+    const timer = setTimeout(() => cached.then(done), 3000);
+
+    fetch(request, { cache: "no-cache" })
+      .then((res) => {
+        clearTimeout(timer);
+        if (res && res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+        }
+        done(res);
+        // Falls der Timeout schon mit der Cache-Fassung geantwortet hat: nichts weiter zu tun,
+        // der Cache ist jetzt aktuell und der nächste Aufruf bekommt den neuen Stand.
       })
-    );
+      .catch(() => {
+        clearTimeout(timer);
+        cached.then(c => c ? done(c) : done(Response.error()));
+      });
+  });
+}
+
+/** Cache-first für alles, was sich nicht ändert. Bei Cache-Miss (z.B. lazy geladene
+ * Tesseract-Dateien beim ersten Bild-Import) wandert die Antwort zusätzlich in den Cache. */
+function cacheFirst(request) {
+  return caches.match(request).then((cached) => {
+    if (cached) return cached;
+    return fetch(request).then((res) => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+      }
+      return res;
+    });
+  });
+}
+
+// Die App fragt hier nach, welcher Stand tatsächlich ausliefert — im Profil-Tab sichtbar.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "version") {
+    event.ports[0]?.postMessage({ version: CACHE_NAME });
   }
 });

@@ -276,15 +276,31 @@ input[type="text"], input[type="number"], input[type="search"], select {
 .subtab-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 
 .list-item {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 10px;
   padding: 12px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--bg-elevated); margin-bottom: 8px;
 }
+/* In Listenzeilen ist die Ampel nur ein Symbol — schmaler halten, der Platz fehlt sonst der
+   Nährwertzeile daneben. */
+.list-item .badge { padding: 6px 8px; }
 .list-item .info { flex: 1; min-width: 0; }
 .list-item .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list-item .meta { font-size: .78rem; color: var(--text-muted); }
+/* Einzeilig halten: mit vier Nährwerten reißt eine umbrechende Zeile die Liste auseinander. */
+.list-item .meta { font-size: .76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Listenzeile mit aufklappbaren Nährwerten (Favoriten, No-Go, Verlauf) */
+.list-entry { margin-bottom: 8px; }
+.list-entry .list-item { margin-bottom: 0; }
+.list-entry.open .list-item { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+.list-detail {
+  border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 12px 12px;
+  background: var(--bg-elevated);
+  padding: 12px;
+}
+.list-detail .hint { margin-top: 10px; }
 .icon-btn {
-  border: none; background: none; font-size: 1.2rem; min-width: 40px; min-height: 40px;
+  border: none; background: none; font-size: 1.15rem; min-width: 34px; min-height: 40px;
   color: var(--text-muted); cursor: pointer;
 }
 .checkbox-row { display: flex; align-items: center; gap: 12px; }
@@ -309,6 +325,8 @@ input[type="text"], input[type="number"], input[type="search"], select {
   max-height: 85vh; overflow-y: auto;
   box-shadow: 0 -4px 24px rgba(0,0,0,.25);
 }
+/* Angehoben (Tastatur offen): die Karte schwebt, also alle vier Ecken runden. */
+.modal-overlay.kb-lifted .modal-card { border-radius: 18px; }
 @media (min-width: 700px) {
   .modal-overlay { align-items: center; }
   .modal-card { border-radius: 18px; }
@@ -431,17 +449,18 @@ input[type="text"], input[type="number"], input[type="search"], select {
 
 .fab-btn { display: none; }
 body[data-design="klar"] .tab-btn[data-tab="scan"] { display: none; }
-/* Der FAB ragt 26px über die Tabbar hinaus — Seiteninhalt entsprechend weiter freihalten,
-   sonst verdeckt er die letzte Zeile. */
-body[data-design="klar"] .view { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 52px); }
+/* Der + Knopf sitzt auf einer Linie mit den übrigen Symbolen: top = halbe Leistenhöhe (gemessen
+   ab Oberkante, die Sicherheitszone liegt als padding darunter) und dann um sich selbst
+   zurückversetzt. Er ragt nicht mehr heraus, die Seiten brauchen deshalb keine Extra-Freihöhe. */
+body[data-design="klar"] .view { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px); }
 body[data-design="klar"] .fab-btn {
   display: flex; align-items: center; justify-content: center;
-  position: absolute; left: 50%; top: -26px; transform: translateX(-50%);
-  width: 60px; height: 60px; border-radius: 50%;
+  position: absolute; left: 50%; top: calc(var(--tabbar-h) / 2); transform: translate(-50%, -50%);
+  width: 52px; height: 52px; border-radius: 50%;
   background: var(--accent); color: var(--accent-contrast);
-  border: 4px solid var(--bg);
-  box-shadow: 0 6px 18px rgba(31,138,95,.4);
-  font-size: 28px; font-weight: 800; line-height: 1;
+  border: none;
+  box-shadow: 0 4px 12px rgba(31,138,95,.35);
+  font-size: 26px; font-weight: 800; line-height: 1;
 }
 
 .klar-week-strip { display: flex; gap: 6px; margin-bottom: 16px; }
@@ -689,6 +708,5 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
 
 /* Fußzeile: FAB tiefer, damit er weniger über der Leiste schwebt; Listen/Rezepte weiter
    nach außen, damit sie nicht am FAB kleben. */
-body[data-design="klar"] .fab-btn { top: -14px; }
 body[data-design="klar"] .tab-btn[data-tab="lists"] { margin-right: 34px; }
 body[data-design="klar"] .tab-btn[data-tab="recipes"] { margin-left: 34px; }

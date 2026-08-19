@@ -3,7 +3,7 @@ import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
-import { showToast, esc, applyDesignTheme, bindBackClose } from "../ui.js";
+import { showToast, esc, applyDesignTheme, bindBackClose, getAppVersion } from "../ui.js";
 
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
@@ -22,9 +22,9 @@ export function renderProfile(container, onProfileChanged) {
       <h2>Daten sichern</h2>
       <p class="hint">Exportiere eure Daten (Profile, Favoriten, Listen) als Datei, oder importiere sie auf dem anderen Handy. Beim Importieren fragt die App, ob zusammengeführt oder ersetzt werden soll.</p>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" id="exportBtn">⬇️ Export</button>
+        <button class="btn secondary" id="importBtn">⬇️ Import</button>
+        <button class="btn secondary" id="exportBtn">⬆️ Export</button>
         <button class="btn secondary" id="shareBtn">📤 Teilen</button>
-        <button class="btn secondary" id="importBtn">⬆️ Import</button>
       </div>
       <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
       ${Store.hasPreMergeBackup() ? `
@@ -36,9 +36,9 @@ export function renderProfile(container, onProfileChanged) {
       <h2>Nur Rezepte teilen</h2>
       <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" id="exportRecipesBtn">⬇️ Export</button>
+        <button class="btn secondary" id="importRecipesBtn">⬇️ Import</button>
+        <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
         <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
-        <button class="btn secondary" id="importRecipesBtn">⬆️ Import</button>
       </div>
       <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
     </div>
@@ -74,6 +74,7 @@ export function renderProfile(container, onProfileChanged) {
       Richtwerte auf Basis gängiger Formeln (Mifflin-St Jeor / Katch-McArdle) — keine medizinische Beratung.
       Bei gesundheitlichen Fragen bitte ärztlichen Rat einholen.
     </p>
+    <p class="hint" style="text-align:center" id="appVersion"></p>
   `;
 
   container.querySelectorAll(".subtab-btn").forEach(btn => {
@@ -88,6 +89,16 @@ export function renderProfile(container, onProfileChanged) {
   wireExportImport(container);
   wireAiKey(container);
   renderAppearanceCard(container, onProfileChanged);
+  showAppVersion(container);
+}
+
+/** Zeigt, welchen Stand der Service Worker gerade ausliefert — nach einem Update sofort
+ * erkennbar, ob die neue Fassung angekommen ist. */
+function showAppVersion(container) {
+  const el = container.querySelector("#appVersion");
+  getAppVersion().then(version => {
+    if (el.isConnected) el.textContent = version ? `Version ${version.replace("keto-dashboard-", "")}` : "";
+  });
 }
 
 function otherProfileName() {

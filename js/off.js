@@ -1,6 +1,7 @@
 // off.js — Anbindung an Open Food Facts, Normalisierung, Cache, eigene Produkte.
 import { Store } from "./store.js";
 import { getLocalFoodByBarcode } from "./foods-db.js";
+import { calcNetCarbs } from "./keto.js";
 
 const FIELDS = [
   "product_name", "brands", "quantity", "serving_size",
@@ -69,11 +70,13 @@ function normalizeOwn(p) {
  * Wirft { notFound: true } wenn nichts gefunden wurde -> UI zeigt "Produkt selbst anlegen".
  */
 export async function lookupProduct(barcode, { forceNetwork = false } = {}) {
-  const local = getLocalFoodByBarcode(barcode);
-  if (local) return local;
-
+  // Eigene Werte zuerst: wer die eingebaute Tabelle korrigiert hat (z.B. andere Eiergröße),
+  // erwartet die Korrektur überall — sonst bliebe sie für "local:"-Einträge wirkungslos.
   const own = Store.getOwnProduct(barcode);
   if (own) return normalizeOwn(own);
+
+  const local = getLocalFoodByBarcode(barcode);
+  if (local) return local;
 
   if (!forceNetwork) {
     const cached = Store.getCachedProduct(barcode);
@@ -199,4 +202,32 @@ export function saveOwnProduct(barcode, data) {
   };
   Store.saveOwnProduct(barcode, product);
   return normalizeOwn(product);
+}
+
+/**
+ * Produkt aus dem, was das Gerät ohnehin hat — eigene Produkte, eingebaute Tabelle, Cache.
+ * Ohne Netz und ohne Wartezeit, gedacht fürs Zeichnen von Listen. Gibt null zurück, wenn zu
+ * diesem Barcode nichts vorliegt.
+ */
+export function getProductOffline(barcode) {
+  if (!barcode) return null;
+  const own = Store.getOwnProduct(barcode);
+  if (own) return normalizeOwn(own);
+  return getLocalFoodByBarcode(barcode) || Store.getCachedProduct(barcode) || null;
+}
+
+/**
+ * Die vier Kennwerte je 100 g, die in Listen und Kacheln gezeigt werden. Werden beim Anlegen
+ * eines Favoriten/Verlaufseintrags mitgespeichert, damit sie auch nach einem Abgleich auf dem
+ * anderen Handy vorhanden sind — der Produkt-Cache wird bewusst nicht mit exportiert.
+ */
+export function nutriSnapshot(product) {
+  const override = Store.getFiberOverride(product.barcode);
+  const subtractFiber = override !== undefined ? override : product.likelyUsLabel;
+  return {
+    kcal: product.per100.kcal ?? null,
+    netCarbs: calcNetCarbs(product.per100, { subtractFiber }),
+    fat: product.per100.fat ?? null,
+    protein: product.per100.protein ?? null,
+  };
 }

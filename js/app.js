@@ -239,10 +239,31 @@ window.addEventListener("online", () => showToast("Wieder online"));
 
 // Service Worker registrieren (relativer Pfad, funktioniert unter /keto-dashboard/ Unterpfad)
 if ("serviceWorker" in navigator) {
+  // Ob beim Start schon ein Service Worker die Seite bedient hat: bei der allerersten
+  // Registrierung wechselt der Controller ebenfalls — dann darf NICHT neu geladen werden.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(err => {
+    navigator.serviceWorker.register("sw.js").then(reg => {
+      // Eine installierte App wird nie neu geladen — beim Zurückholen aus dem Hintergrund
+      // deshalb selbst nach einem neuen Stand schauen.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+    }).catch(err => {
       console.warn("Service Worker Registrierung fehlgeschlagen:", err);
     });
+  });
+
+  // Ein neuer Service Worker hat übernommen: die bereits geladenen Module stammen noch vom
+  // alten Stand, deshalb einmalig neu laden — aber nie mitten in einer Eingabe.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading || !hadController) return;
+    if (document.querySelector(".modal-overlay")) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) return;
+    reloading = true;
+    location.reload();
   });
 }
 
