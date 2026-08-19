@@ -39,9 +39,12 @@ export function renderOnboarding(container, onComplete) {
     const shared = container.querySelector("#obShared").checked;
     const name2 = container.querySelector("#obName2").value.trim();
 
+    // Neu eingerichtete Geräte starten mit dem neuen Design "Klar" (siehe Profil > Design zum
+    // Umschalten) — bestehende Installationen bleiben beim vertrauten "Klassisch" (in migrate()
+    // in store.js), damit niemand ungefragt umgestellt wird.
     const profiles = Store.get().profiles;
-    Store.updateProfile(profiles[0].id, { name: name1 });
-    Store.updateProfile(profiles[1].id, { name: shared && name2 ? name2 : "Profil 2" });
+    Store.updateProfile(profiles[0].id, { name: name1, design: "klar" });
+    Store.updateProfile(profiles[1].id, { name: shared && name2 ? name2 : "Profil 2", design: "klar" });
     Store.setActiveProfile(profiles[0].id);
     Store.setOnboarded();
     onComplete();

@@ -3,7 +3,7 @@ import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
-import { showToast, esc } from "../ui.js";
+import { showToast, esc, applyDesignTheme } from "../ui.js";
 
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
@@ -55,6 +55,19 @@ export function renderProfile(container, onProfileChanged) {
       <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
     </div>
 
+    <div class="card">
+      <h2>Design</h2>
+      <p class="hint" style="margin-top:0">Gilt nur für dieses Profil — ${esc(otherProfileName())} kann ein anderes wählen.</p>
+      <div class="klar-design-choices" id="designChoices"></div>
+      <div class="klar-appearance-row">
+        <div>
+          <div class="klar-appearance-name">Dunkles Erscheinungsbild</div>
+          <div class="klar-appearance-desc" id="appearanceDesc"></div>
+        </div>
+        <button type="button" class="klar-switch" id="appearanceSwitch" role="switch" aria-label="Dunkles Erscheinungsbild"></button>
+      </div>
+    </div>
+
     <p class="hint" style="text-align:center;margin-top:8px">
       Richtwerte auf Basis gängiger Formeln (Mifflin-St Jeor / Katch-McArdle) — keine medizinische Beratung.
       Bei gesundheitlichen Fragen bitte ärztlichen Rat einholen.
@@ -72,6 +85,76 @@ export function renderProfile(container, onProfileChanged) {
   renderProfileForm(container, onProfileChanged);
   wireExportImport(container);
   wireAiKey(container);
+  renderDesignCard(container, onProfileChanged);
+}
+
+function otherProfileName() {
+  const state = Store.get();
+  return state.profiles.find(p => p.id !== state.activeProfileId)?.name || "das andere Profil";
+}
+
+const DESIGNS = [
+  { key: "klassisch", name: "Klassisch", desc: "Vier Ringe, wie bisher" },
+  { key: "klar", name: "Klar", desc: "Ein Ring, Balken, Chips" },
+];
+
+/** Design- und Erscheinungsbild-Wahl je Profil. Beides wirkt sofort (Attribute am <body>),
+ * ohne Neuladen — deshalb wird nach dem Umschalten nur neu gerendert. */
+function renderDesignCard(container, onProfileChanged) {
+  const profile = Store.getActiveProfile();
+  const choicesEl = container.querySelector("#designChoices");
+
+  choicesEl.innerHTML = DESIGNS.map(d => `
+    <div class="klar-design-choice ${d.key === profile.design ? "selected" : ""}" data-design="${d.key}" role="button" tabindex="0">
+      <div class="klar-design-preview">${designPreviewHtml(d.key)}</div>
+      <div class="klar-design-name">
+        <span style="display:inline-flex;width:18px;height:18px;border-radius:50%;border:2px solid ${d.key === profile.design ? "var(--accent)" : "var(--border)"};background:${d.key === profile.design ? "var(--accent)" : "transparent"};flex:none"></span>
+        ${esc(d.name)}
+      </div>
+      <div class="klar-design-desc">${esc(d.desc)}</div>
+    </div>
+  `).join("");
+
+  choicesEl.querySelectorAll(".klar-design-choice").forEach(el => {
+    el.addEventListener("click", () => {
+      Store.updateProfile(profile.id, { design: el.dataset.design });
+      applyDesignTheme();
+      renderProfile(container, onProfileChanged);
+      showToast(`Design: ${DESIGNS.find(d => d.key === el.dataset.design).name}`);
+    });
+  });
+
+  const isDark = profile.appearance === "dark";
+  const sw = container.querySelector("#appearanceSwitch");
+  sw.classList.toggle("on", isDark);
+  sw.setAttribute("aria-checked", String(isDark));
+  container.querySelector("#appearanceDesc").textContent =
+    profile.appearance === "system" ? "Folgt der Systemeinstellung" : isDark ? "Immer dunkel" : "Immer hell";
+
+  sw.addEventListener("click", () => {
+    // Beim ersten Antippen aus "system" heraus: auf das Gegenteil der aktuellen Systemanzeige
+    // wechseln, damit der Schalter sichtbar etwas bewirkt.
+    const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = profile.appearance === "system" ? (systemDark ? "light" : "dark")
+      : profile.appearance === "dark" ? "light" : "dark";
+    Store.updateProfile(profile.id, { appearance: next });
+    applyDesignTheme();
+    renderProfile(container, onProfileChanged);
+  });
+}
+
+function designPreviewHtml(key) {
+  if (key === "klassisch") {
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+      ${[0, 1, 2, 3].map(() => `<span style="display:block;width:14px;height:14px;border-radius:50%;border:3px solid var(--accent)"></span>`).join("")}
+    </div>`;
+  }
+  return `<div style="display:flex;align-items:center;gap:6px">
+    <span style="display:block;width:22px;height:22px;border-radius:50%;border:3px solid var(--accent)"></span>
+    <span style="display:flex;flex-direction:column;gap:3px">
+      ${[16, 12, 9].map(w => `<span style="display:block;width:${w * 1.6}px;height:3px;border-radius:999px;background:var(--accent)"></span>`).join("")}
+    </span>
+  </div>`;
 }
 
 function wireAiKey(container) {

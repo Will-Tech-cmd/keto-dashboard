@@ -128,6 +128,56 @@ export function undoLastWater(profileId, dateKey) {
   return true;
 }
 
+/**
+ * Rangfolge für die Schnellauswahl im Eintragen-Sheet (Design "Klar").
+ *
+ * score = freq30 × timeslotWeight, wobei freq30 = Anzahl Einträge dieses Produkts/Rezepts in
+ * den letzten 30 Tagen und timeslotWeight = Anteil davon, der auf die gerade gewählte Mahlzeit
+ * fiel. Die Untergrenze von 0.15 sorgt dafür, dass etwas, das man sonst nie zu dieser Tageszeit
+ * isst, nicht komplett verschwindet — es rutscht nur nach hinten.
+ *
+ * `amount` ist jeweils die zuletzt benutzte Menge (Gramm bzw. Portionen), damit ein Chip-Tipp
+ * ohne Rückfrage eintragen kann.
+ */
+export function rankFrequentItems(profileId, meal, { maxFrequent = 6, maxRecent = 4 } = {}) {
+  const cutoff = Date.now() - 30 * 86400000;
+  const entries = Store.getConsumption().filter(e => e.profileId === profileId && e.at >= cutoff);
+
+  const byItem = new Map();
+  for (const e of entries) {
+    // Barcode als Schlüssel: Rezepte tragen "recipe:<id>", Produkte ihren echten Barcode.
+    const key = e.barcode;
+    if (!key) continue;
+    const cur = byItem.get(key) || { key, name: e.name, count: 0, mealCount: 0, lastAt: 0, amount: null, isRecipe: key.startsWith("recipe:") };
+    cur.count++;
+    if (e.meal === meal) cur.mealCount++;
+    if (e.at > cur.lastAt) {
+      cur.lastAt = e.at;
+      cur.name = e.name;
+      cur.amount = e.servings != null ? e.servings : e.grams;
+    }
+    byItem.set(key, cur);
+  }
+
+  const items = [...byItem.values()]
+    .filter(i => i.amount != null && i.amount > 0)
+    .map(i => ({
+      ...i,
+      recipeId: i.isRecipe ? i.key.slice("recipe:".length) : null,
+      barcode: i.isRecipe ? null : i.key,
+      score: i.count * Math.max(0.15, i.mealCount / i.count),
+    }));
+
+  const frequent = [...items].sort((a, b) => b.score - a.score).slice(0, maxFrequent);
+  const shown = new Set(frequent.map(i => i.key));
+  const recent = [...items]
+    .filter(i => !shown.has(i.key))
+    .sort((a, b) => b.lastAt - a.lastAt)
+    .slice(0, maxRecent);
+
+  return { frequent, recent };
+}
+
 /** Alle Verbrauchs-Einträge eines Profils an einem bestimmten Tag (dateKey "YYYY-MM-DD"). */
 export function getConsumptionForDate(profileId, dateKey) {
   return Store.getConsumption().filter(e => e.profileId === profileId && e.dateKey === dateKey);

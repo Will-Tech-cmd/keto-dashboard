@@ -78,14 +78,20 @@ function manualOnlyMarkup(message) {
 function wireSearchToggle(container) {
   container.querySelector("#searchToggle").addEventListener("click", () => {
     const wrap = container.querySelector("#searchFormWrap");
-    const show = wrap.style.display === "none";
-    wrap.style.display = show ? "block" : "none";
-    if (show) {
-      wrap.innerHTML = searchFormHtml();
-      wireSearchForm(container);
-      wrap.querySelector("#foodSearchInput").focus();
-    }
+    if (wrap.style.display === "none") openScanSearch(container);
+    else wrap.style.display = "none";
   });
+}
+
+/** Klappt die Namenssuche auf und fokussiert sie — auch von außen aufrufbar, damit der
+ * „🔎 Suchen"-Weg im Klar-Eintragen-Sheet direkt dort landet statt nur im Scan-Tab. */
+export function openScanSearch(container) {
+  const wrap = container.querySelector("#searchFormWrap");
+  if (!wrap) return;
+  wrap.style.display = "block";
+  wrap.innerHTML = searchFormHtml();
+  wireSearchForm(container);
+  wrap.querySelector("#foodSearchInput").focus();
 }
 
 function searchFormHtml() {

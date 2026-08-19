@@ -1,16 +1,16 @@
 // views/start.js — Startseite: Datumsnavigation, Ziel-/Verbrauchsringe, Mahlzeiten,
 // zuletzt gescannte Produkte.
-import { Store } from "../store.js";
+import { Store, dateKeyOf } from "../store.js";
 import { getTargetsForDate } from "../profiles.js";
 import { lookupProduct } from "../off.js";
 import { evaluateProduct } from "../keto.js";
 import {
   getConsumptionForDate, sumConsumption, openQuantityModal, openEditConsumptionModal,
-  getActiveDateKey, resetActiveDateToToday, shiftActiveDate,
+  getActiveDateKey, resetActiveDateToToday, shiftActiveDate, setActiveDateKey,
   isViewingToday, dateLabel, MEAL_LABELS,
   logWater, getWaterForDate, sumWater, undoLastWater,
 } from "../consumption.js";
-import { esc, showToast, shareOrDownloadFile } from "../ui.js";
+import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -63,6 +63,11 @@ async function saveDashboardAsImage(container) {
 
 export async function renderStart(container, goToTab) {
   const profile = Store.getActiveProfile();
+  if (profile.design === "klar") return renderStartKlar(container, goToTab, profile);
+  return renderStartKlassisch(container, goToTab, profile);
+}
+
+async function renderStartKlassisch(container, goToTab, profile) {
   const dateKey = getActiveDateKey();
   // Zielwerte des angezeigten Tages: heute/Zukunft live, vergangene Tage eingefroren.
   const targets = getTargetsForDate(profile, dateKey);
@@ -285,4 +290,232 @@ async function renderRecent(container, targets, refresh) {
 
 function round1(v) {
   return Math.round(v * 10) / 10;
+}
+
+// ===========================================================================
+// Design „Klar" — dieselben Daten, andere Darstellung: Wochenstreifen statt
+// ◀ Heute ▶, ein großer Netto-KH-Ring + drei Balken statt vier gleichrangiger
+// Ringe, Mahlzeiten in einer Karte, Undo über die Snackbar statt ↩️ je Zeile.
+// ===========================================================================
+
+const KLAR_WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const KLAR_RING_CIRCUMFERENCE = 270.2; // 2πr bei r=43 im viewBox 0 0 100 100
+
+async function renderStartKlar(container, goToTab, profile) {
+  const dateKey = getActiveDateKey();
+  const targets = getTargetsForDate(profile, dateKey);
+  const refresh = () => renderStart(container, goToTab);
+  const entries = getConsumptionForDate(profile.id, dateKey);
+  const totals = sumConsumption(entries);
+
+  container.innerHTML = `
+    <div class="klar-week-strip" id="klarWeek"></div>
+    <div class="klar-card" id="klarMacros"></div>
+    <div class="klar-water-card" id="klarWater"></div>
+    <div class="klar-meals-head">
+      <span class="klar-meals-title">Mahlzeiten</span>
+      <span class="klar-meals-count">${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"}</span>
+    </div>
+    <div id="klarMeals"></div>
+    <button class="btn ghost" id="saveImageBtn" style="margin-top:20px">📸 Dashboard als Bild sichern</button>
+  `;
+
+  container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
+
+  renderKlarWeekStrip(container, dateKey, refresh);
+  renderKlarMacros(container, totals, targets, goToTab);
+  renderKlarWater(container, profile, dateKey, refresh);
+  renderKlarMeals(container, entries, refresh);
+}
+
+function renderKlarWeekStrip(container, activeKey, refresh) {
+  const el = container.querySelector("#klarWeek");
+  const todayKey = dateKeyOf(Date.now());
+  const [y, m, d] = activeKey.split("-").map(Number);
+  const active = new Date(y, m - 1, d);
+  // Woche des gewählten Tages, Montag zuerst (getDay(): 0 = Sonntag).
+  const monday = new Date(active);
+  monday.setDate(active.getDate() - ((active.getDay() + 6) % 7));
+
+  const cells = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    const key = dateKeyOf(day.getTime());
+    const isFuture = key > todayKey;
+    cells.push(`
+      <button type="button" class="klar-week-cell ${key === activeKey ? "today" : ""} ${isFuture ? "future" : ""}"
+        data-key="${key}" ${isFuture ? "disabled" : ""}>
+        ${KLAR_WEEKDAYS[day.getDay()]}<div class="dom">${day.getDate()}</div>
+      </button>
+    `);
+  }
+  el.innerHTML = cells.join("");
+
+  el.querySelectorAll(".klar-week-cell:not([disabled])").forEach(btn => {
+    btn.addEventListener("click", () => { setActiveDateKey(btn.dataset.key); refresh(); });
+  });
+
+  // Wischen blättert wochenweise — dieselbe Geste wie im Prototyp, ohne Extra-Knöpfe.
+  let startX = null;
+  el.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (startX == null) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    startX = null;
+    if (Math.abs(dx) < 50) return;
+    shiftActiveDate(dx < 0 ? 7 : -7);
+    if (getActiveDateKey() > todayKey) setActiveDateKey(todayKey);
+    refresh();
+  }, { passive: true });
+}
+
+function renderKlarMacros(container, totals, targets, goToTab) {
+  const el = container.querySelector("#klarMacros");
+  const over = totals.netCarbs > targets.netCarbG;
+  const remaining = round1(Math.abs(targets.netCarbG - totals.netCarbs));
+  const pct = targets.netCarbG > 0 ? Math.min(totals.netCarbs / targets.netCarbG, 1) : 0;
+  const offset = KLAR_RING_CIRCUMFERENCE * (1 - pct);
+
+  const bars = [
+    { name: "Kalorien", unit: "kcal", consumed: totals.kcal, target: targets.kcal },
+    { name: "Fett", unit: "g", consumed: totals.fat, target: targets.fatG },
+    { name: "Eiweiß", unit: "g", consumed: totals.protein, target: targets.proteinG },
+  ];
+
+  const budgetHint = over ? "" : klarBudgetHint(targets.netCarbG - totals.netCarbs);
+
+  el.innerHTML = `
+    <div class="klar-card-head">
+      <span class="klar-eyebrow">Nährwerte ${esc(dateLabel(getActiveDateKey()).toLowerCase())}</span>
+      <button type="button" class="klar-pill-btn" id="klarEvalBtn">📊 Auswertung</button>
+    </div>
+    <div class="klar-ring-row">
+      <div class="klar-ring-wrap">
+        <svg viewBox="0 0 100 100" class="klar-ring-svg">
+          <circle class="klar-ring-track" cx="50" cy="50" r="43"></circle>
+          <circle class="klar-ring-progress ${over ? "over" : ""}" cx="50" cy="50" r="43"
+            stroke-dasharray="${KLAR_RING_CIRCUMFERENCE}" stroke-dashoffset="${offset.toFixed(1)}"
+            transform="rotate(-90 50 50)"></circle>
+        </svg>
+        <div class="klar-ring-center">
+          <div class="klar-ring-value ${over ? "over" : ""}">${over ? "+" : ""}${remaining}</div>
+          <div class="klar-ring-sub">g ${over ? "über Limit" : "übrig"}</div>
+        </div>
+      </div>
+      <div class="klar-ring-info">
+        <div class="klar-macro-label">Netto-Kohlenhydrate</div>
+        <div class="klar-macro-value">${round1(totals.netCarbs)} <span class="of">von ${targets.netCarbG} g</span></div>
+        <div style="margin-top:12px"><span class="badge ${over ? "red" : "green"}">${over ? "Über Limit" : "Im Ziel"}</span></div>
+        ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
+      </div>
+    </div>
+    <hr class="klar-divider">
+    ${bars.map(klarBarHtml).join("")}
+  `;
+
+  el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("lists", { sub: "evaluation" }));
+}
+
+/**
+ * „Reicht noch für …" nur zeigen, wenn es auch stimmt: es muss ein konkretes Lebensmittel aus
+ * den Favoriten geben, das ins Restbudget passt. Sonst lieber gar keinen Satz als einen
+ * generischen Füllsatz.
+ */
+function klarBudgetHint(remainingG) {
+  if (remainingG <= 0) return "";
+  const fits = Store.get().favorites
+    .filter(f => f.netCarbs100 != null && f.netCarbs100 > 0 && f.netCarbs100 <= remainingG)
+    .sort((a, b) => b.netCarbs100 - a.netCarbs100)[0];
+  return fits ? `Reicht noch für 100 g ${fits.name}.` : "";
+}
+
+function klarBarHtml(b) {
+  const over = b.consumed > b.target;
+  const pct = b.target > 0 ? Math.min((b.consumed / b.target) * 100, 100) : 0;
+  return `
+    <div class="klar-bar-row">
+      <div class="klar-bar-labels">
+        <span class="name">${esc(b.name)}</span>
+        <span class="nums">${Math.round(b.consumed)} / ${b.target} ${esc(b.unit)}</span>
+      </div>
+      <div class="klar-bar-track"><div class="klar-bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+    </div>
+  `;
+}
+
+function renderKlarWater(container, profile, dateKey, refresh) {
+  const el = container.querySelector("#klarWater");
+  const consumedMl = sumWater(getWaterForDate(profile.id, dateKey));
+  const target = profile.waterTargetMl || 2500;
+  const pct = target > 0 ? Math.min((consumedMl / target) * 100, 100) : 0;
+
+  el.innerHTML = `
+    <div class="klar-water-head">
+      <span class="klar-water-title">Wasser</span>
+      <span class="klar-water-value">${consumedMl} / ${target} ml</span>
+    </div>
+    <div class="klar-water-track"><div class="klar-water-fill" style="width:${pct}%"></div></div>
+    <div class="klar-water-actions">
+      ${WATER_STEPS.map(ml => `<button type="button" class="klar-water-add" data-ml="${ml}">+${ml}</button>`).join("")}
+      <button type="button" class="klar-water-undo" title="Rückgängig" ${consumedMl > 0 ? "" : "disabled"}>↩</button>
+    </div>
+  `;
+
+  el.querySelectorAll(".klar-water-add").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ml = Number(btn.dataset.ml);
+      const entry = logWater(ml);
+      refresh();
+      showSnackbar({
+        title: `${ml} ml Wasser`,
+        subtitle: `${consumedMl + ml} von ${target} ml`,
+        onUndo: () => { Store.removeWater(entry.id); refresh(); },
+      });
+    });
+  });
+  el.querySelector(".klar-water-undo")?.addEventListener("click", () => {
+    undoLastWater(profile.id, dateKey);
+    refresh();
+  });
+}
+
+function renderKlarMeals(container, entries, refresh) {
+  const el = container.querySelector("#klarMeals");
+  if (entries.length === 0) {
+    el.innerHTML = `<div class="klar-empty-row"><span class="plus">+</span>Noch nichts eingetragen</div>`;
+    return;
+  }
+
+  const groups = new Map([...MEAL_ORDER, "none"].map(k => [k, []]));
+  for (const e of entries) {
+    const key = MEAL_LABELS[e.meal] ? e.meal : "none";
+    groups.get(key).push(e);
+  }
+
+  const blocks = [];
+  for (const key of [...MEAL_ORDER, "none"]) {
+    const items = groups.get(key);
+    if (items.length === 0) continue;
+    const kcal = Math.round(items.reduce((s, e) => s + (e.kcal || 0), 0));
+    const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key].replace(/^\S+\s/, "");
+    blocks.push(`
+      <div class="klar-meal-group-title">${esc(label)} · ${kcal} kcal</div>
+      ${items.map(e => `
+        <div class="klar-meal-row" data-id="${e.id}">
+          <span class="name">${esc(e.name)}</span>
+          <span class="meta">${e.servings != null ? `${e.servings} P.` : `${e.grams} g`} · ${e.kcal ?? "–"} kcal</span>
+          <span class="chevron">›</span>
+        </div>
+      `).join("")}
+    `);
+  }
+  el.innerHTML = `<div class="klar-meals-card">${blocks.join(`<div class="klar-meal-divider"></div>`)}</div>`;
+
+  el.querySelectorAll(".klar-meal-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const entry = Store.getConsumption().find(c => c.id === row.dataset.id);
+      if (entry) openEditConsumptionModal(entry, refresh);
+    });
+  });
 }

@@ -1,4 +1,4 @@
-/* ---------- Design tokens ---------- */
+/* ---------- Design tokens: „Klassisch" (Standard) ---------- */
 :root {
   --bg: #f4f6f5;
   --bg-elevated: #ffffff;
@@ -18,8 +18,10 @@
   color-scheme: light;
 }
 
+/* Explizite Erscheinungsbild-Wahl (Profil > Design) schlägt die Systemeinstellung — "system"
+   setzt gar kein data-theme-Attribut, dann entscheidet allein die Media Query wie bisher. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  body:not([data-theme="light"]):not([data-design="klar"]) {
     --bg: #101512;
     --bg-elevated: #1a211d;
     --text: #eef3f0;
@@ -34,6 +36,91 @@
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
     color-scheme: dark;
   }
+}
+body[data-theme="dark"]:not([data-design="klar"]) {
+  --bg: #101512;
+  --bg-elevated: #1a211d;
+  --text: #eef3f0;
+  --text-muted: #9db0a7;
+  --border: #2a332e;
+  --accent: #34c281;
+  --accent-contrast: #05140c;
+  --green-bg: #103322; --green-fg: #5fe0a4; --green-border: #1f5c3d;
+  --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
+  --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
+  --water-fg: #5b9bf5;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+/* ---------- Design tokens: „Klar" (neues, per Profil wählbares Design) ---------- */
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../vendor/manrope/manrope-variable.woff2") format("woff2");
+}
+body[data-design="klar"] {
+  --bg: #f2f4f1;
+  --bg-elevated: #ffffff;
+  --text: #12201a;
+  --text-muted: #64756d;
+  --text-muted-2: #8b9a93;
+  --text-faint: #c3ccc7;
+  --border: #e3e8e4;
+  --divider: #eef1ee;
+  --accent: #1f8a5f;
+  --accent-contrast: #ffffff;
+  --accent-ink: #157347;
+  --accent-soft: #e4f6ec; --accent-soft-border: #a9e4c4;
+  --water-fg: #1565c0; --water-soft: #f2f6fc;
+  --yellow-bg: #fff6df; --yellow-fg: #916500; --yellow-border: #f2dd9c;
+  --red-bg: #fdeaea;  --red-fg: #b3261e;  --red-border: #f3b8b4;
+  --shadow: 0 1px 2px rgba(16,24,20,.04), 0 8px 24px rgba(16,24,20,.05);
+  font-family: "Manrope", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  body[data-design="klar"]:not([data-theme="light"]) {
+    --bg: #101512;
+    --bg-elevated: #1a211d;
+    --text: #eef3f0;
+    --text-muted: #9db0a7;
+    --text-muted-2: #9db0a7;
+    --text-faint: #4a5a52;
+    --border: #2a332e;
+    --divider: #25302a;
+    --accent: #34c281;
+    --accent-contrast: #05140c;
+    --accent-ink: #5fe0a4;
+    --accent-soft: #103322; --accent-soft-border: #1f5c3d;
+    --water-fg: #5b9bf5; --water-soft: #15243a;
+    --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
+    --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+body[data-design="klar"][data-theme="dark"] {
+  --bg: #101512;
+  --bg-elevated: #1a211d;
+  --text: #eef3f0;
+  --text-muted: #9db0a7;
+  --text-muted-2: #9db0a7;
+  --text-faint: #4a5a52;
+  --border: #2a332e;
+  --divider: #25302a;
+  --accent: #34c281;
+  --accent-contrast: #05140c;
+  --accent-ink: #5fe0a4;
+  --accent-soft: #103322; --accent-soft-border: #1f5c3d;
+  --water-fg: #5b9bf5; --water-soft: #15243a;
+  --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
+  --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -335,3 +422,159 @@ input[type="text"], input[type="number"], input[type="search"], select {
 @media (min-width: 700px) {
   .view { padding-top: 20px; }
 }
+
+/* ===========================================================================
+   „Klar" — neues, per Profil wählbares Design. Eigene Klassen (kein Reuse von
+   .card/.btn & Co.), weil die Maße (Radien, Abstände) bewusst anders sind als
+   in „Klassisch". Wird nur gerendert, wenn profile.design === "klar".
+   =========================================================================== */
+
+.fab-btn { display: none; }
+body[data-design="klar"] .tab-btn[data-tab="scan"] { display: none; }
+/* Der FAB ragt 26px über die Tabbar hinaus — Seiteninhalt entsprechend weiter freihalten,
+   sonst verdeckt er die letzte Zeile. */
+body[data-design="klar"] .view { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 52px); }
+body[data-design="klar"] .fab-btn {
+  display: flex; align-items: center; justify-content: center;
+  position: absolute; left: 50%; top: -26px; transform: translateX(-50%);
+  width: 60px; height: 60px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-contrast);
+  border: 4px solid var(--bg);
+  box-shadow: 0 6px 18px rgba(31,138,95,.4);
+  font-size: 28px; font-weight: 800; line-height: 1;
+}
+
+.klar-week-strip { display: flex; gap: 6px; margin-bottom: 16px; }
+.klar-week-cell {
+  flex: 1; text-align: center; padding: 8px 0; border-radius: 12px;
+  font-size: 11px; font-weight: 700; color: var(--text-muted); cursor: pointer; border: none; background: none;
+}
+.klar-week-cell .dom { font-size: 14px; margin-top: 2px; color: inherit; }
+.klar-week-cell.today { background: var(--text); color: var(--bg-elevated); }
+.klar-week-cell.future { color: var(--text-faint); }
+
+.klar-card {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 22px; padding: 20px; box-shadow: var(--shadow);
+}
+.klar-card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; gap: 10px; }
+.klar-eyebrow { font-size: 11px; font-weight: 800; color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; }
+.klar-pill-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg-elevated); font-size: 11.5px; font-weight: 800; color: var(--accent);
+}
+
+.klar-ring-row { display: flex; align-items: center; gap: 20px; margin-top: 12px; }
+.klar-ring-wrap { position: relative; width: 132px; height: 132px; flex: none; }
+.klar-ring-svg { width: 100%; height: 100%; }
+.klar-ring-track { fill: none; stroke: var(--divider); stroke-width: 10; }
+.klar-ring-progress { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .3s, stroke .3s; }
+.klar-ring-progress.over { stroke: var(--red-fg); }
+.klar-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.klar-ring-value { font-size: 34px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--text); }
+.klar-ring-value.over { color: var(--red-fg); }
+.klar-ring-sub { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
+.klar-ring-info { flex: 1; min-width: 0; }
+.klar-macro-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+.klar-macro-value { font-size: 15px; font-weight: 700; margin-top: 4px; }
+.klar-macro-value .of { color: var(--text-muted); font-weight: 600; }
+.klar-hint { font-size: 12px; color: var(--text-muted); font-weight: 600; line-height: 1.45; margin-top: 10px; }
+
+.klar-divider { height: 1px; background: var(--divider); margin: 20px 0 16px; border: none; }
+.klar-bar-row { margin-bottom: 14px; }
+.klar-bar-row:last-child { margin-bottom: 0; }
+.klar-bar-labels { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+.klar-bar-labels .name { font-weight: 700; }
+.klar-bar-labels .nums { color: var(--text-muted); font-weight: 600; }
+.klar-bar-track { height: 8px; border-radius: 999px; background: var(--divider); overflow: hidden; }
+.klar-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .2s; }
+.klar-bar-fill.over { background: var(--red-fg); }
+
+.klar-water-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 22px; padding: 16px 20px; margin-top: 14px; box-shadow: var(--shadow); }
+.klar-water-head { display: flex; align-items: center; justify-content: space-between; }
+.klar-water-title { font-size: 14px; font-weight: 800; color: var(--water-fg); }
+.klar-water-value { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.klar-water-track { height: 8px; border-radius: 999px; background: var(--divider); overflow: hidden; margin-top: 10px; }
+.klar-water-fill { height: 100%; border-radius: 999px; background: var(--water-fg); }
+.klar-water-actions { display: flex; gap: 8px; margin-top: 12px; }
+.klar-water-add { flex: 1; min-height: 44px; border-radius: 14px; background: var(--water-soft); color: var(--water-fg); font-weight: 700; font-size: 14px; border: none; }
+.klar-water-undo { flex: none; width: 44px; min-height: 44px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 15px; }
+
+.klar-meals-head { display: flex; align-items: center; justify-content: space-between; margin: 22px 2px 10px; }
+.klar-meals-title { font-size: 15px; font-weight: 800; }
+.klar-meals-count { font-size: 12px; font-weight: 700; color: var(--accent); }
+.klar-meals-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); }
+.klar-meal-group-title { font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; padding: 10px 18px 4px; }
+.klar-meal-group-title:first-child { padding-top: 14px; }
+.klar-meal-row { display: flex; align-items: center; gap: 10px; padding: 12px 18px; cursor: pointer; }
+.klar-meal-row .name { font-size: 14.5px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.klar-meal-row .meta { font-size: 12px; color: var(--text-muted); font-weight: 600; flex: none; }
+.klar-meal-row .chevron { color: var(--text-faint); font-size: 13px; flex: none; }
+.klar-meal-divider { height: 1px; background: var(--divider); margin: 0 18px; }
+.klar-empty-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px dashed var(--text-faint); border-radius: 16px; color: var(--text-muted); font-size: 13.5px; font-weight: 600; }
+.klar-empty-row .plus { width: 28px; height: 28px; border-radius: 999px; border: 1px dashed var(--text-faint); display: flex; align-items: center; justify-content: center; flex: none; font-size: 15px; }
+
+.klar-sheet-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(10,20,15,.42); display: flex; align-items: flex-end; justify-content: center; }
+.klar-sheet {
+  background: var(--bg-elevated); border-radius: 26px 26px 0 0; padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; box-shadow: 0 -8px 40px rgba(0,0,0,.22);
+}
+.klar-sheet-handle { width: 38px; height: 4px; border-radius: 999px; background: var(--divider); margin: 0 auto 16px; }
+.klar-sheet-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.klar-sheet-sub { font-size: 12.5px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
+.klar-entry-ways { display: flex; gap: 8px; margin-top: 16px; }
+.klar-entry-way { flex: 1; min-height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 7px; font-weight: 700; font-size: 13.5px; border: none; cursor: pointer; }
+.klar-entry-way.primary { background: var(--text); color: var(--bg-elevated); }
+.klar-entry-way.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.klar-meal-select-head { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }
+.klar-meal-segments { display: flex; gap: 7px; }
+.klar-meal-segment { flex: 1; padding: 10px 0; text-align: center; border-radius: 12px; border: 1px solid var(--border); font-weight: 700; font-size: 12.5px; color: var(--text-muted); background: transparent; cursor: pointer; }
+.klar-meal-segment.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.klar-rank-head { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 0 4px; }
+.klar-rank-note { font-size: 11.5px; color: var(--text-muted-2); font-weight: 600; margin-bottom: 10px; }
+.klar-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.klar-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); font-weight: 700; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.klar-chip.top { border-color: var(--accent-soft-border); background: var(--accent-soft); color: var(--accent-ink); }
+.klar-chip.warn { border-color: var(--yellow-border); background: var(--yellow-bg); color: var(--yellow-fg); }
+.klar-chip-count { font-size: 10.5px; font-weight: 800; border-radius: 999px; padding: 2px 6px; background: var(--bg); color: var(--text-muted); }
+.klar-chip.top .klar-chip-count { background: var(--accent-soft-border); color: var(--accent-ink); }
+.klar-chip-amount { font-weight: 800; color: var(--accent-ink); }
+.klar-manual-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border-radius: 16px; background: var(--bg); }
+.klar-manual-row .lbl { font-size: 12.5px; color: var(--text-muted); font-weight: 700; flex: 1; }
+.klar-manual-row .val { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); font-weight: 700; font-size: 12.5px; }
+
+.klar-snackbar-wrap {
+  position: fixed; left: 14px; right: 14px; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 18px);
+  z-index: 80; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none;
+}
+.klar-snackbar {
+  background: var(--text); color: var(--bg-elevated); border-radius: 16px; padding: 14px 16px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.28); display: flex; align-items: center; gap: 12px;
+  pointer-events: auto; opacity: 0; transform: translateY(12px); transition: opacity .18s, transform .18s;
+}
+.klar-snackbar.show { opacity: 1; transform: translateY(0); }
+.klar-snackbar-text { flex: 1; min-width: 0; }
+.klar-snackbar-title { font-size: 13.5px; font-weight: 700; }
+.klar-snackbar-sub { font-size: 11.5px; font-weight: 600; opacity: .65; margin-top: 2px; }
+.klar-snackbar-undo { flex: none; border: none; background: rgba(127,255,170,.16); color: var(--accent); font-weight: 800; font-size: 12.5px; border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  .klar-snackbar { transition: opacity .18s; transform: none; }
+}
+
+.klar-design-choices { display: flex; gap: 10px; margin-top: 12px; }
+.klar-design-choice { flex: 1; border-radius: 18px; border: 1px solid var(--border); padding: 12px; cursor: pointer; background: var(--bg-elevated); }
+.klar-design-choice.selected { border: 2px solid var(--accent); padding: 11px; }
+.klar-design-preview {
+  border-radius: 10px; border: 1px solid var(--border); padding: 8px; margin-bottom: 8px;
+  height: 56px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--bg);
+}
+.klar-design-name { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.klar-design-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.klar-appearance-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.klar-appearance-name { font-size: 13.5px; font-weight: 700; }
+.klar-appearance-desc { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
+.klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
+.klar-switch.on { background: var(--accent); }
+.klar-switch.on::after { left: 21px; }

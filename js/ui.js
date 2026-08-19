@@ -1,4 +1,14 @@
 // ui.js — kleine, geteilte UI-Helfer.
+import { Store } from "./store.js";
+
+/** Setzt Design ("klassisch"/"klar") und Erscheinungsbild ("system"/"light"/"dark") des aktiven
+ * Profils als Attribute am <body> — steuert in app.css sämtliche Farb-/Schrift-Tokens sowie
+ * Tabbar und FAB. Aufrufen beim Start, nach Profilwechsel und nach Änderung im Profil-Tab. */
+export function applyDesignTheme() {
+  const profile = Store.getActiveProfile();
+  document.body.dataset.design = profile.design;
+  document.body.dataset.theme = profile.appearance;
+}
 
 let toastTimer = null;
 
@@ -9,6 +19,53 @@ export function showToast(text) {
   el.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+// ---------------------------------------------------------------------------
+// Snackbar mit Rückgängig (nur Design "Klar") — Ersatz für die einzelnen ↩️-Buttons
+// in jeder Zeile. Mehrere Aktionen kurz hintereinander ersetzen die sichtbare Snackbar,
+// bleiben aber als Stapel bestehen: Rückgängig macht immer zuerst die zuletzt gezeigte
+// Aktion rückgängig (LIFO), bis der Stapel leer ist. Jede Aktion verfällt nach 5s eigenständig
+// und ist danach endgültig — auch wenn sie gerade nicht sichtbar ist, weil eine neuere
+// Aktion sie überdeckt hat.
+// ---------------------------------------------------------------------------
+let snackbarStack = [];
+
+function renderSnackbarStack() {
+  const wrap = document.getElementById("snackbarWrap");
+  if (!wrap) return;
+  const top = snackbarStack[snackbarStack.length - 1];
+  if (!top) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `
+    <div class="klar-snackbar" id="activeSnackbar">
+      <div class="klar-snackbar-text">
+        <div class="klar-snackbar-title">${esc(top.title)}</div>
+        ${top.subtitle ? `<div class="klar-snackbar-sub">${esc(top.subtitle)}</div>` : ""}
+      </div>
+      ${top.onUndo ? `<button type="button" class="klar-snackbar-undo">Rückgängig</button>` : ""}
+    </div>
+  `;
+  requestAnimationFrame(() => wrap.querySelector(".klar-snackbar")?.classList.add("show"));
+  wrap.querySelector(".klar-snackbar-undo")?.addEventListener("click", () => {
+    const i = snackbarStack.indexOf(top);
+    if (i >= 0) snackbarStack.splice(i, 1);
+    clearTimeout(top.timer);
+    top.onUndo();
+    renderSnackbarStack();
+  });
+}
+
+/** Zeigt eine rückgängig-machbare Aktion als Snackbar. `onUndo` bleibt weg, wenn nichts
+ * rückgängig zu machen ist (z.B. reine Statusmeldungen im Klar-Design). */
+export function showSnackbar({ title, subtitle, onUndo }) {
+  const entry = { title, subtitle, onUndo };
+  entry.timer = setTimeout(() => {
+    const i = snackbarStack.indexOf(entry);
+    if (i >= 0) snackbarStack.splice(i, 1);
+    renderSnackbarStack();
+  }, 5000);
+  snackbarStack.push(entry);
+  renderSnackbarStack();
 }
 
 export function esc(s) {
