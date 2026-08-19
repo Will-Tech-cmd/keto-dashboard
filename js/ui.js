@@ -68,6 +68,40 @@ export function showSnackbar({ title, subtitle, onUndo }) {
   renderSnackbarStack();
 }
 
+/**
+ * Hält die Aktionsknöpfe eines Dialogs sichtbar, sobald ein Eingabefeld den Fokus bekommt.
+ * Auf dem Handy schiebt sich die Tastatur über die untere Hälfte — ohne das hier steht man
+ * im Bearbeiten-Dialog vor dem Zahlenfeld und muss erst blind nach unten wischen, um
+ * „Speichern" zu erreichen. Die Verzögerung wartet die Einblend-Animation der Tastatur ab.
+ */
+export function keepActionsInView(overlay, actionsSelector = ".btn-row:last-of-type") {
+  const card = overlay.querySelector(".modal-card");
+  const actions = overlay.querySelector(actionsSelector);
+  if (!card || !actions) return;
+
+  // Bewusst direkt scrollen statt scrollIntoView: Letzteres entscheidet je nach Browser
+  // unterschiedlich, ob überhaupt gescrollt werden muss. Die Knöpfe sind das letzte Element
+  // im Dialog, ans Ende scrollen bringt sie also zuverlässig ins Bild.
+  const reveal = () => setTimeout(() => {
+    if (card.scrollHeight > card.clientHeight) {
+      card.scrollTo({ top: card.scrollHeight, behavior: "smooth" });
+    }
+  }, 300);
+  overlay.querySelectorAll("input, select, textarea").forEach(el => {
+    el.addEventListener("focus", reveal);
+  });
+  // Manche Browser melden das Erscheinen der Tastatur nur als Größenänderung des sichtbaren
+  // Bereichs — dann ebenfalls nachführen, solange der Dialog offen ist.
+  const onResize = () => {
+    if (!document.body.contains(overlay)) {
+      visualViewport?.removeEventListener("resize", onResize);
+      return;
+    }
+    if (overlay.contains(document.activeElement)) reveal();
+  };
+  visualViewport?.addEventListener("resize", onResize);
+}
+
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }

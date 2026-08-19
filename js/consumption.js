@@ -3,7 +3,7 @@
 // Essensplanung), damit Einträge aus Scan/Listen/Rezepten immer auf dem gewählten Tag landen.
 import { Store, dateKeyOf } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
-import { esc, showToast, bindBackClose } from "./ui.js";
+import { esc, showToast, bindBackClose, keepActionsInView } from "./ui.js";
 
 export const MEAL_LABELS = {
   breakfast: "🌅 Frühstück",
@@ -232,7 +232,7 @@ export function setConsumptionMeal(id, meal) {
 }
 
 /** Verknüpft ein Portionen- und ein Gramm-Feld: Eingabe in einem rechnet das andere live um. */
-function wireCoupledAmountFields(portionsInput, gramsInput, servingG) {
+export function wireCoupledAmountFields(portionsInput, gramsInput, servingG) {
   if (!portionsInput || !servingG) return;
   let syncing = false;
   portionsInput.addEventListener("input", () => {
@@ -335,6 +335,7 @@ export function openQuantityModal(product, onLogged) {
     onLogged?.();
   });
 
+  keepActionsInView(overlay);
   (portionsInput || gramsInput).focus();
 }
 
@@ -411,5 +412,6 @@ export function openEditConsumptionModal(entry, onDone) {
     onDone?.();
   });
 
+  keepActionsInView(overlay);
   input.focus();
 }

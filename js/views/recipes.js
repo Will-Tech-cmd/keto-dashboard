@@ -9,9 +9,9 @@ import {
   updateIngredient, calcRecipeTotals, calcPerServing, logRecipeConsumption,
   parseIngredientText, recognizeImageText,
 } from "../recipes.js";
-import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel } from "../consumption.js";
+import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel, wireCoupledAmountFields } from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
-import { showToast, esc, bindBackClose } from "../ui.js";
+import { showToast, esc, bindBackClose, keepActionsInView } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
 let openRecipeId = null;
@@ -134,8 +134,17 @@ function openServingsModal(recipe) {
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(recipe.name)}</h2>
       <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal. Wie viele davon zu „${esc(dayLabel)}" hinzufügen?</p>
+      ${gramsPer ? `
+        <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
+          ${[1, 2, 3].map(n => `<button type="button" class="btn secondary qty-chip" data-portions="${n}" style="width:auto;flex:none;padding:0 14px">${n}× (${Math.round(gramsPer * n)} g)</button>`).join("")}
+        </div>
+      ` : ""}
       <label for="servingsInput">Portionen</label>
-      <input type="number" id="servingsInput" value="1" min="0.25" step="0.25">
+      <input type="number" id="servingsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
+      ${gramsPer ? `
+        <label for="servingsGramsInput">Menge in Gramm</label>
+        <input type="number" id="servingsGramsInput" value="${gramsPer}" min="1" inputmode="numeric">
+      ` : ""}
       <p class="hint" id="servingsPreview" style="margin-top:8px"></p>
       ${mealChipsHtml(selectedMeal)}
       <div class="btn-row" style="margin-top:16px">
@@ -148,7 +157,11 @@ function openServingsModal(recipe) {
   wireMealChips(overlay, (meal) => { selectedMeal = meal; });
 
   const input = overlay.querySelector("#servingsInput");
+  const gramsInput = overlay.querySelector("#servingsGramsInput");
   const preview = overlay.querySelector("#servingsPreview");
+  // Portionen und Gramm rechnen sich gegenseitig um — dieselbe Kopplung wie beim Produkt-Dialog.
+  if (gramsPer) wireCoupledAmountFields(input, gramsInput, gramsPer);
+
   const updatePreview = () => {
     const val = parseFloat(input.value);
     if (!val || val <= 0) { preview.textContent = ""; return; }
@@ -156,7 +169,15 @@ function openServingsModal(recipe) {
     preview.textContent = `→ ${gramsPart}${round1((perServing.kcal ?? 0) * val)} kcal · ${round1((perServing.netCarbs ?? 0) * val)} g Netto-KH werden eingetragen`;
   };
   input.addEventListener("input", updatePreview);
+  gramsInput?.addEventListener("input", updatePreview);
   updatePreview();
+
+  overlay.querySelectorAll(".qty-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      input.value = chip.dataset.portions;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
 
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
@@ -168,6 +189,7 @@ function openServingsModal(recipe) {
     showToast(`${servings} Portion(en) „${recipe.name}" eingetragen`);
     close();
   });
+  keepActionsInView(overlay);
   input.focus();
 }
 
@@ -448,6 +470,7 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
     showToast("Zutat aktualisiert");
   });
 
+  keepActionsInView(overlay);
   overlay.querySelector("#ieName").focus();
 }
 
