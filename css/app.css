@@ -710,3 +710,165 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
    nach außen, damit sie nicht am FAB kleben. */
 body[data-design="klar"] .tab-btn[data-tab="lists"] { margin-right: 34px; }
 body[data-design="klar"] .tab-btn[data-tab="recipes"] { margin-left: 34px; }
+
+/* ===========================================================================
+   Feinschliff für Design „Klar" — kompaktere Maße, feinere Typo, Terrakotta als
+   zweite Stimme. Alles unter body[data-design="klar"] gescoped, „Klassisch"
+   bleibt unberührt.
+   =========================================================================== */
+
+/* ---- 1. Maße & zweite Akzentfarbe ----
+   Die Dunkelfassung folgt derselben Dreiteilung wie die Tokens weiter oben:
+   Grundwerte hell, dann einmal für die Systemeinstellung (Media Query) und
+   einmal für die ausdrückliche Wahl im Profil. Ein bloßes :not([data-theme="light"])
+   ohne Media Query würde auch bei "system" auf einem hellen Gerät greifen. */
+body[data-design="klar"] {
+  --radius: 12px;
+  --tabbar-h: 56px;
+  --topbar-h: 48px;
+  --warm: #b8632f;          /* Terrakotta, hell */
+  --warm-bg: #f7ede5;
+  --warm-border: #e7cdb9;
+  --sage: #7a8a5e;
+}
+@media (prefers-color-scheme: dark) {
+  body[data-design="klar"]:not([data-theme="light"]) {
+    --warm: #d98a5a;
+    --warm-bg: #2a1d14;
+    --warm-border: #4a3220;
+    --sage: #9db07d;
+    /* Dunkel eine Spur tiefer + weichere Trennungen als bisher */
+    --bg: #0f1413;
+    --bg-elevated: #181e1b;
+    --border: #242c27;
+    --divider: #202723;
+    --text: #eaf0ec;
+    --text-muted: #93a49b;
+    --shadow: 0 1px 2px rgba(0,0,0,.22);
+  }
+}
+body[data-design="klar"][data-theme="dark"] {
+  --warm: #d98a5a;
+  --warm-bg: #2a1d14;
+  --warm-border: #4a3220;
+  --sage: #9db07d;
+  --bg: #0f1413;
+  --bg-elevated: #181e1b;
+  --border: #242c27;
+  --divider: #202723;
+  --text: #eaf0ec;
+  --text-muted: #93a49b;
+  --shadow: 0 1px 2px rgba(0,0,0,.22);
+}
+
+/* ---- 2. Kopf- und Fußleiste ---- */
+body[data-design="klar"] .brand { font-size: 15px; letter-spacing: -.01em; }
+body[data-design="klar"] .profile-switch { padding: 5px 12px; font-size: 12.5px; min-height: 30px; font-weight: 700; }
+body[data-design="klar"] .topbar-inner { padding: 0 16px; }
+body[data-design="klar"] .tab-btn { font-size: 10px; font-weight: 700; }
+body[data-design="klar"] .tab-icon { font-size: 17px; opacity: .9; }
+body[data-design="klar"] .tab-btn.active .tab-icon { opacity: 1; }
+body[data-design="klar"] .tab-btn.active { font-weight: 800; }
+body[data-design="klar"] .fab-btn {
+  width: 44px; height: 44px; font-size: 22px;
+  box-shadow: 0 3px 10px rgba(31,138,95,.3);
+}
+body[data-design="klar"] .tab-btn[data-tab="lists"] { margin-right: 30px; }
+body[data-design="klar"] .tab-btn[data-tab="recipes"] { margin-left: 30px; }
+body[data-design="klar"] .view { padding: 12px 14px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px); }
+
+/* ---- 3. Karten: kleinere Radien, weniger Polster, flacherer Schatten ---- */
+body[data-design="klar"] .klar-card,
+body[data-design="klar"] .klar-water-card,
+body[data-design="klar"] .klar-meals-card,
+body[data-design="klar"] .klar-shop-card,
+body[data-design="klar"] .klar-result-card { border-radius: 18px; }
+body[data-design="klar"] .klar-card { padding: 15px; }
+body[data-design="klar"] .klar-water-card { padding: 13px 15px; margin-top: 10px; }
+body[data-design="klar"] .klar-result-card { padding: 15px; }
+body[data-design="klar"] .klar-divider { margin: 15px 0 12px; }
+
+/* ---- 4. Nährwert-Kacheln: vierspaltig statt 2×2 ---- */
+body[data-design="klar"] .klar-tile-grid {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin-top: 12px;
+}
+body[data-design="klar"] .klar-tile { border-radius: 12px; padding: 9px 4px; }
+body[data-design="klar"] .klar-tile .val { font-size: 16px; }
+body[data-design="klar"] .klar-tile .lbl { font-size: 9.5px; font-weight: 700; line-height: 1.25; }
+
+/* ---- 5. Typo eine Stufe kleiner, engerer Satz ---- */
+body[data-design="klar"] .klar-product-name { font-size: 17px; letter-spacing: -.03em; margin-top: 9px; }
+body[data-design="klar"] .klar-product-meta { font-size: 11.5px; margin-top: 2px; }
+body[data-design="klar"] .klar-page-title { font-size: 15px; }
+body[data-design="klar"] .section-title { font-size: 15px; margin: 2px 0 10px; }
+body[data-design="klar"] .klar-sheet-title { font-size: 15px; }
+body[data-design="klar"] .klar-result-value { font-size: 30px; letter-spacing: -.045em; }
+body[data-design="klar"] .klar-result-unit { font-size: 12.5px; }
+body[data-design="klar"] .klar-result-macros { font-size: 11px; margin-top: 8px; }
+body[data-design="klar"] .klar-result-total { font-size: 10.5px; margin-top: 5px; }
+body[data-design="klar"] .klar-eyebrow,
+body[data-design="klar"] .klar-meal-group-title { font-size: 10.5px; letter-spacing: .06em; }
+body[data-design="klar"] .klar-hint { font-size: 11.5px; }
+
+/* ---- 6. Listenzeilen kompakter ---- */
+body[data-design="klar"] .list-item { padding: 10px 14px; border-radius: 14px; gap: 9px; }
+body[data-design="klar"] .list-item .name { font-size: 13.5px; letter-spacing: -.01em; }
+body[data-design="klar"] .list-item .meta { font-size: 11px; font-weight: 600; }
+body[data-design="klar"] .icon-btn { font-size: 14px; min-width: 26px; min-height: 30px; color: var(--text-muted); }
+body[data-design="klar"] .list-item .badge { padding: 4px 7px; font-size: 11.5px; }
+body[data-design="klar"] .list-detail { padding: 10px 14px 12px; }
+body[data-design="klar"] .klar-shop-row { padding: 11px 15px; }
+body[data-design="klar"] .klar-shop-row .name { font-size: 13.5px; }
+body[data-design="klar"] .klar-meal-row { padding: 10px 15px; }
+body[data-design="klar"] .klar-meal-row .name { font-size: 13.5px; }
+body[data-design="klar"] .klar-meal-row .meta { font-size: 11px; }
+
+/* ---- 7. Knöpfe & Eingaben: Pillen, flacher ---- */
+body[data-design="klar"] .klar-primary-btn { min-height: 44px; border-radius: 14px; font-size: 13.5px; }
+body[data-design="klar"] .klar-action-btn { min-height: 38px; border-radius: 12px; font-size: 11.5px; }
+body[data-design="klar"] .klar-action-row { gap: 6px; margin-top: 6px; }
+body[data-design="klar"] .klar-icon-btn { width: 30px; height: 30px; font-size: 13px; }
+body[data-design="klar"] .klar-back-btn { width: 28px; height: 28px; font-size: 13px; }
+body[data-design="klar"] .klar-page-head { gap: 10px; margin-bottom: 12px; }
+body[data-design="klar"] input[type="text"],
+body[data-design="klar"] input[type="number"],
+body[data-design="klar"] input[type="search"],
+body[data-design="klar"] select {
+  min-height: 38px; border-radius: 999px; padding: 0 14px;
+  font-size: 12.5px; font-weight: 600; background: var(--bg-elevated);
+}
+body[data-design="klar"] .subtab-btn { padding: 7px 0; font-size: 11.5px; }
+body[data-design="klar"] .subtabs { gap: 5px; margin-bottom: 11px; }
+body[data-design="klar"] .klar-chip { padding: 8px 12px; font-size: 11.5px; gap: 6px; }
+body[data-design="klar"] .klar-chip-row { gap: 6px; }
+body[data-design="klar"] .klar-chip-count { font-size: 9.5px; background: none; padding: 0; color: var(--text-muted); }
+
+/* ---- 8. Eintragen-Sheet: Segmente als Pillengruppe ---- */
+body[data-design="klar"] .klar-sheet { border-radius: 22px 22px 0 0; padding: 11px 16px calc(20px + env(safe-area-inset-bottom)); }
+body[data-design="klar"] .klar-entry-way { min-height: 40px; font-size: 12px; border-radius: 14px; }
+body[data-design="klar"] .klar-entry-ways { gap: 6px; margin-top: 12px; }
+body[data-design="klar"] .klar-meal-segments {
+  gap: 5px; padding: 3px; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--border);
+}
+body[data-design="klar"] .klar-meal-segment { border: none; border-radius: 999px; padding: 7px 0; font-size: 11.5px; }
+body[data-design="klar"] .klar-meal-select-head { margin: 14px 0 7px; }
+body[data-design="klar"] .klar-rank-head { margin: 14px 0 4px; }
+
+/* ---- 9. Terrakotta & Salbei als zweite Stimmen ---- */
+body[data-design="klar"] .trend-dot.over { fill: var(--warm); }
+body[data-design="klar"] .trend-line { stroke-width: 1.6; }
+body[data-design="klar"] .trend-target-line { stroke: var(--text-faint); stroke-dasharray: 3 5; }
+body[data-design="klar"] .progress-fill.over,
+body[data-design="klar"] .klar-bar-fill.over { background: var(--warm); }
+body[data-design="klar"] .progress-track,
+body[data-design="klar"] .klar-bar-track { height: 4px; border: none; background: var(--divider); }
+body[data-design="klar"] .klar-sheet-sub strong,
+body[data-design="klar"] .klar-rank-note strong { color: var(--warm); }
+body[data-design="klar"] .badge.yellow { border-color: var(--warm-border); background: var(--warm-bg); color: var(--warm); }
+
+/* ---- 10. Umschalter etwas kleiner ---- */
+body[data-design="klar"] .klar-switch { width: 40px; height: 24px; }
+body[data-design="klar"] .klar-switch::after { width: 18px; height: 18px; }
+body[data-design="klar"] .klar-switch.on::after { left: 19px; }
