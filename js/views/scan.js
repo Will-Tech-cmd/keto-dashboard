@@ -7,7 +7,7 @@ import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { openQuantityModal, suggestMeal, mealShort } from "../consumption.js";
-import { showToast, esc } from "../ui.js";
+import { showToast, esc, nutriTilesHtml } from "../ui.js";
 
 let currentBarcode = null;
 
@@ -317,12 +317,12 @@ function renderResult(container, product) {
       </div>
       <div class="klar-product-name">${esc(product.name)}</div>
       <div class="klar-product-meta">${esc(product.brand || "")}${product.quantity ? " · " + esc(product.quantity) : ""}</div>
-      <div class="klar-tile-grid">
-        <div class="klar-tile"><div class="val">${fmt(evalResult.netCarbs100)}</div><div class="lbl">g Netto-KH /100 g</div></div>
-        <div class="klar-tile"><div class="val">${fmt(product.per100.fat)}</div><div class="lbl">g Fett /100 g</div></div>
-        <div class="klar-tile"><div class="val">${fmt(product.per100.protein)}</div><div class="lbl">g Eiweiß /100 g</div></div>
-        <div class="klar-tile"><div class="val">${fmt(product.per100.kcal)}</div><div class="lbl">kcal /100 g</div></div>
-      </div>
+      ${nutriTilesHtml({
+        kcal: product.per100.kcal,
+        netCarbs: evalResult.netCarbs100,
+        fat: product.per100.fat,
+        protein: product.per100.protein,
+      })}
       ${notes}
       <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
       <div class="klar-action-row">

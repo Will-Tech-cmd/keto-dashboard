@@ -144,6 +144,35 @@ export function getAppVersion() {
   });
 }
 
+/**
+ * Die vier Kennwerte als Kachelreihe — dieselbe Darstellung in der Scan-Ergebniskarte und in
+ * den Listen. Die Einheit steht einmal unter der Reihe statt in jedem Label: bei vier Spalten
+ * nebeneinander bricht „g Netto-KH /100 g" sonst um, „kcal /100 g" nicht, und die Reihe wirkt
+ * ausgefranst. Reihenfolge wie die Ringe auf der Startseite.
+ */
+export function nutriTilesHtml(nutri) {
+  const v = (x) => x == null ? "–" : Math.round(x * 10) / 10;
+  const tiles = [
+    ["kcal", nutri?.kcal],
+    ["g Netto-KH", nutri?.netCarbs],
+    ["g Fett", nutri?.fat],
+    ["g Eiweiß", nutri?.protein],
+  ];
+  return `
+    <div class="klar-tile-grid">
+      ${tiles.map(([label, value]) => `
+        <div class="klar-tile"><div class="val">${v(value)}</div><div class="lbl">${label}</div></div>
+      `).join("")}
+    </div>
+    <div class="klar-tile-unit">je 100 g</div>
+  `;
+}
+
+/** Ampelpunkt für Listenzeilen — bewusst ohne Emoji, damit die Zeile ruhig bleibt. */
+export function gradeDotHtml(grade) {
+  return `<span class="klar-dot ${grade || "gray"}" aria-hidden="true"></span>`;
+}
+
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }

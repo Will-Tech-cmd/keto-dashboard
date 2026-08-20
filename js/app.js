@@ -284,12 +284,15 @@ if (Store.isOnboarded()) {
   updateProfileSwitchLabel();
   goToTab(initialTabFromUrl());
 } else {
+  // Auch die Ersteinrichtung schon im Design "Klar" zeigen — ohne das hier ist der allererste
+  // Bildschirm eines neuen Geräts der einzige, der ohne die Schrift und die Farbtokens läuft.
+  applyDesignTheme();
   tabbar.style.display = "none";
   profileSwitchBtn.style.display = "none";
   renderOnboarding(view, () => {
     tabbar.style.display = "";
     profileSwitchBtn.style.display = "";
-    applyDesignTheme(); // frisch eingerichtete Profile starten in "Klar"
+    applyDesignTheme(); // nach dem Anlegen gilt das Erscheinungsbild des neuen Profils
     updateProfileSwitchLabel();
     goToTab("start");
   });

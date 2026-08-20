@@ -11,7 +11,7 @@ import {
 } from "../recipes.js";
 import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel, wireCoupledAmountFields } from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
-import { showToast, esc, bindBackClose, keepActionsInView } from "../ui.js";
+import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
 let openRecipeId = null;
@@ -84,13 +84,13 @@ function renderRecipeRows(container) {
     return;
   }
 
-  body.innerHTML = recipes.map(r => {
+  body.innerHTML = `<div class="klar-list-card">${recipes.map(r => {
     const perServing = calcPerServing(r);
     const grade = ketoGrade(perServing.netCarbs, activeThresholds());
     const gramsPer = gramsPerServing(r);
     return `
       <div class="list-item" data-id="${r.id}" style="cursor:pointer">
-        <span class="badge ${grade}" style="flex-shrink:0">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[grade]}</span>
+        ${gradeDotHtml(grade)}
         <div class="info">
           <div class="name">${esc(r.name)}</div>
           <div class="meta" title="${r.ingredients.length} Zutaten, ${r.servings} Portionen">1 P.${gramsPer ? ` (${gramsPer} g)` : ""} · ${perServing.kcal != null ? Math.round(perServing.kcal) : "–"} kcal · ${perServing.netCarbs ?? "–"} g KH</div>
@@ -99,7 +99,7 @@ function renderRecipeRows(container) {
         <button class="icon-btn" data-action="delete" title="Löschen">🗑️</button>
       </div>
     `;
-  }).join("");
+  }).join("")}</div>`;
 
   body.querySelectorAll(".list-item").forEach(row => {
     const id = row.dataset.id;
@@ -220,6 +220,7 @@ function renderEditor(container, recipeId) {
     </div>
 
     <div class="card" id="totalsCard"></div>
+    <button class="btn secondary" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
 
     <h2 class="section-title">Zutaten</h2>
     <div id="ingredientList"></div>
@@ -287,6 +288,18 @@ function renderEditor(container, recipeId) {
       renderIngredientList(container, recipeId);
       renderTotals(container, recipeId);
     });
+  });
+
+  container.querySelector("#addTodayBtn").addEventListener("click", () => {
+    // Name und Portionen erst festschreiben: wer den Wert gerade getippt hat und direkt hier
+    // tippt, hätte sonst je nach Gerät noch den alten Stand im Dialog.
+    const name = container.querySelector("#recName").value.trim() || "Rezept";
+    const s = parseInt(container.querySelector("#recServings").value, 10);
+    updateRecipeMeta(recipeId, { name, servings: s > 0 ? s : 1 });
+    renderTotals(container, recipeId);
+    const current = Store.getRecipe(recipeId);
+    if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
+    openServingsModal(current);
   });
 
   container.querySelector("#ingToShoppingBtn").addEventListener("click", () => {

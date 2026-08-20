@@ -236,7 +236,7 @@ button { font-family: inherit; }
 .btn-row .btn { flex: 1; }
 
 label { display: block; font-size: .85rem; color: var(--text-muted); margin: 12px 0 4px; }
-input[type="text"], input[type="number"], input[type="search"], select {
+input[type="text"], input[type="number"], input[type="search"], input[type="password"], select {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--border);
@@ -834,6 +834,7 @@ body[data-design="klar"] .klar-page-head { gap: 10px; margin-bottom: 12px; }
 body[data-design="klar"] input[type="text"],
 body[data-design="klar"] input[type="number"],
 body[data-design="klar"] input[type="search"],
+body[data-design="klar"] input[type="password"],
 body[data-design="klar"] select {
   min-height: 38px; border-radius: 999px; padding: 0 14px;
   font-size: 12.5px; font-weight: 600; background: var(--bg-elevated);
@@ -872,3 +873,41 @@ body[data-design="klar"] .badge.yellow { border-color: var(--warm-border); backg
 body[data-design="klar"] .klar-switch { width: 40px; height: 24px; }
 body[data-design="klar"] .klar-switch::after { width: 18px; height: 18px; }
 body[data-design="klar"] .klar-switch.on::after { left: 19px; }
+
+/* ---- 11. Ampelpunkt, Kachel-Einheit, Listenkarte ---- */
+body[data-design="klar"] .klar-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--text-faint);
+}
+body[data-design="klar"] .klar-dot.green { background: var(--accent); }
+body[data-design="klar"] .klar-dot.yellow { background: var(--warm); }
+body[data-design="klar"] .klar-dot.red { background: var(--red-fg); }
+
+body[data-design="klar"] .klar-tile-unit {
+  margin-top: 6px; text-align: center;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+
+/* Eine Karte je Liste (bzw. je Tag im Verlauf) statt einer Karte pro Zeile. */
+body[data-design="klar"] .klar-list-card {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 18px; overflow: hidden; box-shadow: var(--shadow);
+}
+body[data-design="klar"] .klar-list-card .list-item {
+  border: none; border-radius: 0; background: none; margin-bottom: 0;
+}
+body[data-design="klar"] .klar-list-card .list-entry + .list-entry,
+body[data-design="klar"] .klar-list-card .list-item + .list-item {
+  border-top: 1px solid var(--divider);
+}
+body[data-design="klar"] .klar-list-card .list-entry { margin-bottom: 0; }
+body[data-design="klar"] .klar-list-card .list-detail {
+  border: none; border-radius: 0; background: var(--bg);
+}
+/* Der Aufklappbereich braucht die abgesetzte Kante nicht mehr — die Karte rahmt schon. */
+body[data-design="klar"] .klar-list-card .list-entry.open .list-item { border-bottom-color: transparent; }
+
+/* Favoritenstern im Verlauf: gefüllt = gemerkt, hohl = noch nicht. */
+body[data-design="klar"] .icon-btn.star { font-size: 17px; color: var(--warm); }
+body[data-design="klar"] .icon-btn.star.on { color: var(--warm); }

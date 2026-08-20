@@ -9,7 +9,7 @@ import {
   openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
 } from "./consumption.js";
 import { openAnalysisModal } from "./analysis.js";
-import { showToast } from "./ui.js";
+import { showToast, nutriTilesHtml, gradeDotHtml } from "./ui.js";
 
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
@@ -116,13 +116,13 @@ function renderProductRows(body, listName) {
     return;
   }
 
-  rowsEl.innerHTML = items.map(item => {
+  rowsEl.innerHTML = `<div class="klar-list-card">${items.map(item => {
     const nutri = nutriOf(item, listName);
     const meta = [item.brand || "", metaLine(nutri)].filter(Boolean).join(" · ");
     return `
       <div class="list-entry" data-barcode="${esc(item.barcode)}">
         <div class="list-item" style="cursor:pointer">
-          <span class="badge ${item.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(item.grade)}</span>
+          ${gradeDotHtml(item.grade)}
           <div class="info">
             <div class="name">${esc(item.name)}</div>
             <div class="meta">${esc(meta)}</div>
@@ -130,16 +130,10 @@ function renderProductRows(body, listName) {
           <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
           <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
         </div>
-        <div class="list-detail" hidden>
-          ${tileGridHtml(nutri)}
-          <div class="btn-row" style="margin-top:10px">
-            <button class="btn secondary" data-action="edit">✎ Werte</button>
-            <button class="btn" data-action="eat">Eintragen</button>
-          </div>
-        </div>
+        ${detailHtml(nutri)}
       </div>
     `;
-  }).join("");
+  }).join("")}</div>`;
 
   rowsEl.querySelectorAll(".list-entry").forEach(entry => {
     const barcode = entry.dataset.barcode;
@@ -210,17 +204,18 @@ function metaLine(nutri) {
   ].filter(Boolean).join(" · ");
 }
 
-/** Vier Kacheln wie in der Scan-Ergebniskarte, je 100 g. */
-function tileGridHtml(nutri) {
-  const v = (x) => x == null ? "–" : round1(x);
+/** Aufklappbereich einer Listenzeile: Kacheln, optionale Zusatzzeile, Aktionen. */
+function detailHtml(nutri, extraHint = "") {
   return `
-    <div class="klar-tile-grid" style="margin-top:0">
-      <div class="klar-tile"><div class="val">${v(nutri?.kcal)}</div><div class="lbl">kcal /100 g</div></div>
-      <div class="klar-tile"><div class="val">${v(nutri?.netCarbs)}</div><div class="lbl">g Netto-KH /100 g</div></div>
-      <div class="klar-tile"><div class="val">${v(nutri?.fat)}</div><div class="lbl">g Fett /100 g</div></div>
-      <div class="klar-tile"><div class="val">${v(nutri?.protein)}</div><div class="lbl">g Eiweiß /100 g</div></div>
+    <div class="list-detail" hidden>
+      ${nutriTilesHtml(nutri)}
+      ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
+      ${extraHint}
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn secondary" data-action="edit">✎ Werte</button>
+        <button class="btn" data-action="eat">Eintragen</button>
+      </div>
     </div>
-    ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
   `;
 }
 
@@ -385,43 +380,54 @@ function renderHistoryList(el, items) {
     return;
   }
 
+  // Je Tag eine Karte mit Trennlinien statt einer Karte pro Zeile.
+  const blocks = [];
   let lastLabel = null;
-  const rows = [];
+  let rows = [];
+  const flush = () => {
+    if (rows.length) blocks.push(`<div class="klar-list-card">${rows.join("")}</div>`);
+    rows = [];
+  };
+
   for (const entry of items) {
     const label = dayLabel(entry.at);
     if (label !== lastLabel) {
-      rows.push(`<div class="muted" style="font-size:.8rem;font-weight:700;margin:14px 0 6px">${esc(label)}</div>`);
+      flush();
+      blocks.push(`<div class="klar-eyebrow" style="margin:16px 2px 8px">${esc(label)}</div>`);
       lastLabel = label;
     }
     const time = new Date(entry.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     // Verlaufseinträge werden nicht nachträglich befüllt (es sind viele) — nur angezeigt.
     const nutri = nutriOf(entry, null);
     const meta = [time, metaLine(nutri)].filter(Boolean).join(" · ");
+    const isFav = Store.isInList("favorites", entry.barcode);
     rows.push(`
       <div class="list-entry" data-barcode="${esc(entry.barcode)}">
         <div class="list-item" style="cursor:pointer">
-          <span class="badge ${entry.grade || "gray"}" style="flex-shrink:0">${gradeEmoji(entry.grade)}</span>
+          ${gradeDotHtml(entry.grade)}
           <div class="info">
             <div class="name">${esc(entry.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
+          <button class="icon-btn star ${isFav ? "on" : ""}" data-action="fav"
+            title="${isFav ? "Favorit entfernen" : "Als Favorit merken"}"
+            aria-pressed="${isFav}">${isFav ? "★" : "☆"}</button>
         </div>
-        <div class="list-detail" hidden>
-          ${tileGridHtml(nutri)}
-          <p class="hint">${esc(entry.brand || "")}${entry.brand ? " · " : ""}gesucht von ${esc(entry.profileName)}</p>
-          <div class="btn-row" style="margin-top:10px">
-            <button class="btn secondary" data-action="edit">✎ Werte</button>
-            <button class="btn" data-action="eat">Eintragen</button>
-          </div>
-        </div>
+        ${detailHtml(nutri, `<p class="hint">${esc(entry.brand || "")}${entry.brand ? " · " : ""}gesucht von ${esc(entry.profileName)}</p>`)}
       </div>
     `);
   }
-  el.innerHTML = rows.join("");
+  flush();
+  el.innerHTML = blocks.join("");
 
   el.querySelectorAll(".list-entry").forEach(entry => {
     const barcode = entry.dataset.barcode;
     entry.querySelector(".list-item").addEventListener("click", () => toggleDetail(entry));
+    entry.querySelector('[data-action="fav"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFavoriteFromHistory(barcode);
+      renderHistoryList(el, items);
+    });
     entry.querySelector('[data-action="eat"]').addEventListener("click", async () => {
       const product = await resolveProduct(barcode);
       if (product) openQuantityModal(product);
@@ -435,6 +441,30 @@ function renderHistoryList(el, items) {
       });
     });
   });
+}
+
+/**
+ * Stern in einer Verlaufszeile: macht den Eintrag zum Favoriten oder nimmt ihn wieder heraus.
+ * Der Verlauf trägt Name, Ampel und Kennwerte bereits, es braucht also weder Netz noch Scan.
+ */
+function toggleFavoriteFromHistory(barcode) {
+  if (Store.isInList("favorites", barcode)) {
+    Store.removeFromList("favorites", barcode);
+    showToast("Aus den Favoriten entfernt");
+    return;
+  }
+  const entry = Store.getHistory().find(e => e.barcode === barcode);
+  if (!entry) return;
+  Store.addToList("favorites", {
+    barcode: entry.barcode,
+    name: entry.name,
+    brand: entry.brand,
+    addedAt: Date.now(),
+    netCarbs100: entry.netCarbs100,
+    grade: entry.grade,
+    nutri100: nutriOf(entry, null),
+  });
+  showToast("Zu Favoriten hinzugefügt");
 }
 
 /** 30-Tage-Auswertung: Tag-für-Tag-Verlauf, Durchschnitte, Zielquote, längste Serie. */
@@ -601,10 +631,6 @@ function dayLabel(ts) {
   if (diffDays === 0) return "Heute";
   if (diffDays === 1) return "Gestern";
   return new Date(ts).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" });
-}
-
-function gradeEmoji(grade) {
-  return { green: "🟢", yellow: "🟡", red: "🔴" }[grade] || "⚪";
 }
 
 function emptyState(emoji, text) {
