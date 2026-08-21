@@ -105,8 +105,31 @@ function load() {
   }
 }
 
+// Persistieren wird debounced: ein schneller Klick-Ausbruch (z.B. 5× "+200 ml Wasser") soll nicht
+// 5 synchrone localStorage-Schreibvorgänge auslösen. Beim Verlassen der App (Tab wechseln,
+// schließen) wird sofort geschrieben — sonst ginge eine Änderung kurz vor dem Schließen verloren.
+let persistTimer = null;
+
+function writeNow() {
+  clearTimeout(persistTimer);
+  persistTimer = null;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn("Store: persistieren fehlgeschlagen", e);
+  }
+}
+
 function persist() {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(writeNow, 250);
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && persistTimer) writeNow();
+  });
+  window.addEventListener("pagehide", () => { if (persistTimer) writeNow(); });
 }
 
 /** Prüft eine Backup-Datei und gibt den Inhalt zurück. Wirft mit klarer Meldung bei Unfug. */

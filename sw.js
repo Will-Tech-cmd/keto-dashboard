@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v22";
+const CACHE_NAME = "keto-dashboard-v23";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -96,11 +96,13 @@ function isCode(url) {
  * auch wenn zwischenzeitlich schon die gecachte Fassung ausgeliefert wurde.
  */
 function networkFirst(request) {
+  // 5s statt kurzer angesetzt: bei 2G/3G reißt ein knapperer Timeout den Nutzer sonst mitten
+  // im Laden auf den (dann veralteten) Cache-Stand zurück, obwohl das Netz noch geantwortet hätte.
   const cached = caches.match(request);
   return new Promise((resolve) => {
     let settled = false;
     const done = (res) => { if (res && !settled) { settled = true; resolve(res); } };
-    const timer = setTimeout(() => cached.then(done), 3000);
+    const timer = setTimeout(() => cached.then(done), 5000);
 
     fetch(request, { cache: "no-cache" })
       .then((res) => {
