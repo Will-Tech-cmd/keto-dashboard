@@ -657,6 +657,41 @@ body[data-design="klar"] #addItemForm .btn {
 }
 .klar-product-name { font-size: 21px; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; margin-top: 10px; }
 .klar-product-meta { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+
+.klar-scan-grade { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13px; }
+
+/* Die Portion ist die Antwort auf die Frage, wegen der gescannt wurde — eigene Fläche in der
+   Ampelfarbe statt ein Satz zwischen den Kacheln. */
+.klar-portion-panel { border-radius: 16px; padding: 14px 16px; margin-top: 14px; }
+.klar-portion-panel.green { background: var(--accent-soft); }
+.klar-portion-panel.yellow { background: var(--yellow-bg); }
+.klar-portion-panel.red { background: var(--red-bg); }
+.klar-portion-panel.gray { background: var(--bg); }
+.klar-portion-head { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.klar-portion-value { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin-top: 4px; display: flex; align-items: baseline; gap: 7px; }
+.klar-portion-value span { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.klar-portion-panel .progress-track { margin-top: 10px; }
+.klar-portion-sub { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-top: 8px; }
+
+/* Hinweise nach Rang: eine ausklappbare Zeile statt vier gleich grauer Absätze. */
+.klar-hints-toggle {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  margin-top: 14px; padding: 10px 2px; border: none; background: none;
+  font-weight: 700; font-size: 12.5px; color: var(--text); cursor: pointer;
+}
+.klar-hints-toggle .chev { color: var(--text-muted); transition: transform .15s; }
+.klar-hints-toggle.open .chev { transform: rotate(180deg); }
+.klar-hints { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
+.klar-hint-row { display: flex; gap: 10px; }
+.klar-hint-mark {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); color: var(--text-muted);
+}
+.klar-hint-row.warn .klar-hint-mark { background: var(--warm-bg); color: var(--warm); }
+.klar-hint-title { font-size: 12.5px; font-weight: 700; }
+.klar-hint-row.warn .klar-hint-title { color: var(--warm); }
+.klar-hint-body { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
 .klar-tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 /* Weiß mit Rahmen statt reinem --bg: die Kachel muss sich sowohl von einer weißen Karte
    (Scan-Ergebnis) als auch vom grauen Seitenhintergrund (Aufklappbereich in den Listen)

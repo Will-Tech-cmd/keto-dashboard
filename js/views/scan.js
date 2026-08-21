@@ -1,13 +1,20 @@
 // views/scan.js — Scan-Tab: Kamera, Ergebniskarte, manuelle Eingabe, "Produkt selbst anlegen".
 import { Store } from "../store.js";
-import { calcTargets } from "../profiles.js";
+import { getTargetsForDate } from "../profiles.js";
 import { lookupProduct, searchProductsByName, searchOwnProducts, newOwnBarcode, nutriSnapshot } from "../off.js";
 import { ownProductFormHtml, wireOwnProductForm } from "../product-editor.js";
 import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
-import { openQuantityModal, suggestMeal, mealShort } from "../consumption.js";
-import { showToast, esc, nutriTilesHtml } from "../ui.js";
+import {
+  openQuantityModal, suggestMeal, mealShort,
+  getActiveDateKey, getConsumptionForDate, sumConsumption,
+} from "../consumption.js";
+import { showToast, esc, nutriTilesHtml, gradeDotHtml } from "../ui.js";
+
+function round1(v) {
+  return v == null ? null : Math.round(v * 10) / 10;
+}
 
 let currentBarcode = null;
 
@@ -211,7 +218,7 @@ function scrollToResult(container) {
 /** Protokolliert einen Such-/Scan-Treffer im Verlauf (nur Log, keine Mengen/Kalorien). */
 function logHistory(product) {
   const profile = Store.getActiveProfile();
-  const targets = calcTargets(profile);
+  const targets = getTargetsForDate(profile, getActiveDateKey());
   const evalResult = evaluateProduct(product, targets);
   Store.addHistoryEntry({
     id: crypto.randomUUID(),
@@ -275,7 +282,7 @@ async function handleBarcode(container, barcode) {
 
 function renderResult(container, product) {
   const profile = Store.getActiveProfile();
-  const targets = calcTargets(profile);
+  const targets = getTargetsForDate(profile, getActiveDateKey());
   const fiberOverride = Store.getFiberOverride(product.barcode);
   const subtractFiber = fiberOverride !== undefined ? fiberOverride : product.likelyUsLabel;
   const evalResult = evaluateProduct(product, targets, { subtractFiber });
@@ -285,45 +292,83 @@ function renderResult(container, product) {
   const isFav = Store.isInList("favorites", product.barcode);
   const isNoGo = Store.isInList("noGo", product.barcode);
 
-  const notes = `
-    ${evalResult.netCarbsServing != null ? `
-      <p class="hint" style="margin-top:10px">
-        Portion (${evalResult.servingGrams} g): <strong>${evalResult.netCarbsServing} g Netto-KH</strong>
-        ${evalResult.pctOfDailyLimit != null ? ` — das sind ${evalResult.pctOfDailyLimit}% deines Tageslimits (${targets.netCarbG} g).` : ""}
-      </p>` : ""}
-    ${hasFiber ? `
-      <label class="btn-row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer">
-        <input type="checkbox" id="fiberToggle" ${subtractFiber ? "checked" : ""} style="width:auto;min-height:auto;flex:none">
-        <span class="hint" style="margin:0">Etikett nach US-Konvention (${fmt(product.per100.fiber)} g Ballaststoffe zählen zu den KH)</span>
-      </label>
-    ` : ""}
-    ${!evalResult.fiberAvailable ? `<p class="hint">ℹ️ Keine Ballaststoff-Angabe verfügbar.</p>` : ""}
-    ${evalResult.sugarAlcohols ? `<p class="hint">ℹ️ Enthält Zuckeralkohole (z.B. Erythrit/Xylit) — wirken sich meist kaum auf den Blutzucker aus.</p>` : ""}
-    ${evalResult.plausibility ? `
-      <p class="hint" style="margin-top:8px;color:var(--red-fg)">
-        ⚠️ Die kcal-Angabe (${fmt(product.per100.kcal)}) passt nicht zu den übrigen Werten — aus Kohlenhydraten/Fett/Eiweiß errechnen sich ca. <strong>${evalResult.plausibility.calculatedKcal} kcal</strong> (${evalResult.plausibility.deviationPct}% Abweichung). Vermutlich ein Fehler in der Datenbank — oben mit „✎" anpassen.
-      </p>
-    ` : ""}
-    ${evalResult.warnings.length ? `
-      <ul class="warn-list">${evalResult.warnings.map(w => `<li>⚠️ ${esc(w)}</li>`).join("")}</ul>
-    ` : ""}
-  `;
+  // Die Portion ist die Antwort auf die Frage, wegen der gescannt wurde — eigene Fläche in der
+  // Ampelfarbe statt ein Satz zwischen den Kacheln, mit Balken und Folge fürs Restbudget.
+  const portionPanel = evalResult.netCarbsServing != null ? (() => {
+    const already = sumConsumption(getConsumptionForDate(profile.id, getActiveDateKey())).netCarbs;
+    const afterTotal = round1(already + evalResult.netCarbsServing);
+    const remainingAfter = round1(targets.netCarbG - afterTotal);
+    const pct = targets.netCarbG > 0 ? Math.min((evalResult.netCarbsServing / targets.netCarbG) * 100, 100) : 0;
+    const over = evalResult.pctOfDailyLimit != null && evalResult.pctOfDailyLimit > 100;
+    return `
+      <div class="klar-portion-panel ${evalResult.grade}">
+        <div class="klar-portion-head">Eine Portion (${evalResult.servingGrams} g)</div>
+        <div class="klar-portion-value">${evalResult.netCarbsServing} g<span>Netto-KH${evalResult.pctOfDailyLimit != null ? ` · ${evalResult.pctOfDailyLimit}% des Tageslimits` : ""}</span></div>
+        <div class="progress-track"><div class="progress-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+        <div class="klar-portion-sub">${remainingAfter >= 0
+          ? `Heute noch ${round1(targets.netCarbG - already)} g frei — danach ${remainingAfter} g`
+          : `Heute noch ${round1(targets.netCarbG - already)} g frei — danach ${Math.abs(remainingAfter)} g darüber`}</div>
+      </div>
+    `;
+  })() : "";
+
+  // Hinweise nach Rang statt vier gleich grauer Absätze: Warnungen (Terrakotta) vor
+  // Sachhinweisen (Grau), zusammengefasst hinter einer ausklappbaren Zeile.
+  const hints = [];
+  if (evalResult.plausibility) {
+    hints.push({ warn: true, title: "kcal-Angabe unplausibel",
+      body: `Aus KH, Fett und Eiweiß errechnen sich ca. ${evalResult.plausibility.calculatedKcal} kcal statt ${fmt(product.per100.kcal)} (${evalResult.plausibility.deviationPct}% Abweichung). Mit „✎" anpassen.` });
+  }
+  evalResult.warnings.forEach(w => hints.push({ warn: true, title: w, body: "" }));
+  if (evalResult.sugarAlcohols) {
+    hints.push({ warn: false, title: "Enthält Zuckeralkohole", body: "Wirken sich meist kaum auf den Blutzucker aus." });
+  }
+  if (!evalResult.fiberAvailable) {
+    hints.push({ warn: false, title: "Keine Ballaststoff-Angabe verfügbar", body: "" });
+  }
+
+  const hintsHtml = hints.length ? `
+    <button type="button" class="klar-hints-toggle" id="hintsToggle">
+      <span>${hints.length} ${hints.length === 1 ? "Hinweis" : "Hinweise"} zu diesen Werten</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="klar-hints" id="hintsBody" hidden>
+      ${hints.map(h => `
+        <div class="klar-hint-row ${h.warn ? "warn" : ""}">
+          <span class="klar-hint-mark">${h.warn ? "!" : "ℹ"}</span>
+          <div>
+            <div class="klar-hint-title">${esc(h.title)}</div>
+            ${h.body ? `<div class="klar-hint-body">${h.body}</div>` : ""}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
+
+  const fiberToggleHtml = hasFiber ? `
+    <label class="btn-row" style="align-items:center;gap:8px;margin-top:14px;cursor:pointer">
+      <input type="checkbox" id="fiberToggle" ${subtractFiber ? "checked" : ""} style="width:auto;min-height:auto;flex:none">
+      <span class="hint" style="margin:0">Etikett nach US-Konvention (${fmt(product.per100.fiber)} g Ballaststoffe zählen zu den KH)</span>
+    </label>
+  ` : "";
 
   resultWrap.innerHTML = `
     <div class="klar-card" style="margin-top:14px">
       <div class="klar-card-head" style="align-items:center">
-        <span class="badge ${evalResult.grade}">${{ green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[evalResult.grade]} ${esc(GRADE_LABEL[evalResult.grade])}</span>
+        <span class="klar-scan-grade">${gradeDotHtml(evalResult.grade)}${esc(GRADE_LABEL[evalResult.grade])}</span>
         <button type="button" class="klar-icon-btn" id="correctBtn" title="Werte korrigieren">✎</button>
       </div>
       <div class="klar-product-name">${esc(product.name)}</div>
       <div class="klar-product-meta">${esc(product.brand || "")}${product.quantity ? " · " + esc(product.quantity) : ""}</div>
+      ${portionPanel}
       ${nutriTilesHtml({
         kcal: product.per100.kcal,
         netCarbs: evalResult.netCarbs100,
         fat: product.per100.fat,
         protein: product.per100.protein,
       })}
-      ${notes}
+      ${hintsHtml}
+      ${fiberToggleHtml}
       <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
       <div class="klar-action-row">
         <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">⭐ Favorit</button>
@@ -332,6 +377,13 @@ function renderResult(container, product) {
       </div>
     </div>
   `;
+
+  resultWrap.querySelector("#hintsToggle")?.addEventListener("click", () => {
+    const body = resultWrap.querySelector("#hintsBody");
+    const toggle = resultWrap.querySelector("#hintsToggle");
+    body.hidden = !body.hidden;
+    toggle.classList.toggle("open", !body.hidden);
+  });
 
   wireResultActions(container, resultWrap, product, evalResult);
 }
