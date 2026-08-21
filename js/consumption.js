@@ -3,6 +3,7 @@
 // Essensplanung), damit Einträge aus Scan/Listen/Rezepten immer auf dem gewählten Tag landen.
 import { Store, dateKeyOf } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
+import { getTargetsForDate } from "./profiles.js";
 import { esc, showToast, bindBackClose, keepActionsInView } from "./ui.js";
 
 export const MEAL_LABELS = {
@@ -82,7 +83,12 @@ export function logConsumption(product, grams, meal = null) {
   if (!g || g <= 0) return null;
   const scale = g / 100;
   const per100 = product.per100;
-  const netCarbs100 = calcNetCarbs(per100, { subtractFiber: product.likelyUsLabel });
+  // Dieselbe Regel wie auf der Scan-Ergebniskarte: manuelle Übersteuerung (US-Etikett-Schalter)
+  // hat Vorrang, sonst die automatische Erkennung — sonst könnten die eingetragenen Netto-KH
+  // von dem abweichen, was gerade eben noch auf der Karte stand.
+  const fiberOverride = Store.getFiberOverride(product.barcode);
+  const subtractFiber = fiberOverride !== undefined ? fiberOverride : product.likelyUsLabel;
+  const netCarbs100 = calcNetCarbs(per100, { subtractFiber });
   const profile = Store.getActiveProfile();
 
   const entry = {
@@ -262,6 +268,27 @@ export function wireCoupledAmountFields(portionsInput, gramsInput, servingG) {
   });
 }
 
+/**
+ * "Von 30 g heute: 21.4 g gegessen, 4.1 g bleiben danach frei" — dieselbe Frage, die man beim
+ * Eintragen ohnehin im Kopf hat, deshalb direkt im Dialog statt erst danach auf Start.
+ * `excludeId` lässt den gerade bearbeiteten Eintrag selbst aus der Summe raus (Bearbeiten-Dialog),
+ * sonst würde er sich doppelt einrechnen.
+ */
+function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
+  const profile = Store.getActiveProfile();
+  const dateKey = getActiveDateKey();
+  const targets = getTargetsForDate(profile, dateKey);
+  const already = getConsumptionForDate(profile.id, dateKey)
+    .filter(e => e.id !== excludeId)
+    .reduce((sum, e) => sum + (e.netCarbs || 0), 0);
+  const afterTotal = already + (addNetCarbs || 0);
+  const remaining = round1(targets.netCarbG - afterTotal);
+  const nach = remaining < 0
+    ? `${Math.abs(remaining)} g darüber`
+    : `${remaining} g bleiben danach frei`;
+  return `Von ${targets.netCarbG} g heute: ${round1(already)} g gegessen, ${nach}`;
+}
+
 export function mealChipsHtml(selected) {
   return `
     <label>Mahlzeit</label>
@@ -296,7 +323,7 @@ export function openQuantityModal(product, onLogged) {
   overlay.innerHTML = `
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(product.name)}</h2>
-      <p class="hint">Gegessene Menge eintragen — wird von eurem Tagesziel abgezogen.</p>
+      <p class="hint">Gegessene Menge eintragen — wird von eurem Tagesziel abgezogen.${isViewingToday() ? "" : ` Eintrag für <strong>${esc(dateLabel(getActiveDateKey()))}</strong>.`}</p>
       ${servingG ? `
         <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
           ${[1, 2, 3, 4].map(n => `<button type="button" class="btn secondary qty-chip" data-portions="${n}" style="width:auto;flex:none;padding:0 14px">${n}× (${round1(servingG * n)} g)</button>`).join("")}
@@ -306,6 +333,8 @@ export function openQuantityModal(product, onLogged) {
       ` : ""}
       <label for="qtyGramsInput">Menge in Gramm</label>
       <input type="number" id="qtyGramsInput" value="${servingG || 100}" min="1" inputmode="numeric">
+      <p class="hint" id="qtyPreview" style="margin-top:8px"></p>
+      <p class="hint" id="qtyBudgetLine" style="margin-top:0"></p>
       ${mealChipsHtml(selectedMeal)}
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="qtyCancel">Abbrechen</button>
@@ -319,6 +348,24 @@ export function openQuantityModal(product, onLogged) {
   const gramsInput = overlay.querySelector("#qtyGramsInput");
   if (servingG) wireCoupledAmountFields(portionsInput, gramsInput, servingG);
   wireMealChips(overlay, (meal) => { selectedMeal = meal; });
+
+  const fiberOverride = Store.getFiberOverride(product.barcode);
+  const subtractFiber = fiberOverride !== undefined ? fiberOverride : product.likelyUsLabel;
+  const netCarbs100 = calcNetCarbs(product.per100, { subtractFiber });
+  const preview = overlay.querySelector("#qtyPreview");
+  const budgetLine = overlay.querySelector("#qtyBudgetLine");
+  const updatePreview = () => {
+    const g = parseFloat(gramsInput.value);
+    if (!g || g <= 0) { preview.textContent = ""; budgetLine.textContent = ""; return; }
+    const kcal = product.per100.kcal != null ? round1(product.per100.kcal * g / 100) : null;
+    const netCarbs = netCarbs100 != null ? round1(netCarbs100 * g / 100) : null;
+    preview.textContent = kcal != null || netCarbs != null
+      ? `Das trägt ein: ${netCarbs ?? "–"} g Netto-KH · ${kcal ?? "–"} kcal`
+      : "";
+    budgetLine.textContent = budgetLineText(netCarbs);
+  };
+  gramsInput.addEventListener("input", updatePreview);
+  updatePreview();
 
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
@@ -385,6 +432,7 @@ export function openEditConsumptionModal(entry, onDone) {
         <input type="number" id="editAmountInput" value="${currentAmount}" min="0.1" step="1" inputmode="decimal">
       `}
       <p class="hint" id="editPreview" style="margin-top:8px"></p>
+      <p class="hint" id="editBudgetLine" style="margin-top:0"></p>
       ${mealChipsHtml(selectedMeal)}
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="editDelete">🗑️ Löschen</button>
@@ -406,14 +454,17 @@ export function openEditConsumptionModal(entry, onDone) {
   wireMealChips(overlay, (meal) => { selectedMeal = meal; });
 
   const preview = overlay.querySelector("#editPreview");
+  const budgetLine = overlay.querySelector("#editBudgetLine");
   const updatePreview = () => {
     const val = parseFloat(input.value);
-    if (!val || val <= 0) { preview.textContent = ""; return; }
+    if (!val || val <= 0) { preview.textContent = ""; budgetLine.textContent = ""; return; }
     const ratio = val / currentAmount;
-    const k = entry.kcal != null ? round1(entry.kcal * ratio) : "–";
-    const nc = entry.netCarbs != null ? round1(entry.netCarbs * ratio) : "–";
+    const k = entry.kcal != null ? round1(entry.kcal * ratio) : null;
+    const nc = entry.netCarbs != null ? round1(entry.netCarbs * ratio) : null;
     const gramsPart = servingG && isRecipe ? `${Math.round(val * servingG)} g · ` : "";
-    preview.textContent = `→ ${gramsPart}${k} kcal · ${nc} g Netto-KH`;
+    preview.textContent = `→ ${gramsPart}${k ?? "–"} kcal · ${nc ?? "–"} g Netto-KH`;
+    // Der bearbeitete Eintrag selbst zählt nicht doppelt zur Tagessumme.
+    budgetLine.textContent = budgetLineText(nc, { excludeId: entry.id });
   };
   input.addEventListener("input", updatePreview);
   gramsInput?.addEventListener("input", updatePreview);

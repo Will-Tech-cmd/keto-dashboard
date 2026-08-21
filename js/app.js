@@ -6,10 +6,18 @@ import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
-import { logConsumption, rankFrequentItems, MEAL_LABELS, mealShort, suggestMeal } from "./consumption.js";
-import { logRecipeConsumption } from "./recipes.js";
-import { lookupProduct } from "./off.js";
+import {
+  logConsumption, rankFrequentItems, MEAL_LABELS, mealShort, suggestMeal,
+  getActiveDateKey, getConsumptionForDate, sumConsumption,
+} from "./consumption.js";
+import { logRecipeConsumption, calcPerServing } from "./recipes.js";
+import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
+import { getTargetsForDate } from "./profiles.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
+
+function round1(v) {
+  return v == null ? null : Math.round(v * 10) / 10;
+}
 
 const view = document.getElementById("view");
 const tabbar = document.getElementById("tabbar");
@@ -105,10 +113,18 @@ function openEntrySheet() {
 
   const render = () => {
     const { frequent, recent } = rankFrequentItems(profile.id, meal);
+    const targets = getTargetsForDate(profile, getActiveDateKey());
+    const totals = sumConsumption(getConsumptionForDate(profile.id, getActiveDateKey()));
+    const carbsLeft = round1(targets.netCarbG - totals.netCarbs);
+    const kcalLeft = Math.round(targets.kcal - totals.kcal);
+
     overlay.innerHTML = `
       <div class="klar-sheet">
         <div class="klar-sheet-handle"></div>
-        <div class="klar-sheet-title">Eintragen</div>
+        <div class="klar-sheet-head">
+          <div class="klar-sheet-title">Eintragen</div>
+          <span class="klar-pill-btn budget ${carbsLeft <= 0 ? "over" : ""}">Noch ${carbsLeft} g KH · ${kcalLeft} kcal</span>
+        </div>
         <div class="klar-sheet-sub">Sortiert nach dem, was du um diese Zeit wirklich isst.</div>
 
         <div class="klar-entry-ways">
@@ -131,16 +147,17 @@ function openEntrySheet() {
           <div class="klar-rank-head">
             <span class="klar-eyebrow">Für dich ${esc(mealPhrase(meal))}</span>
           </div>
-          <div class="klar-rank-note">Häufigkeit der letzten 30 Tage, gewichtet mit der Tageszeit.</div>
+          <div class="klar-rank-note">Häufigkeit × Tageszeit. Terrakotta passt nicht mehr ins KH-Budget.</div>
           <div class="klar-chip-row">
-            ${frequent.map((item, i) => chipHtml(item, i < 2 ? "top" : "")).join("")}
+            ${frequent.map((item, i) => chipHtml(item, i < 2 ? "top" : "", carbsLeft)).join("")}
           </div>
         ` : ""}
 
         ${recent.length > 0 ? `
-          <div class="klar-eyebrow" style="margin:18px 0 10px">Zuletzt benutzt</div>
+          <hr class="klar-divider">
+          <div class="klar-eyebrow" style="margin:0 0 10px">Zuletzt benutzt</div>
           <div class="klar-chip-row">
-            ${recent.map(item => chipHtml(item, "")).join("")}
+            ${recent.map(item => chipHtml(item, "", carbsLeft)).join("")}
           </div>
         ` : ""}
 
@@ -175,12 +192,28 @@ function openEntrySheet() {
   render();
 }
 
-function chipHtml(item, extraClass) {
+/** Netto-KH, die ein Chip einträgt — ohne Netz aus dem, was das Gerät ohnehin hat (Cache,
+ * eigene Produkte, eingebaute Tabelle, lokal gespeicherte Rezepte). null, wenn nicht ermittelbar
+ * (z.B. Produkt noch nie gecacht) — der Chip zeigt dann nur Name und Menge, wie bisher. */
+function estimateNetCarbs(item) {
+  if (item.isRecipe) {
+    const recipe = Store.getRecipe(item.recipeId);
+    return recipe ? round1(calcPerServing(recipe).netCarbs * item.amount) : null;
+  }
+  const product = getProductOffline(item.barcode);
+  if (!product) return null;
+  const netCarbs100 = nutriSnapshot(product).netCarbs;
+  return netCarbs100 != null ? round1(netCarbs100 * item.amount / 100) : null;
+}
+
+function chipHtml(item, extraClass, carbsLeft) {
+  const netCarbs = estimateNetCarbs(item);
+  const over = netCarbs != null && carbsLeft != null && netCarbs > carbsLeft;
   return `
-    <button type="button" class="klar-chip ${extraClass}" data-key="${esc(item.key)}">
+    <button type="button" class="klar-chip ${extraClass} ${over ? "over" : ""}" data-key="${esc(item.key)}">
       ${esc(item.name)}
       ${item.count > 1 ? `<span class="klar-chip-count">${item.count}×</span>` : ""}
-      <span class="klar-chip-amount">+${item.isRecipe ? `${item.amount} P.` : `${item.amount} g`}</span>
+      <span class="klar-chip-amount">+${item.isRecipe ? `${item.amount} P.` : `${item.amount} g`}${netCarbs != null ? ` ${netCarbs} g KH` : ""}</span>
     </button>
   `;
 }

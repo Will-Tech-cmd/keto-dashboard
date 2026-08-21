@@ -540,8 +540,11 @@ body[data-design="klar"] .fab-btn {
   width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; box-shadow: 0 -8px 40px rgba(0,0,0,.22);
 }
 .klar-sheet-handle { width: 38px; height: 4px; border-radius: 999px; background: var(--divider); margin: 0 auto 16px; }
+.klar-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .klar-sheet-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .klar-sheet-sub { font-size: 12.5px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
+.klar-pill-btn.budget { flex: none; }
+.klar-pill-btn.budget.over { color: var(--warm); border-color: var(--warm-border); background: var(--warm-bg); }
 .klar-entry-ways { display: flex; gap: 8px; margin-top: 16px; }
 .klar-entry-way { flex: 1; min-height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 7px; font-weight: 700; font-size: 13.5px; border: none; cursor: pointer; }
 .klar-entry-way.primary { background: var(--text); color: var(--bg-elevated); }
@@ -556,6 +559,9 @@ body[data-design="klar"] .fab-btn {
 .klar-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); font-weight: 700; font-size: 12.5px; color: var(--text); cursor: pointer; }
 .klar-chip.top { border-color: var(--accent-soft-border); background: var(--accent-soft); color: var(--accent-ink); }
 .klar-chip.warn { border-color: var(--yellow-border); background: var(--yellow-bg); color: var(--yellow-fg); }
+.klar-chip.over { border-color: var(--warm-border); background: var(--warm-bg); color: var(--warm); }
+.klar-chip.over .klar-chip-amount { color: var(--warm); }
+.klar-chip.over .klar-chip-count { background: var(--warm-border); color: var(--warm); }
 .klar-chip-count { font-size: 10.5px; font-weight: 800; border-radius: 999px; padding: 2px 6px; background: var(--bg); color: var(--text-muted); }
 .klar-chip.top .klar-chip-count { background: var(--accent-soft-border); color: var(--accent-ink); }
 .klar-chip-amount { font-weight: 800; color: var(--accent-ink); }
