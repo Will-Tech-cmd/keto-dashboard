@@ -1022,6 +1022,43 @@ body[data-design="klar"] .icon-btn.star { font-size: 17px; color: var(--warm); }
 body[data-design="klar"] .icon-btn.star.on { color: var(--warm); }
 body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 
+/* ---------- Onboarding: dreistufiger Assistent ---------- */
+.klar-ob { max-width: 420px; margin: 0 auto; padding-bottom: 100px; }
+.klar-ob-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.klar-ob-progress { font-size: 11.5px; font-weight: 800; color: var(--text-muted); letter-spacing: .04em; }
+.klar-ob-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; margin: 0; text-transform: none; }
+.klar-ob-subtitle { font-size: .85rem; color: var(--text-muted); margin: 6px 0 20px; }
+.klar-ob-body label:first-child { margin-top: 0; }
+
+.klar-ob-sex { display: flex; gap: 8px; margin-bottom: 4px; }
+.klar-ob-sex-btn {
+  flex: 1; min-height: 46px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg-elevated); color: var(--text); font-weight: 700; font-size: .9rem; cursor: pointer;
+}
+.klar-ob-sex-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
+.klar-ob-stepper-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 2px; border-bottom: 1px solid var(--divider);
+}
+.klar-ob-stepper-label { font-weight: 700; font-size: .9rem; }
+.klar-stepper { display: flex; align-items: center; gap: 14px; }
+.klar-stepper-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg-elevated); color: var(--text); font-size: 20px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none;
+}
+.klar-stepper-val { font-size: 1.05rem; font-weight: 800; min-width: 64px; text-align: center; }
+
+.klar-ob-footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg); border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  max-width: 560px; margin: 0 auto;
+}
+.klar-ob-footer .btn.ghost { min-height: 36px; font-size: .8rem; }
+
 /* Alle Animationen (Ringe, Sheets, Toasts, Balken) für Bewegungsempfindlichkeit deaktivieren —
    nicht nur die Snackbar, die das bisher als einzige selbst berücksichtigte. */
 @media (prefers-reduced-motion: reduce) {
