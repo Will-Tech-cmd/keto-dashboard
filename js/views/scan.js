@@ -31,13 +31,11 @@ export function renderScan(container) {
 
   container.innerHTML = `
     <h1 class="section-title">Scannen</h1>
-    <div class="scan-wrap">
-      <video id="scanVideo" playsinline muted></video>
-      <div class="scan-frame"></div>
-      <div class="scan-status" id="scanStatus">Kamera wird gestartet …</div>
+    <div id="scanArea"></div>
+    <div id="scanToggles">
+      <button class="btn secondary" id="manualToggle">🔢 Barcode manuell eingeben</button>
+      <button class="btn secondary" id="searchToggle" style="margin-top:8px">🔎 Lebensmittel ohne Barcode suchen</button>
     </div>
-    <button class="btn secondary" id="manualToggle">🔢 Barcode manuell eingeben</button>
-    <button class="btn secondary" id="searchToggle" style="margin-top:8px">🔎 Lebensmittel ohne Barcode suchen</button>
     <div id="manualFormWrap" style="display:none;margin-top:12px"></div>
     <div id="searchFormWrap" style="display:none;margin-top:12px"></div>
     <div id="resultWrap"></div>
@@ -54,9 +52,28 @@ export function renderScan(container) {
   });
 
   wireSearchToggle(container);
+  startCameraView(container);
+}
 
-  const video = container.querySelector("#scanVideo");
-  const statusEl = container.querySelector("#scanStatus");
+/**
+ * Baut die Kameraansicht auf und startet den Scanner. Eigene Funktion, damit "Erneut scannen"
+ * (nach einem Treffer, siehe collapseScanArea) dieselbe Ansicht erneut aufbauen kann, ohne die
+ * ganze Seite (inkl. Suchfeld, Ergebnis) neu zu rendern.
+ */
+function startCameraView(container) {
+  const area = container.querySelector("#scanArea");
+  if (!area) return;
+  area.innerHTML = `
+    <div class="scan-wrap">
+      <video id="scanVideo" playsinline muted></video>
+      <div class="scan-frame"></div>
+      <div class="scan-status" id="scanStatus">Kamera wird gestartet …</div>
+    </div>
+  `;
+  container.querySelector("#scanToggles").style.display = "";
+
+  const video = area.querySelector("#scanVideo");
+  const statusEl = area.querySelector("#scanStatus");
 
   startScanner(
     video,
@@ -65,6 +82,34 @@ export function renderScan(container) {
   ).catch(err => {
     console.error("Scanner konnte nicht gestartet werden:", err);
     statusEl.textContent = "Kamerazugriff fehlgeschlagen. Bitte Berechtigung erlauben oder manuell eingeben.";
+  });
+}
+
+/**
+ * Die Kamera hat ihre Aufgabe erfüllt, sobald ein Barcode erkannt ist — sie bräuchte sonst
+ * weiter ein Drittel des Bildschirms und drückt die Ergebniskarte unter die Falz. Ersetzt die
+ * Kameraansicht durch eine schmale Bestätigungszeile mit dem erkannten Code; "Erneut scannen"
+ * baut die Kamera über startCameraView() wieder auf. Manuelle Eingabe/Namenssuche verstecken
+ * sich mit, solange ein Ergebnis dasteht — sie sind Alternativen zum Scannen, keine Ergänzung.
+ */
+function collapseScanArea(container, barcode) {
+  stopScanner();
+  const area = container.querySelector("#scanArea");
+  if (!area) return;
+  area.innerHTML = `
+    <div class="klar-scan-confirm">
+      <span class="klar-scan-confirm-check">✓</span>
+      <span class="klar-scan-confirm-code">Barcode erkannt · ${esc(barcode)}</span>
+      <button type="button" class="klar-pill-btn" id="rescanBtn">Erneut scannen</button>
+    </div>
+  `;
+  const toggles = container.querySelector("#scanToggles");
+  if (toggles) toggles.style.display = "none";
+  container.querySelector("#manualFormWrap").style.display = "none";
+  container.querySelector("#searchFormWrap").style.display = "none";
+  area.querySelector("#rescanBtn").addEventListener("click", () => {
+    container.querySelector("#resultWrap").innerHTML = "";
+    startCameraView(container);
   });
 }
 
@@ -261,6 +306,7 @@ function wireManualForm(container) {
 async function handleBarcode(container, barcode) {
   currentBarcode = barcode;
   Store.pushRecent(barcode);
+  collapseScanArea(container, barcode);
   const resultWrap = container.querySelector("#resultWrap");
   resultWrap.innerHTML = `<div class="card"><p class="muted">Suche Produkt …</p></div>`;
 
