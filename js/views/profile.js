@@ -3,7 +3,7 @@ import { Store } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
-import { showToast, esc, applyDesignTheme, bindBackClose, getAppVersion } from "../ui.js";
+import { showToast, esc, applyDesignTheme, bindBackClose, keepActionsInView, getAppVersion } from "../ui.js";
 
 const RING_STYLES = [
   { key: "rings", label: "Vier Ringe" },
@@ -193,19 +193,99 @@ function wireAiKey(container) {
   });
 }
 
+const SHORT_ACTIVITY_LABELS = { 1.2: "kaum aktiv", 1.375: "leicht aktiv", 1.55: "mäßig aktiv", 1.725: "sehr aktiv" };
+
+/** Zielwerte oben als Ergebniskarte (wie im Rezept-Editor), Körperdaten darunter als vier
+ * Zeilen mit ihrem aktuellen Stand — jede öffnet ein kleines Sheet statt eines 14-Felder-
+ * Formulars. Jedes Sheet speichert bei jeder Änderung sofort (Store.updateProfile), die
+ * Zielkarte und die Zeile selbst aktualisieren sich live mit — kein "Speichern"-Knopf nötig.
+ */
 function renderProfileForm(container, onProfileChanged) {
   const profile = Store.getActiveProfile();
-  const targets = calcTargets(profile);
   const formWrap = container.querySelector("#profileForm");
+
+  const groups = () => {
+    const p = Store.getActiveProfile();
+    return [
+      { key: "body", title: "Körperdaten",
+        sub: `${p.sex === "male" ? "m" : "w"} · ${p.age} J · ${p.heightCm} cm · ${p.weightKg} kg${p.bodyFatPct ? ` · ${p.bodyFatPct}% KF` : ""}` },
+      { key: "goal", title: "Ziel & Aktivität",
+        sub: `${Goals[p.goal]}${p.goal === "lose" ? `, ${p.deficitPct}% Defizit` : ""} · ${SHORT_ACTIVITY_LABELS[p.activity] || ActivityLevels[p.activity]}` },
+      { key: "diet", title: "Ernährungsform",
+        sub: `${DIET_TYPES[p.dietType]?.label || p.dietType} · Ampel grün bis ${p.gradeThresholds.green} g, gelb bis ${p.gradeThresholds.yellow} g` },
+      { key: "limits", title: "Grenzwerte",
+        sub: `${p.netCarbLimitG} g KH · ${p.proteinFactor} g Eiweiß/kg · ${p.waterTargetMl ?? 2500} ml Wasser` },
+    ];
+  };
 
   formWrap.innerHTML = `
     <div class="card">
       <label>Name</label>
       <input type="text" id="fName" value="${esc(profile.name)}">
+    </div>
 
+    <div class="klar-result-card" id="profileTargetsCard"></div>
+
+    <div class="klar-eyebrow" style="margin:16px 2px 8px">Woraus sich das ergibt</div>
+    <div class="klar-list-card" id="profileGroups"></div>
+  `;
+
+  formWrap.querySelector("#fName").addEventListener("change", (e) => {
+    Store.updateProfile(profile.id, { name: e.target.value.trim() || profile.name });
+    onProfileChanged?.();
+  });
+
+  const renderTargetsCard = () => {
+    const p = Store.getActiveProfile();
+    const t = calcTargets(p);
+    formWrap.querySelector("#profileTargetsCard").innerHTML = `
+      <div class="klar-result-head">
+        <span class="klar-result-eyebrow">Deine Tagesziele</span>
+        <span class="klar-result-badge gray">${esc(DIET_TYPES[p.dietType]?.label || p.dietType)}</span>
+      </div>
+      <div class="klar-tile-grid" style="margin-top:10px">
+        <div class="klar-tile"><div class="val">${t.kcal}</div><div class="lbl">kcal</div></div>
+        <div class="klar-tile"><div class="val">${t.netCarbG}</div><div class="lbl">g Netto-KH</div></div>
+        <div class="klar-tile"><div class="val">${t.fatG}</div><div class="lbl">g Fett</div></div>
+        <div class="klar-tile"><div class="val">${t.proteinG}</div><div class="lbl">g Eiweiß</div></div>
+      </div>
+      <div class="klar-result-total">Grundumsatz ${t.bmr} kcal · Gesamtumsatz ${t.tdee} kcal${p.goal === "lose" ? ` · ${p.deficitPct}% Defizit` : ""}</div>
+    `;
+  };
+
+  const renderGroups = () => {
+    const list = formWrap.querySelector("#profileGroups");
+    list.innerHTML = groups().map(g => `
+      <div class="list-item" data-group="${g.key}" style="cursor:pointer">
+        <div class="info">
+          <div class="name">${esc(g.title)}</div>
+          <div class="meta">${esc(g.sub)}</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+    `).join("");
+    list.querySelectorAll(".list-item").forEach(row => {
+      row.addEventListener("click", () => openGroupSheet(row.dataset.group, refresh));
+    });
+  };
+
+  // Nach jeder Änderung in einem Sheet aufgerufen — hält Zielkarte und Zeilen aktuell, ohne
+  // das offene Sheet selbst neu zu zeichnen.
+  const refresh = () => { renderTargetsCard(); renderGroups(); };
+  refresh();
+}
+
+/** Kleines Feld-Sheet für eine der vier Körperdaten-Gruppen. `onChanged` aktualisiert die
+ * Zielkarte/Zeilen im Hintergrund, während das Sheet offen bleibt. */
+function openGroupSheet(key, onChanged) {
+  const profile = Store.getActiveProfile();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const bodyHtml = {
+    body: `
       <div class="field-row">
-        <div>
-          <label>Geschlecht</label>
+        <div><label>Geschlecht</label>
           <select id="fSex">
             <option value="female" ${profile.sex === "female" ? "selected" : ""}>weiblich</option>
             <option value="male" ${profile.sex === "male" ? "selected" : ""}>männlich</option>
@@ -213,126 +293,110 @@ function renderProfileForm(container, onProfileChanged) {
         </div>
         <div><label>Alter</label><input type="number" id="fAge" value="${profile.age}"></div>
       </div>
-
       <div class="field-row">
         <div><label>Größe (cm)</label><input type="number" id="fHeight" value="${profile.heightCm}"></div>
         <div><label>Gewicht (kg)</label><input type="number" step="0.1" id="fWeight" value="${profile.weightKg}"></div>
       </div>
-
       <label>Körperfettanteil % (optional, für genauere Berechnung)</label>
       <input type="number" step="0.1" id="fBodyFat" value="${profile.bodyFatPct ?? ""}" placeholder="unbekannt">
-
-      <label>Aktivitätslevel</label>
-      <select id="fActivity">
-        ${Object.entries(ActivityLevels).map(([val, label]) =>
-          `<option value="${val}" ${Number(val) === profile.activity ? "selected" : ""}>${esc(label)}</option>`
-        ).join("")}
-      </select>
-
+    `,
+    goal: `
       <label>Ziel</label>
       <select id="fGoal">
-        ${Object.entries(Goals).map(([val, label]) =>
-          `<option value="${val}" ${val === profile.goal ? "selected" : ""}>${esc(label)}</option>`
-        ).join("")}
+        ${Object.entries(Goals).map(([val, label]) => `<option value="${val}" ${val === profile.goal ? "selected" : ""}>${esc(label)}</option>`).join("")}
       </select>
-
       <div id="deficitWrap" style="${profile.goal === "lose" ? "" : "display:none"}">
         <label>Kaloriendefizit %</label>
         <select id="fDeficit">
           ${[10, 15, 20, 25].map(v => `<option value="${v}" ${v === profile.deficitPct ? "selected" : ""}>${v}%</option>`).join("")}
         </select>
       </div>
-
+      <label>Aktivitätslevel</label>
+      <select id="fActivity">
+        ${Object.entries(ActivityLevels).map(([val, label]) => `<option value="${val}" ${Number(val) === profile.activity ? "selected" : ""}>${esc(label)}</option>`).join("")}
+      </select>
+    `,
+    diet: `
+      <label>Ernährungsform</label>
+      <select id="fDietType">
+        ${Object.entries(DIET_TYPES).map(([k, d]) => `<option value="${k}" ${k === profile.dietType ? "selected" : ""}>${esc(d.label)}</option>`).join("")}
+      </select>
+      <p class="hint" style="margin-top:-2px">Bestimmt die Vorschlagswerte für die Ampel (frei anpassbar).</p>
       <div class="field-row">
-        <div>
-          <label>Netto-KH-Limit /Tag</label>
+        <div><label>Ampel grün bis (g Netto-KH/100g)</label><input type="number" step="0.5" id="fGradeGreen" value="${profile.gradeThresholds.green}"></div>
+        <div><label>Ampel gelb bis (g Netto-KH/100g)</label><input type="number" step="0.5" id="fGradeYellow" value="${profile.gradeThresholds.yellow}"></div>
+      </div>
+      <p class="hint" style="margin-top:-8px">Darüber gilt ein Produkt als rot/nicht empfohlen.</p>
+    `,
+    limits: `
+      <div class="field-row">
+        <div><label>Netto-KH-Limit /Tag</label>
           <select id="fCarbLimit">
             ${[20, 30, 50, 75, 100, 130].map(v => `<option value="${v}" ${v === profile.netCarbLimitG ? "selected" : ""}>${v} g</option>`).join("")}
           </select>
         </div>
-        <div>
-          <label>Eiweiß g/kg (fettfreie Masse)</label>
-          <input type="number" step="0.1" id="fProteinFactor" value="${profile.proteinFactor}">
-        </div>
+        <div><label>Eiweiß g/kg (fettfreie Masse)</label><input type="number" step="0.1" id="fProteinFactor" value="${profile.proteinFactor}"></div>
       </div>
-
       <label>Trinkziel /Tag (ml)</label>
       <input type="number" step="100" min="0" id="fWaterTarget" value="${profile.waterTargetMl ?? 2500}">
+    `,
+  }[key];
 
-      <div class="divider"></div>
-
-      <label>Ernährungsform</label>
-      <select id="fDietType">
-        ${Object.entries(DIET_TYPES).map(([key, d]) =>
-          `<option value="${key}" ${key === profile.dietType ? "selected" : ""}>${esc(d.label)}</option>`
-        ).join("")}
-      </select>
-      <p class="hint" style="margin-top:-2px">Bestimmt die Vorschlagswerte für die Ampel unten (frei anpassbar).</p>
-
-      <div class="field-row">
-        <div>
-          <label>Ampel grün bis (g Netto-KH/100g)</label>
-          <input type="number" step="0.5" id="fGradeGreen" value="${profile.gradeThresholds.green}">
-        </div>
-        <div>
-          <label>Ampel gelb bis (g Netto-KH/100g)</label>
-          <input type="number" step="0.5" id="fGradeYellow" value="${profile.gradeThresholds.yellow}">
-        </div>
-      </div>
-      <p class="hint" style="margin-top:-8px">Darüber gilt ein Produkt als rot/nicht empfohlen. Gilt für Scan, Suche und Rezepte.</p>
-
-      <button class="btn" id="saveProfileBtn" style="margin-top:14px">Speichern</button>
-    </div>
-
-    <div class="card">
-      <h2>Berechnete Ziele</h2>
-      <div class="grid-2">
-        <div class="stat"><div class="val">${targets.kcal}</div><div class="lbl">kcal/Tag</div></div>
-        <div class="stat"><div class="val">${targets.netCarbG} g</div><div class="lbl">Netto-KH</div></div>
-        <div class="stat"><div class="val">${targets.fatG} g</div><div class="lbl">Fett</div></div>
-        <div class="stat"><div class="val">${targets.proteinG} g</div><div class="lbl">Eiweiß</div></div>
-      </div>
-      <p class="hint">Grundumsatz ${targets.bmr} kcal · Gesamtumsatz ${targets.tdee} kcal</p>
+  const titles = { body: "Körperdaten", goal: "Ziel & Aktivität", diet: "Ernährungsform", limits: "Grenzwerte" };
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:10px">${esc(titles[key])}</h2>
+      ${bodyHtml}
+      <button type="button" class="btn" id="groupDone" style="margin-top:16px">Fertig</button>
     </div>
   `;
+  document.body.appendChild(overlay);
 
-  formWrap.querySelector("#fGoal").addEventListener("change", (e) => {
-    formWrap.querySelector("#deficitWrap").style.display = e.target.value === "lose" ? "" : "none";
-  });
+  const save = (patch) => { Store.updateProfile(profile.id, patch); onChanged(); };
+  const val = (id) => overlay.querySelector(id)?.value;
+  const num = (id, fallback) => { const n = parseFloat(val(id)); return Number.isFinite(n) ? n : fallback; };
 
-  formWrap.querySelector("#fDietType").addEventListener("change", (e) => {
-    const d = DIET_TYPES[e.target.value];
-    if (!d) return;
-    formWrap.querySelector("#fGradeGreen").value = d.defaultThresholds.green;
-    formWrap.querySelector("#fGradeYellow").value = d.defaultThresholds.yellow;
-  });
-
-  formWrap.querySelector("#saveProfileBtn").addEventListener("click", () => {
-    const val = (id) => formWrap.querySelector(id).value;
-    const bodyFatRaw = val("#fBodyFat").trim();
-    Store.updateProfile(profile.id, {
-      name: val("#fName").trim() || profile.name,
-      sex: val("#fSex"),
-      age: parseInt(val("#fAge"), 10) || profile.age,
-      heightCm: parseFloat(val("#fHeight")) || profile.heightCm,
-      weightKg: parseFloat(val("#fWeight")) || profile.weightKg,
-      bodyFatPct: bodyFatRaw ? parseFloat(bodyFatRaw) : null,
-      activity: parseFloat(val("#fActivity")),
-      goal: val("#fGoal"),
-      deficitPct: parseInt(val("#fDeficit"), 10) || profile.deficitPct,
-      netCarbLimitG: parseInt(val("#fCarbLimit"), 10),
-      proteinFactor: parseFloat(val("#fProteinFactor")) || profile.proteinFactor,
-      waterTargetMl: parseInt(val("#fWaterTarget"), 10) || profile.waterTargetMl,
-      dietType: val("#fDietType"),
-      gradeThresholds: {
-        green: parseFloat(val("#fGradeGreen")) || profile.gradeThresholds.green,
-        yellow: parseFloat(val("#fGradeYellow")) || profile.gradeThresholds.yellow,
-      },
+  if (key === "body") {
+    overlay.querySelector("#fSex").addEventListener("change", () => save({ sex: val("#fSex") }));
+    overlay.querySelector("#fAge").addEventListener("change", () => save({ age: num("#fAge", profile.age) }));
+    overlay.querySelector("#fHeight").addEventListener("change", () => save({ heightCm: num("#fHeight", profile.heightCm) }));
+    overlay.querySelector("#fWeight").addEventListener("change", () => save({ weightKg: num("#fWeight", profile.weightKg) }));
+    overlay.querySelector("#fBodyFat").addEventListener("change", () => {
+      const raw = val("#fBodyFat").trim();
+      save({ bodyFatPct: raw ? parseFloat(raw) : null });
     });
-    showToast("Profil gespeichert");
-    onProfileChanged?.();
-    renderProfileForm(container, onProfileChanged);
-  });
+  } else if (key === "goal") {
+    overlay.querySelector("#fGoal").addEventListener("change", () => {
+      overlay.querySelector("#deficitWrap").style.display = val("#fGoal") === "lose" ? "" : "none";
+      save({ goal: val("#fGoal") });
+    });
+    overlay.querySelector("#fDeficit").addEventListener("change", () => save({ deficitPct: num("#fDeficit", profile.deficitPct) }));
+    overlay.querySelector("#fActivity").addEventListener("change", () => save({ activity: num("#fActivity", profile.activity) }));
+  } else if (key === "diet") {
+    overlay.querySelector("#fDietType").addEventListener("change", () => {
+      const d = DIET_TYPES[val("#fDietType")];
+      if (d) {
+        overlay.querySelector("#fGradeGreen").value = d.defaultThresholds.green;
+        overlay.querySelector("#fGradeYellow").value = d.defaultThresholds.yellow;
+      }
+      save({
+        dietType: val("#fDietType"),
+        gradeThresholds: { green: num("#fGradeGreen", profile.gradeThresholds.green), yellow: num("#fGradeYellow", profile.gradeThresholds.yellow) },
+      });
+    });
+    const saveThresholds = () => save({ gradeThresholds: { green: num("#fGradeGreen", profile.gradeThresholds.green), yellow: num("#fGradeYellow", profile.gradeThresholds.yellow) } });
+    overlay.querySelector("#fGradeGreen").addEventListener("change", saveThresholds);
+    overlay.querySelector("#fGradeYellow").addEventListener("change", saveThresholds);
+  } else if (key === "limits") {
+    overlay.querySelector("#fCarbLimit").addEventListener("change", () => save({ netCarbLimitG: num("#fCarbLimit", profile.netCarbLimitG) }));
+    overlay.querySelector("#fProteinFactor").addEventListener("change", () => save({ proteinFactor: num("#fProteinFactor", profile.proteinFactor) }));
+    overlay.querySelector("#fWaterTarget").addEventListener("change", () => save({ waterTargetMl: num("#fWaterTarget", profile.waterTargetMl ?? 2500) }));
+  }
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#groupDone").addEventListener("click", close);
+  keepActionsInView(overlay);
 }
 
 // Chrome erlaubt beim Teilen nur eine Positivliste von Dateitypen (Audio, Bild, Text, Video)
