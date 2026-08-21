@@ -224,7 +224,6 @@ function renderEditor(container, recipeId) {
 
     <h2 class="section-title">Zutaten</h2>
     <div id="ingredientList"></div>
-    <button class="btn ghost" id="ingToShoppingBtn" style="margin-bottom:14px">🛒 Zutaten auf Einkaufsliste</button>
 
     <div class="card">
       <label for="ingSearchInput">Zutat suchen und hinzufügen</label>
@@ -233,11 +232,9 @@ function renderEditor(container, recipeId) {
       ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">📷 Zutat scannen</button>` : ""}
       <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">✏️ Zutat manuell eintragen</button>
       <div id="manualIngWrap" style="display:none;margin-top:10px"></div>
-    </div>
 
-    <h2 class="section-title">Aus Bild oder Text importieren</h2>
-    <div class="card">
-      <p class="hint" style="margin-top:0">Foto einer Zutatenliste (z.B. Screenshot) einlesen, oder Text direkt einfügen. Ergebnis kannst du danach prüfen und korrigieren.${hasApiKey() ? " Optional per KI (Gemini) erkennen lassen — genauer bei unbekannten Zutaten, braucht aber Internet." : ""}</p>
+      <hr class="klar-divider">
+      <p class="hint" style="margin-top:0">Ganze Zutatenliste aus Foto oder Text übernehmen. Ergebnis kannst du danach prüfen und korrigieren.${hasApiKey() ? " Optional per KI (Gemini) erkennen lassen — genauer bei unbekannten Zutaten, braucht aber Internet." : ""}</p>
       <input type="file" id="recipeImageInput" accept="image/*" style="display:none">
       <div class="btn-row">
         <button class="btn secondary" id="importImageBtn">📷 Bild wählen</button>
@@ -249,7 +246,10 @@ function renderEditor(container, recipeId) {
 
     <div id="reviewWrap"></div>
 
-    <button class="btn ghost" id="deleteRecipeBtn" style="margin-top:20px">🗑️ Rezept löschen</button>
+    <div class="btn-row" style="margin-top:20px">
+      <button class="btn secondary" id="ingToShoppingBtn">🛒 Auf Einkaufsliste</button>
+      <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">🗑️ Löschen</button>
+    </div>
   `;
 
   const closeEditor = bindBackClose(() => {
@@ -372,24 +372,42 @@ function renderIngredientList(container, recipeId) {
     el.innerHTML = `<div class="empty-state"><span class="emoji">🥄</span>Noch keine Zutaten. Unten suchen, manuell eintragen oder importieren.</div>`;
     return;
   }
-  el.innerHTML = recipe.ingredients.map(ing => {
+
+  const totalGrams = recipe.ingredients.reduce((s, i) => s + (i.grams || 0), 0);
+  const withNc = recipe.ingredients.map(ing => {
     const netCarbs100 = calcNetCarbs(ing.per100, { subtractFiber: ing.likelyUsLabel });
     const scale = (ing.grams || 0) / 100;
-    const kcal = ing.per100.kcal != null ? Math.round(ing.per100.kcal * scale) : null;
-    const nc = netCarbs100 != null ? +(netCarbs100 * scale).toFixed(1) : null;
-    return `
-      <div class="list-item" data-id="${ing.id}">
-        <div class="info">
-          <div class="name">${esc(ing.name)}</div>
-          <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g Netto-KH</div>
-        </div>
-        <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" style="width:64px;text-align:right;min-height:36px">
-        <span class="hint" style="margin:0 4px">g</span>
-        <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
-        <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
-      </div>
-    `;
-  }).join("");
+    return { ing, nc: netCarbs100 != null ? +(netCarbs100 * scale).toFixed(1) : null };
+  });
+  // Die Zutat mit dem größten Netto-KH-Anteil bekommt einen eigenen Hinweis — beim Anpassen
+  // eines Rezepts ist genau das die Frage: welche Zutat treibt die Kohlenhydrate.
+  const topKcId = withNc.reduce((best, cur) =>
+    cur.nc != null && (best == null || cur.nc > best.nc) ? cur : best, null)?.ing.id;
+
+  el.innerHTML = `
+    <div class="klar-eyebrow" style="margin:0 2px 8px">${recipe.ingredients.length} · ${totalGrams} g</div>
+    <div class="klar-list-card">
+      ${withNc.map(({ ing, nc }) => {
+        const kcal = ing.per100.kcal != null ? Math.round(ing.per100.kcal * (ing.grams || 0) / 100) : null;
+        const share = totalGrams > 0 ? Math.round((ing.grams || 0) / totalGrams * 100) : null;
+        const contribution = ing.id === topKcId && nc > 0
+          ? "größte KH-Quelle"
+          : share != null ? `${share}% des Gewichts` : "";
+        return `
+          <div class="list-item" data-id="${ing.id}">
+            <div class="info">
+              <div class="name">${esc(ing.name)}</div>
+              <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
+            </div>
+            <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" style="width:64px;text-align:right;min-height:36px">
+            <span class="hint" style="margin:0 4px">g</span>
+            <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
+            <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 
   const refresh = () => {
     renderIngredientList(container, recipeId);
