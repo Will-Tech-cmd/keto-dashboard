@@ -641,6 +641,20 @@ body[data-design="klar"] .fab-btn {
 .klar-diff-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; }
 .klar-diff-head span:first-child { font-weight: 700; }
 
+/* ±10g-Stepper für Zutatenmengen im Rezept-Editor — kompakter als der 44px-Stepper aus dem
+   Onboarding, weil daneben noch ✎ und 🗑️ in derselben Zeile Platz brauchen. Das Zahlenfeld
+   bleibt ein echtes <input>, direkte Eingabe funktioniert also weiterhin. */
+.klar-ing-stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.klar-ing-stepper-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg-elevated); color: var(--text); font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; padding: 0;
+}
+.klar-ing-stepper input.ing-grams-input {
+  width: 46px; min-height: 30px; text-align: center; padding: 0 2px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px;
+}
+
 .klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
 .klar-switch.on { background: var(--accent); }
@@ -775,6 +789,17 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
 .klar-result-unit { font-size: 15px; font-weight: 700; color: rgba(255,255,255,.6); }
 .klar-result-macros { font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.75); margin-top: 10px; }
 .klar-result-total { font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.5); margin-top: 6px; }
+.klar-result-servings-btn {
+  margin-top: 12px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08);
+  color: #fff; font-weight: 700; font-size: 12px; cursor: pointer;
+}
+
+/* Rezept-Editor: Name/Portionen im Kopf statt eigener Karte — ✎ öffnet ein kleines Sheet. */
+.klar-recipe-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.klar-recipe-head-name { flex: 1; min-width: 0; }
+.klar-recipe-title { font-size: 19px; font-weight: 800; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.klar-recipe-status { font-size: 11.5px; font-weight: 700; color: var(--accent-ink); margin-top: 2px; }
 
 /* ---------- „Klar": Ringraster auf der Startseite (4 Zielwerte + Wasser in einer Karte) ---------- */
 .klar-head-actions { display: flex; gap: 8px; align-items: center; flex: none; }

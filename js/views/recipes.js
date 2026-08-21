@@ -207,19 +207,16 @@ function renderEditor(container, recipeId) {
   reviewRows = null;
 
   container.innerHTML = `
-    <div class="editor-topbar">
-      <button class="btn ghost" id="backBtn" style="padding:0 4px">← Zurück</button>
-      <button class="btn" id="saveBtn">✓ Speichern</button>
+    <div class="klar-recipe-head">
+      <button class="klar-back-btn" id="backBtn" aria-label="Zurück">‹</button>
+      <div class="klar-recipe-head-name">
+        <div class="klar-recipe-title">${esc(recipe.name)}</div>
+        <div class="klar-recipe-status" id="recStatus">Gespeichert</div>
+      </div>
+      <button type="button" class="klar-icon-btn" id="editNameBtn" title="Name & Portionen bearbeiten">✎</button>
     </div>
 
-    <div class="card">
-      <label for="recName">Name</label>
-      <input type="text" id="recName" value="${esc(recipe.name)}">
-      <label for="recServings">Portionen</label>
-      <input type="number" id="recServings" value="${recipe.servings}" min="1" step="1">
-    </div>
-
-    <div class="card" id="totalsCard"></div>
+    <div class="klar-result-card" id="totalsCard"></div>
     <button class="btn secondary" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
 
     <h2 class="section-title">Zutaten</h2>
@@ -258,22 +255,11 @@ function renderEditor(container, recipeId) {
   });
   container.querySelector("#backBtn").addEventListener("click", closeEditor);
 
-  container.querySelector("#saveBtn").addEventListener("click", () => {
-    const name = container.querySelector("#recName").value.trim() || "Rezept";
-    const s = parseInt(container.querySelector("#recServings").value, 10);
-    updateRecipeMeta(recipeId, { name, servings: s > 0 ? s : 1 });
-    renderTotals(container, recipeId);
-    showToast("Rezept gespeichert");
-  });
-
-  container.querySelector("#recName").addEventListener("change", (e) => {
-    updateRecipeMeta(recipeId, { name: e.target.value.trim() || "Rezept" });
-  });
-  container.querySelector("#recServings").addEventListener("change", (e) => {
-    const s = parseInt(e.target.value, 10);
-    updateRecipeMeta(recipeId, { servings: s > 0 ? s : 1 });
+  const openNameSheet = () => openRecipeMetaSheet(recipeId, () => {
+    container.querySelector(".klar-recipe-title").textContent = Store.getRecipe(recipeId).name;
     renderTotals(container, recipeId);
   });
+  container.querySelector("#editNameBtn").addEventListener("click", openNameSheet);
 
   container.querySelector("#deleteRecipeBtn").addEventListener("click", () => {
     if (confirm(`Rezept „${recipe.name}" wirklich löschen?`)) {
@@ -291,12 +277,8 @@ function renderEditor(container, recipeId) {
   });
 
   container.querySelector("#addTodayBtn").addEventListener("click", () => {
-    // Name und Portionen erst festschreiben: wer den Wert gerade getippt hat und direkt hier
-    // tippt, hätte sonst je nach Gerät noch den alten Stand im Dialog.
-    const name = container.querySelector("#recName").value.trim() || "Rezept";
-    const s = parseInt(container.querySelector("#recServings").value, 10);
-    updateRecipeMeta(recipeId, { name, servings: s > 0 ? s : 1 });
-    renderTotals(container, recipeId);
+    // Name/Portionen speichern jetzt sofort im Meta-Sheet (siehe openRecipeMetaSheet) — der
+    // Store ist hier immer schon aktuell, ein Nachtragen vor dem Öffnen ist nicht mehr nötig.
     const current = Store.getRecipe(recipeId);
     if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
     openServingsModal(current);
@@ -351,7 +333,50 @@ function renderTotals(container, recipeId) {
     </div>
     <div class="klar-result-macros">${perServing.kcal ?? "–"} kcal · F ${perServing.fat ?? "–"} g · E ${perServing.protein ?? "–"} g</div>
     <div class="klar-result-total">Gesamt: ${round1(totals.kcal) ?? "–"} kcal · ${round1(totals.netCarbs) ?? "–"} g Netto-KH bei ${recipe.servings} Portion(en)</div>
+    <button type="button" class="klar-result-servings-btn" id="servingsBtn">${recipe.servings} Portionen ›</button>
   `;
+  card.querySelector("#servingsBtn").addEventListener("click", () => {
+    openRecipeMetaSheet(recipeId, () => {
+      container.querySelector(".klar-recipe-title").textContent = Store.getRecipe(recipeId).name;
+      renderTotals(container, recipeId);
+    });
+  });
+}
+
+/** Kleines Sheet für Name & Portionen — ersetzt die eigene Karte im Editor-Kopf. Speichert bei
+ * jeder Änderung sofort (kein „Speichern"-Knopf, beide Felder speicherten schon vorher bei
+ * change), `onSaved` hält Titel/Ergebniskarte im Hintergrund aktuell. */
+function openRecipeMetaSheet(recipeId, onSaved) {
+  const recipe = Store.getRecipe(recipeId);
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:10px">Name & Portionen</h2>
+      <label for="recName">Name</label>
+      <input type="text" id="recName" value="${esc(recipe.name)}">
+      <label for="recServings">Portionen</label>
+      <input type="number" id="recServings" value="${recipe.servings}" min="1" step="1">
+      <button type="button" class="btn" id="metaDone" style="margin-top:16px">Fertig</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#recName").addEventListener("change", (e) => {
+    updateRecipeMeta(recipeId, { name: e.target.value.trim() || "Rezept" });
+    onSaved();
+  });
+  overlay.querySelector("#recServings").addEventListener("change", (e) => {
+    const s = parseInt(e.target.value, 10);
+    updateRecipeMeta(recipeId, { servings: s > 0 ? s : 1 });
+    onSaved();
+  });
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#metaDone").addEventListener("click", close);
+  keepActionsInView(overlay);
+  overlay.querySelector("#recName").focus();
 }
 
 /**
@@ -399,8 +424,11 @@ function renderIngredientList(container, recipeId) {
               <div class="name">${esc(ing.name)}</div>
               <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
             </div>
-            <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" style="width:64px;text-align:right;min-height:36px">
-            <span class="hint" style="margin:0 4px">g</span>
+            <div class="klar-ing-stepper">
+              <button type="button" class="klar-ing-stepper-btn" data-action="minus" aria-label="10 g weniger">−</button>
+              <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
+              <button type="button" class="klar-ing-stepper-btn" data-action="plus" aria-label="10 g mehr">+</button>
+            </div>
             <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
             <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
           </div>
@@ -416,9 +444,20 @@ function renderIngredientList(container, recipeId) {
 
   el.querySelectorAll(".list-item").forEach(row => {
     const ingId = row.dataset.id;
-    row.querySelector(".ing-grams-input").addEventListener("change", (e) => {
+    const gramsInput = row.querySelector(".ing-grams-input");
+    gramsInput.addEventListener("change", (e) => {
       const g = parseFloat(e.target.value);
       updateIngredient(recipeId, ingId, { grams: g >= 0 ? g : 0 });
+      refresh();
+    });
+    row.querySelector('[data-action="minus"]').addEventListener("click", () => {
+      const g = Math.max(0, (parseFloat(gramsInput.value) || 0) - 10);
+      updateIngredient(recipeId, ingId, { grams: g });
+      refresh();
+    });
+    row.querySelector('[data-action="plus"]').addEventListener("click", () => {
+      const g = (parseFloat(gramsInput.value) || 0) + 10;
+      updateIngredient(recipeId, ingId, { grams: g });
       refresh();
     });
     row.querySelector('[data-action="edit"]').addEventListener("click", () => {
