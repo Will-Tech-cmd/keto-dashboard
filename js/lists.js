@@ -2,6 +2,7 @@
 // Verlauf) sowie die Auswertungsseite.
 import { Store, dateKeyOf } from "./store.js";
 import { getTargetsForDate } from "./profiles.js";
+import { parseServingGrams } from "./keto.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { ketoGrade } from "./keto.js";
 import { openProductEditor } from "./product-editor.js";
@@ -116,6 +117,7 @@ function renderProductRows(body, listName) {
     return;
   }
 
+  const isNoGo = listName === "noGo";
   rowsEl.innerHTML = `<div class="klar-list-card">${items.map(item => {
     const nutri = nutriOf(item, listName);
     const meta = [item.brand || "", metaLine(nutri)].filter(Boolean).join(" · ");
@@ -127,10 +129,9 @@ function renderProductRows(body, listName) {
             <div class="name">${esc(item.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
-          <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
-          <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
+          ${isNoGo ? "" : `<button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>`}
         </div>
-        ${detailHtml(nutri)}
+        ${isNoGo ? noGoDetailHtml(item, nutri) : detailHtml(nutri)}
       </div>
     `;
   }).join("")}</div>`;
@@ -144,18 +145,18 @@ function renderProductRows(body, listName) {
       renderProductList(body, listName);
       showToast("Entfernt");
     });
-    entry.querySelector('[data-action="cart"]').addEventListener("click", (e) => {
+    entry.querySelector('[data-action="cart"]')?.addEventListener("click", (e) => {
       e.stopPropagation();
       const item = Store.get()[listName].find(e2 => e2.barcode === barcode);
       Store.addShoppingItem(item.name, barcode);
       showToast("Auf Einkaufsliste gesetzt");
     });
     entry.querySelector(".list-item").addEventListener("click", () => toggleDetail(entry));
-    entry.querySelector('[data-action="eat"]').addEventListener("click", async () => {
+    entry.querySelector('[data-action="eat"]')?.addEventListener("click", async () => {
       const product = await resolveProduct(barcode);
       if (product) openQuantityModal(product);
     });
-    entry.querySelector('[data-action="edit"]').addEventListener("click", async () => {
+    entry.querySelector('[data-action="edit"]')?.addEventListener("click", async () => {
       const product = await resolveProduct(barcode);
       if (!product) return;
       openProductEditor(product, (saved) => {
@@ -163,7 +164,48 @@ function renderProductRows(body, listName) {
         renderProductRows(body, listName);
       });
     });
+    // No-Go: "Zu Favoriten" verschiebt den Eintrag statt ihn einzutragen — der Weg zurück,
+    // wenn sich die Einschätzung ändert.
+    entry.querySelector('[data-action="toFavorites"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const item = Store.get().noGo.find(e2 => e2.barcode === barcode);
+      Store.addToList("favorites", { ...item, addedAt: Date.now() });
+      renderProductList(body, "noGo");
+      showToast("Zu Favoriten verschoben");
+    });
   });
+}
+
+/**
+ * Aufklappbereich für No-Go: kein 🛒 (etwas auf die Einkaufsliste zu setzen, das man meidet,
+ * wäre widersprüchlich), stattdessen "Zu Favoriten" als Weg zurück, falls sich die Einschätzung
+ * ändert — plus eine Zeile, die die Portionsrechnung nennt, damit nachvollziehbar bleibt,
+ * warum es ein No-Go ist.
+ */
+function noGoDetailHtml(item, nutri) {
+  const profile = Store.getActiveProfile();
+  const targets = getTargetsForDate(profile, dateKeyOf(Date.now()));
+  const product = getProductOffline(item.barcode);
+  const grams = product ? parseServingGrams(product.servingSize) : null;
+  let portionHint = "";
+  if (nutri?.netCarbs != null && grams) {
+    const perServing = round1(nutri.netCarbs * grams / 100);
+    portionHint = perServing > targets.netCarbG
+      ? `<p class="hint">Eine Portion (${grams} g) wäre ${perServing} g Netto-KH — mehr als dein Tageslimit (${targets.netCarbG} g).</p>`
+      : `<p class="hint">Eine Portion (${grams} g) wäre ${perServing} g Netto-KH.</p>`;
+  }
+  return `
+    <div class="list-detail" hidden>
+      ${nutriTilesHtml(nutri)}
+      ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor.</p>`}
+      ${portionHint}
+      <div class="btn-row" style="margin-top:10px">
+        <button class="icon-btn" data-action="edit" title="Werte korrigieren">✎</button>
+        <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+        <button class="btn" data-action="toFavorites" style="flex:2">☆ Zu Favoriten</button>
+      </div>
+    </div>
+  `;
 }
 
 /** Klappt die Nährwertkacheln einer Zeile auf/zu — immer nur eine gleichzeitig. */
@@ -205,15 +247,16 @@ function metaLine(nutri) {
 }
 
 /** Aufklappbereich einer Listenzeile: Kacheln, optionale Zusatzzeile, Aktionen. */
-function detailHtml(nutri, extraHint = "") {
+function detailHtml(nutri, extraHint = "", { showRemove = true } = {}) {
   return `
     <div class="list-detail" hidden>
       ${nutriTilesHtml(nutri)}
       ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
       ${extraHint}
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" data-action="edit">✎ Werte</button>
-        <button class="btn" data-action="eat">Eintragen</button>
+        <button class="icon-btn" data-action="edit" title="Werte korrigieren">✎</button>
+        ${showRemove ? `<button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>` : ""}
+        <button class="btn" data-action="eat" style="flex:2">Eintragen</button>
       </div>
     </div>
   `;
@@ -413,7 +456,7 @@ function renderHistoryList(el, items) {
             title="${isFav ? "Favorit entfernen" : "Als Favorit merken"}"
             aria-pressed="${isFav}">${isFav ? "★" : "☆"}</button>
         </div>
-        ${detailHtml(nutri, `<p class="hint">${esc(entry.brand || "")}${entry.brand ? " · " : ""}gesucht von ${esc(entry.profileName)}</p>`)}
+        ${detailHtml(nutri, `<p class="hint">${esc(entry.brand || "")}${entry.brand ? " · " : ""}gesucht von ${esc(entry.profileName)}</p>`, { showRemove: false })}
       </div>
     `);
   }
@@ -502,8 +545,9 @@ function renderEvaluation(body, goToTab) {
   }
 
   const withData = days.filter(d => d.hasEntries);
-  const avgKcal = withData.length ? Math.round(withData.reduce((s, d) => s + d.totals.kcal, 0) / withData.length) : null;
-  const avgCarbs = withData.length ? round1(withData.reduce((s, d) => s + d.totals.netCarbs, 0) / withData.length) : null;
+  const avg = (field) => withData.length
+    ? round1(withData.reduce((s, d) => s + d.totals[field], 0) / withData.length)
+    : null;
   const daysInTarget = withData.filter(d => d.totals.netCarbs <= d.targets.netCarbG).length;
 
   let streak = 0, maxStreak = 0;
@@ -512,24 +556,38 @@ function renderEvaluation(body, goToTab) {
     else streak = 0;
   }
 
+  // Die Frage der Seite ist "halte ich mein Limit?" — die Quote steht deshalb groß voran,
+  // die Serie als Pille daneben, statt vier gleich große Kacheln nebeneinanderzustellen.
   body.innerHTML = `
-    <div class="grid-2" style="margin-bottom:14px">
-      <div class="stat"><div class="val">${avgKcal ?? "–"}</div><div class="lbl">Ø kcal/Tag</div></div>
-      <div class="stat"><div class="val">${avgCarbs ?? "–"} g</div><div class="lbl">Ø Netto-KH/Tag</div></div>
-      <div class="stat"><div class="val">${daysInTarget}/${withData.length}</div><div class="lbl">Tage im Netto-KH-Ziel</div></div>
-      <div class="stat"><div class="val">${maxStreak}</div><div class="lbl">Längste Serie im Ziel</div></div>
+    <div class="klar-card" style="margin-bottom:14px">
+      <div class="klar-card-head">
+        <span class="klar-eyebrow">30 Tage · Im Netto-KH-Ziel</span>
+        ${maxStreak > 0 ? `<span class="klar-pill-btn" style="color:var(--warm)">Serie ${maxStreak} ${maxStreak === 1 ? "Tag" : "Tage"}</span>` : ""}
+      </div>
+      <div class="klar-result-main" style="margin-top:2px">
+        <span class="klar-result-value">${daysInTarget}</span>
+        <span class="klar-result-unit">von ${withData.length} Tagen mit Einträgen</span>
+      </div>
+      ${withData.length > 0 ? `
+        <div class="klar-tile-grid" style="margin-top:16px">
+          <div class="klar-tile"><div class="val">${avg("kcal") ?? "–"}</div><div class="lbl">kcal</div></div>
+          <div class="klar-tile"><div class="val">${avg("netCarbs") ?? "–"}</div><div class="lbl">g Netto-KH</div></div>
+          <div class="klar-tile"><div class="val">${avg("fat") ?? "–"}</div><div class="lbl">g Fett</div></div>
+          <div class="klar-tile"><div class="val">${avg("protein") ?? "–"}</div><div class="lbl">g Eiweiß</div></div>
+        </div>
+        <div class="klar-tile-unit">Ø pro Tag</div>
+      ` : `<p class="hint" style="text-align:center;margin:14px 0 0">Noch keine Einträge in den letzten 30 Tagen.</p>`}
     </div>
-    ${withData.length === 0
-      ? `<p class="hint" style="text-align:center;margin-bottom:10px">Noch keine Einträge in den letzten 30 Tagen.</p>`
-      : trendChartHtml(days)}
-    <button class="btn secondary" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
+    ${trendChartHtml(days)}
+    <button class="klar-pill-btn" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
+    <div class="klar-eyebrow" style="margin:0 2px 8px">Tage einzeln</div>
     <div id="evalDays"></div>
   `;
 
   body.querySelector("#analyzeBtn").addEventListener("click", openAnalysisModal);
 
   const daysEl = body.querySelector("#evalDays");
-  daysEl.innerHTML = [...days].reverse().map(evalDayRowHtml).join("");
+  daysEl.innerHTML = `<div class="klar-list-card">${[...days].reverse().map(evalDayRowHtml).join("")}</div>`;
 
   daysEl.querySelectorAll(".list-item[data-daykey]").forEach(row => {
     row.addEventListener("click", () => {
@@ -577,9 +635,12 @@ function trendChartHtml(days) {
   const targetY = y(todayTarget).toFixed(1);
 
   return `
-    <div class="card" style="margin-bottom:14px">
-      <h2 style="margin-bottom:2px">Netto-KH-Verlauf</h2>
-      <p class="hint" style="margin-top:0">Gestrichelt: heutiges Ziel (${todayTarget} g). Frühere Tage können ein anderes Ziel gehabt haben — rote Punkte lagen über ihrem jeweiligen Ziel.</p>
+    <div class="klar-card" style="margin-bottom:14px">
+      <div class="klar-card-head">
+        <span class="klar-eyebrow">Netto-KH-Verlauf</span>
+        <span class="klar-pill-btn">Ziel ${todayTarget} g</span>
+      </div>
+      <p class="hint" style="margin-top:0">Frühere Tage können ein anderes Ziel gehabt haben — Punkte in Terrakotta lagen über ihrem jeweiligen Ziel.</p>
       <svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="none" style="width:100%;height:120px">
         <line x1="${PAD}" y1="${targetY}" x2="${W - PAD}" y2="${targetY}" class="trend-target-line"></line>
         ${segments.map(seg => `<polyline points="${seg.join(" ")}" class="trend-line"></polyline>`).join("")}
@@ -612,11 +673,12 @@ function evalDayRowHtml(d) {
     <div class="list-item" data-daykey="${d.key}" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:6px">
       <div class="btn-row" style="justify-content:space-between;align-items:center">
         <span class="name">${esc(label)}</span>
-        <span class="meta">${round1(d.totals.kcal)} kcal · ${round1(d.totals.netCarbs)} g Netto-KH</span>
+        <span class="meta">${round1(d.totals.netCarbs)} / ${targets.netCarbG} g</span>
       </div>
       <div class="progress-track" style="height:6px">
         <div class="progress-fill ${over ? "over" : ""}" style="width:${pct}%"></div>
       </div>
+      <div class="meta">${round1(d.totals.kcal)} kcal · F ${round1(d.totals.fat)} · E ${round1(d.totals.protein)}</div>
     </div>
   `;
 }

@@ -97,7 +97,7 @@ async function renderStartKlar(container, goToTab, profile) {
   container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
 
   renderKlarWeekStrip(container, dateKey, refresh);
-  renderKlarMacros(container, totals, targets, goToTab);
+  renderKlarMacros(container, totals, targets, goToTab, profile);
   renderKlarWater(container, profile, dateKey, refresh);
   renderKlarMeals(container, entries, refresh);
 }
@@ -171,7 +171,7 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
   el.addEventListener("touchcancel", () => { startX = null; settle(); }, { passive: true });
 }
 
-function renderKlarMacros(container, totals, targets, goToTab) {
+function renderKlarMacros(container, totals, targets, goToTab, profile) {
   const el = container.querySelector("#klarMacros");
   const rings = [
     { label: "Kalorien", unit: "kcal", target: targets.kcal, consumed: totals.kcal },
@@ -190,7 +190,7 @@ function renderKlarMacros(container, totals, targets, goToTab) {
         <button type="button" class="klar-pill-btn" id="klarEvalBtn">📊 Auswertung</button>
       </div>
     </div>
-    <div class="klar-ring-grid">${rings.map(klarRingTile).join("")}</div>
+    ${ringDiagramHtml(rings, profile.ringStyle)}
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
     <div id="klarWater"></div>
   `;
@@ -199,8 +199,14 @@ function renderKlarMacros(container, totals, targets, goToTab) {
   el.querySelector("#klarScanBtn").addEventListener("click", () => goToTab("scan"));
 }
 
-/** Ein Ring je Zielwert — dieselbe Aufteilung wie früher in "Klassisch", nur in den
- * Maßen und Farben von "Klar". */
+/** Wählt zwischen den drei Anzeigeformen (Profil-Einstellung, siehe views/profile.js). */
+function ringDiagramHtml(rings, style) {
+  if (style === "row") return klarRingRowHtml(rings);
+  if (style === "concentric") return klarRingConcentricHtml(rings);
+  return `<div class="klar-ring-grid">${rings.map(klarRingTile).join("")}</div>`;
+}
+
+/** Ein Ring je Zielwert im 2×2-Raster — die ursprüngliche Darstellung. */
 function klarRingTile(r) {
   const over = r.consumed > r.target;
   const remaining = round1(Math.abs(r.target - r.consumed));
@@ -223,6 +229,68 @@ function klarRingTile(r) {
       <div class="klar-ring-label">${esc(r.label)}</div>
       <div class="klar-ring-total">${round1(r.consumed)} / ${r.target} ${esc(r.unit)}</div>
     </div>
+  `;
+}
+
+/** Dieselben vier Ringe, aber in einer Zeile statt 2×2 — kompakter, alle vier ohne Scrollen. */
+function klarRingRowHtml(rings) {
+  return `<div class="klar-ring-grid row">${rings.map(klarRingTile).join("")}</div>`;
+}
+
+// Eine Farbe je Bahn, von außen nach innen — dieselbe Reihenfolge wie überall sonst (Kalorien,
+// Netto-KH, Fett, Eiweiß). --sage kam mit dem Feinschliff dazu, war bis hierhin aber nirgends
+// im Einsatz.
+const CONCENTRIC_COLORS = ["var(--accent)", "var(--warm)", "var(--water-fg)", "var(--sage)"];
+const CONCENTRIC_RADII = [43, 34, 25, 16];
+const CONCENTRIC_CIRC = CONCENTRIC_RADII.map(r => 2 * Math.PI * r);
+
+/**
+ * Ein Ring, vier ineinanderliegende Bahnen — deutlich kompakter, dafür ist jede einzelne Bahn
+ * klein und für sich schwerer zu lesen. Die Mitte zeigt die Kalorien (die meistgelesene Zahl),
+ * der Rest steht als Legende darunter.
+ */
+function klarRingConcentricHtml(rings) {
+  const kcalRing = rings[0];
+  const kcalOver = kcalRing.consumed > kcalRing.target;
+  const kcalRemaining = round1(Math.abs(kcalRing.target - kcalRing.consumed));
+
+  const bands = rings.map((r, i) => {
+    const pct = r.target > 0 ? Math.min(r.consumed / r.target, 1) : 0;
+    const circ = CONCENTRIC_CIRC[i];
+    const offset = circ * (1 - pct);
+    const over = r.consumed > r.target;
+    return `
+      <circle class="klar-ring-track" cx="50" cy="50" r="${CONCENTRIC_RADII[i]}" stroke-width="7"></circle>
+      <circle cx="50" cy="50" r="${CONCENTRIC_RADII[i]}" stroke-width="7" fill="none" stroke-linecap="round"
+        stroke="${over ? "var(--warm)" : CONCENTRIC_COLORS[i]}"
+        stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+        transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .3s"></circle>
+    `;
+  }).join("");
+
+  const legend = rings.map((r, i) => {
+    const over = r.consumed > r.target;
+    const remaining = round1(Math.abs(r.target - r.consumed));
+    return `
+      <div class="klar-ring-legend-row">
+        <span class="klar-ring-legend-dot" style="background:${over ? "var(--warm)" : CONCENTRIC_COLORS[i]}"></span>
+        <span class="klar-ring-legend-label">${esc(r.label)}</span>
+        <span class="klar-ring-legend-val ${over ? "over" : ""}">${over ? "+" : ""}${remaining} ${esc(r.unit)} ${over ? "über" : "übrig"}</span>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="klar-ring-concentric">
+      <div class="klar-ring-wrap" style="width:160px;height:160px">
+        <svg viewBox="0 0 100 100" class="klar-ring-svg">${bands}</svg>
+        <div class="klar-ring-center">
+          <div class="klar-ring-value ${kcalOver ? "over" : ""}">${kcalOver ? "+" : ""}${kcalRemaining}</div>
+          <div class="klar-ring-sub">kcal ${kcalOver ? "über" : "übrig"}</div>
+        </div>
+      </div>
+    </div>
+    <div class="klar-ring-legend">${legend}</div>
   `;
 }
 

@@ -6,7 +6,7 @@ import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
-import { logConsumption, rankFrequentItems, MEAL_LABELS, mealShort } from "./consumption.js";
+import { logConsumption, rankFrequentItems, MEAL_LABELS, mealShort, suggestMeal } from "./consumption.js";
 import { logRecipeConsumption } from "./recipes.js";
 import { lookupProduct } from "./off.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
@@ -95,7 +95,7 @@ fabBtn.addEventListener("click", openEntrySheet);
 
 function openEntrySheet() {
   const profile = Store.getActiveProfile();
-  let meal = suggestMealNow();
+  let meal = suggestMeal();
 
   const overlay = document.createElement("div");
   overlay.className = "klar-sheet-overlay";
@@ -119,7 +119,7 @@ function openEntrySheet() {
 
         <div class="klar-meal-select-head">
           <span class="klar-eyebrow">Mahlzeit</span>
-          <span class="klar-water-value">${nowLabel()} · ${esc(mealShort(suggestMealNow()))} vorgeschlagen</span>
+          <span class="klar-water-value">${nowLabel()} vorgeschlagen</span>
         </div>
         <div class="klar-meal-segments">
           ${Object.keys(MEAL_LABELS).map(key => `
@@ -214,13 +214,6 @@ async function logQuickEntry(item, meal) {
   });
 }
 
-function suggestMealNow() {
-  const h = new Date().getHours(), m = new Date().getMinutes() / 60 + h;
-  if (m < 10.5) return "breakfast";
-  if (m < 15) return "lunch";
-  if (m < 21.5) return "dinner";
-  return "snack";
-}
 function mealPhrase(key) {
   return { breakfast: "zum Frühstück", lunch: "mittags", dinner: "am Abend", snack: "als Snack" }[key] || "";
 }

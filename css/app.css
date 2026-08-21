@@ -489,10 +489,10 @@ body[data-design="klar"] .fab-btn {
 .klar-ring-svg { width: 100%; height: 100%; }
 .klar-ring-track { fill: none; stroke: var(--divider); stroke-width: 10; }
 .klar-ring-progress { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .3s, stroke .3s; }
-.klar-ring-progress.over { stroke: var(--red-fg); }
+.klar-ring-progress.over { stroke: var(--warm); }
 .klar-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .klar-ring-value { font-size: 34px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--text); }
-.klar-ring-value.over { color: var(--red-fg); }
+.klar-ring-value.over { color: var(--warm); }
 .klar-ring-sub { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-top: 3px; }
 .klar-ring-info { flex: 1; min-width: 0; }
 .klar-macro-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -701,6 +701,24 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
 .klar-ring-total { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-top: 1px; }
 .klar-ring-tile .klar-ring-value { font-size: 20px; }
 .klar-ring-tile .klar-ring-sub { font-size: 10px; margin-top: 1px; }
+
+/* "Eine Reihe" — dieselben vier Ringe, aber nebeneinander statt 2×2. Deutlich kleiner, damit
+   alle vier auf schmalen Displays ohne Umbruch nebeneinander passen. */
+.klar-ring-grid.row { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.klar-ring-grid.row .klar-ring-wrap { width: 64px; height: 64px; }
+.klar-ring-grid.row .klar-ring-label { font-size: 10px; margin-top: 5px; }
+.klar-ring-grid.row .klar-ring-total { font-size: 9px; }
+.klar-ring-grid.row .klar-ring-value { font-size: 13px; }
+.klar-ring-grid.row .klar-ring-sub { font-size: 7.5px; margin-top: 0; }
+
+/* "Konzentrisch" — ein Ring, vier Bahnen, Legende darunter statt vier eigener Ringe. */
+.klar-ring-concentric { display: flex; justify-content: center; margin-top: 14px; }
+.klar-ring-legend { margin-top: 16px; display: flex; flex-direction: column; gap: 9px; }
+.klar-ring-legend-row { display: flex; align-items: center; gap: 9px; }
+.klar-ring-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.klar-ring-legend-label { font-weight: 700; font-size: 13px; flex: 1; min-width: 0; }
+.klar-ring-legend-val { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.klar-ring-legend-val.over { color: var(--warm); font-weight: 700; }
 
 /* Trennlinien zwischen den Mahlzeiten-Gruppen deutlicher — bei mehreren Mahlzeiten am Tag
    war die frühere, sehr helle Linie kaum zu sehen. */
@@ -916,6 +934,7 @@ body[data-design="klar"] .klar-list-card .list-entry.open .list-item { border-bo
 /* Favoritenstern im Verlauf: gefüllt = gemerkt, hohl = noch nicht. */
 body[data-design="klar"] .icon-btn.star { font-size: 17px; color: var(--warm); }
 body[data-design="klar"] .icon-btn.star.on { color: var(--warm); }
+body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 
 /* Alle Animationen (Ringe, Sheets, Toasts, Balken) für Bewegungsempfindlichkeit deaktivieren —
    nicht nur die Snackbar, die das bisher als einzige selbst berücksichtigte. */

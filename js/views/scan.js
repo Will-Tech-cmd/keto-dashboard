@@ -294,7 +294,7 @@ function renderResult(container, product) {
     ${hasFiber ? `
       <label class="btn-row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer">
         <input type="checkbox" id="fiberToggle" ${subtractFiber ? "checked" : ""} style="width:auto;min-height:auto;flex:none">
-        <span class="hint" style="margin:0">Ballaststoffe abziehen (${fmt(product.per100.fiber)} g)</span>
+        <span class="hint" style="margin:0">Etikett nach US-Konvention (${fmt(product.per100.fiber)} g Ballaststoffe zählen zu den KH)</span>
       </label>
     ` : ""}
     ${!evalResult.fiberAvailable ? `<p class="hint">ℹ️ Keine Ballaststoff-Angabe verfügbar.</p>` : ""}

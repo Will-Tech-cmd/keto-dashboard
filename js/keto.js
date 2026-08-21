@@ -118,14 +118,18 @@ export function evaluateProduct(product, profileTargets, opts = {}) {
  * Nutzt die einfachen Atwater-Faktoren (Kohlenhydrate 4, Fett 9, Eiweiß 4 kcal/g) auf die
  * deklarierten Werte, ohne Annahmen über EU/US-Ballaststoff-Konvention zu treffen — damit
  * funktioniert der Check unabhängig davon, ob Ballaststoffe in "carbs" enthalten sind oder
- * nicht. Bei mehr als 20% Abweichung ist ein Erfassungsfehler in den Rohdaten wahrscheinlich
+ * nicht. Ballaststoffe fließen zusätzlich mit ~2 kcal/g ein (Atwater-Faktor für Ballaststoffe):
+ * die deklarierte Energie schließt sie ein, auch wenn sie in "carbs" nicht mitgezählt werden
+ * (EU-Konvention) — ohne diesen Anteil meldet die Prüfung bei ballaststoffreichen Produkten
+ * (z.B. Flohsamenschalen) eine Abweichung, die es gar nicht gibt.
+ * Bei mehr als 20% Abweichung ist ein Erfassungsfehler in den Rohdaten wahrscheinlich
  * (z.B. Kommafehler oder vertauschte/doppelt gezählte Werte).
  * Liefert null, wenn plausibel oder Daten fehlen.
  */
 export function checkKcalPlausibility(per100) {
-  const { kcal, carbs, fat, protein } = per100;
+  const { kcal, carbs, fat, protein, fiber } = per100;
   if (kcal == null || carbs == null || fat == null || protein == null) return null;
-  const calculated = carbs * 4 + fat * 9 + protein * 4;
+  const calculated = carbs * 4 + (fiber || 0) * 2 + fat * 9 + protein * 4;
   if (calculated <= 0) return null;
   const deviationPct = Math.round((Math.abs(kcal - calculated) / calculated) * 100);
   if (deviationPct <= 20) return null;

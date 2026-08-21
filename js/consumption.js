@@ -12,22 +12,30 @@ export const MEAL_LABELS = {
   snack: "🍎 Snack",
 };
 
-/** Mahlzeitenname ohne Emoji — für Fließtext und knappe Knopfbeschriftungen. */
+/** Mahlzeitenname ohne Emoji — für Fließtext und knappe Knopfbeschriftungen. Fällt auf
+ * "Mahlzeit" zurück statt eine bestimmte vorzutäuschen, wenn keine gewählt ist (z.B. ältere
+ * Einträge ohne Zuordnung) — sonst stünde überall "Snack", ohne dass je Snack gewählt wurde. */
 export function mealShort(key) {
-  return { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" }[key] || "Snack";
+  return { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" }[key] || "Mahlzeit";
 }
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
 }
 
-/** Zeitgerechter Mahlzeiten-Vorschlag, nur als Startwert — jederzeit umstellbar. */
+/**
+ * Zeitgerechter Mahlzeiten-Vorschlag, nur als Startwert — jederzeit umstellbar.
+ * Die einzige Stelle, die das berechnet (Eintragen-Sheet, Scan-Ergebnis und beide
+ * Mengendialoge riefen früher zwei verschiedene Funktionen mit unterschiedlichen Grenzen auf —
+ * dadurch stand nachmittags praktisch überall "Snack", obwohl niemand Snack gewählt hatte).
+ * Snack ist die Ausnahme (spätnachts/früh), nicht ein eigenes Zeitfenster am Nachmittag.
+ */
 export function suggestMeal() {
-  const h = new Date().getHours();
-  if (h < 10) return "breakfast";
-  if (h < 14) return "lunch";
-  if (h < 18) return "snack";
-  return "dinner";
+  const h = new Date().getHours() + new Date().getMinutes() / 60;
+  if (h < 10.5) return "breakfast";
+  if (h < 15) return "lunch";
+  if (h < 21.5) return "dinner";
+  return "snack";
 }
 
 // ---------------------------------------------------------------------------

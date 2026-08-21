@@ -22,6 +22,7 @@ function defaultProfile(name) {
     gradeThresholds: { green: 5, yellow: 10 }, // g Netto-KH je 100g, frei editierbar
     waterTargetMl: 2500,    // Tagesziel Trinkmenge (frei editierbar), unabhängig von den Makro-Zielen
     appearance: "system",   // "system" | "light" | "dark" — schlägt bei explizitem Wert die Systemeinstellung
+    ringStyle: "rings",     // "rings" (2x2) | "row" (vier in einer Reihe) | "concentric" (ein Ring, vier Bahnen)
   };
 }
 
@@ -78,6 +79,7 @@ function migrate(parsed) {
     gradeThresholds: { green: 5, yellow: 10 },
     waterTargetMl: 2500,
     appearance: "system",
+    ringStyle: "rings",
     ...p,
   }));
   // Verbrauchs-Einträge von vor Tagesplanung/Mahlzeiten: dateKey aus dem Zeitstempel

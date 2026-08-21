@@ -5,6 +5,12 @@ import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
 import { showToast, esc, applyDesignTheme, bindBackClose, getAppVersion } from "../ui.js";
 
+const RING_STYLES = [
+  { key: "rings", label: "Vier Ringe" },
+  { key: "row", label: "Eine Reihe" },
+  { key: "concentric", label: "Konzentrisch" },
+];
+
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
 
@@ -70,6 +76,16 @@ export function renderProfile(container, onProfileChanged) {
       </div>
     </div>
 
+    <div class="card">
+      <h2>Nährwert-Diagramm</h2>
+      <p class="hint" style="margin-top:0">Wie die vier Tageswerte auf der Startseite dargestellt werden — gilt nur für dieses Profil.</p>
+      <div class="klar-meal-segments" id="ringStyleSegments" style="margin-top:10px">
+        ${RING_STYLES.map(rs => `
+          <button type="button" class="klar-meal-segment" data-style="${rs.key}">${esc(rs.label)}</button>
+        `).join("")}
+      </div>
+    </div>
+
     <p class="hint" style="text-align:center;margin-top:8px">
       Richtwerte auf Basis gängiger Formeln (Mifflin-St Jeor / Katch-McArdle) — keine medizinische Beratung.
       Bei gesundheitlichen Fragen bitte ärztlichen Rat einholen.
@@ -89,6 +105,7 @@ export function renderProfile(container, onProfileChanged) {
   wireExportImport(container);
   wireAiKey(container);
   renderAppearanceCard(container, onProfileChanged);
+  renderRingStyleCard(container, onProfileChanged);
   showAppVersion(container);
 }
 
@@ -126,6 +143,21 @@ function renderAppearanceCard(container, onProfileChanged) {
     Store.updateProfile(profile.id, { appearance: next });
     applyDesignTheme();
     renderProfile(container, onProfileChanged);
+  });
+}
+
+/** Wahl des Nährwert-Diagramms auf Start, je Profil — dieselbe Segment-Optik wie die
+ * Mahlzeit-Auswahl im Eintragen-Sheet. */
+function renderRingStyleCard(container, onProfileChanged) {
+  const profile = Store.getActiveProfile();
+  const wrap = container.querySelector("#ringStyleSegments");
+  wrap.querySelectorAll(".klar-meal-segment").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.style === (profile.ringStyle || "rings"));
+    btn.addEventListener("click", () => {
+      Store.updateProfile(profile.id, { ringStyle: btn.dataset.style });
+      onProfileChanged?.();
+      renderProfile(container, onProfileChanged);
+    });
   });
 }
 
@@ -335,6 +367,7 @@ const PROFILE_FIELD_LABELS = {
   bodyFatPct: "Körperfett", activity: "Aktivität", goal: "Ziel", deficitPct: "Kaloriendefizit",
   proteinFactor: "Eiweißfaktor", netCarbLimitG: "Netto-KH-Limit", dietType: "Ernährungsform",
   gradeThresholds: "Ampelgrenzen", waterTargetMl: "Trinkziel", appearance: "Erscheinungsbild",
+  ringStyle: "Nährwert-Diagramm",
 };
 const fieldLabel = (k) => PROFILE_FIELD_LABELS[k] || k;
 
