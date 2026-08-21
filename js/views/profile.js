@@ -371,12 +371,38 @@ const PROFILE_FIELD_LABELS = {
 };
 const fieldLabel = (k) => PROFILE_FIELD_LABELS[k] || k;
 
+const RING_STYLE_LABELS = { rings: "Vier Ringe", row: "Eine Reihe", concentric: "Konzentrisch" };
+const APPEARANCE_LABELS = { system: "Systemeinstellung", light: "Hell", dark: "Dunkel" };
+
+/** Menschlich lesbarer Wert für ein Profilfeld — für die Vergleichstabelle beim Backup-Import. */
+function formatFieldValue(key, value) {
+  if (value == null) return "–";
+  switch (key) {
+    case "sex": return value === "male" ? "männlich" : "weiblich";
+    case "goal": return Goals[value] || value;
+    case "activity": return ActivityLevels[value] || value;
+    case "dietType": return DIET_TYPES[value]?.label || value;
+    case "appearance": return APPEARANCE_LABELS[value] || value;
+    case "ringStyle": return RING_STYLE_LABELS[value] || value;
+    case "heightCm": return `${value} cm`;
+    case "weightKg": return `${value} kg`;
+    case "age": return `${value} Jahre`;
+    case "bodyFatPct": return `${value}%`;
+    case "deficitPct": return `${value}%`;
+    case "proteinFactor": return `${value} g/kg`;
+    case "netCarbLimitG": return `${value} g`;
+    case "waterTargetMl": return `${value} ml`;
+    case "gradeThresholds": return `grün bis ${value.green}, gelb bis ${value.yellow} g`;
+    default: return String(value);
+  }
+}
+
 /**
  * Zeigt vor dem Einspielen eines Vollbackups, was genau passieren würde, und lässt die Wahl
  * zwischen Zusammenführen (nichts geht verloren) und Ersetzen. Die Zahlen kommen aus
  * Store.previewMerge(), sind also echt gerechnet und keine allgemeine Warnung.
  */
-function openMergeDialog(container, json) {
+function openMergeDialog(container, json, fileInfo = {}) {
   let incoming;
   try {
     incoming = Store.parseBackup(json);
@@ -389,11 +415,17 @@ function openMergeDialog(container, json) {
   // gepflegt hat, stellt hier gezielt auf "Datei" um.
   const profileChoice = {};
   p.profileDiffs.forEach(d => { profileChoice[d.id] = "local"; });
+  let mode = "merge"; // "merge" | "replace"
 
-  const added = [
-    [p.consumption, "Tageseinträge"], [p.recipes, "Rezepte"], [p.favorites, "Favoriten"],
-    [p.noGo, "No-Go"], [p.shoppingList, "Einkaufsartikel"], [p.water, "Wasser-Einträge"],
-  ].filter(([n]) => n > 0);
+  // Herkunft: das Profil, das auf dem exportierenden Gerät aktiv war — beim Export ist das so
+  // gut wie immer die Person, der das Backup gehört.
+  const sourceProfile = incoming.profiles?.find(pr => pr.id === incoming.activeProfileId);
+  const sourceLine = [
+    sourceProfile ? `Von ${esc(sourceProfile.name)}` : null,
+    fileInfo.lastModified ? new Date(fileInfo.lastModified).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null,
+    fileInfo.size ? `${Math.round(fileInfo.size / 1024)} KB` : null,
+  ].filter(Boolean).join(" · ");
+
   const lost = [
     [p.losesOnReplace.consumption, "Tageseinträge"], [p.losesOnReplace.recipes, "Rezepte"],
     [p.losesOnReplace.favorites, "Favoriten"], [p.losesOnReplace.shoppingList, "Einkaufsartikel"],
@@ -404,23 +436,59 @@ function openMergeDialog(container, json) {
   overlay.innerHTML = `
     <div class="modal-card">
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Backup einspielen</h2>
-      <p class="hint">${added.length
-        ? `Neu dazu: <strong>${added.map(([n, l]) => `${n} ${l}`).join(" · ")}</strong>.`
-        : "Die Datei enthält nichts, was hier fehlt."}
-        ${p.recipesUpdated > 0 ? ` ${p.recipesUpdated} Rezept(e) werden aktualisiert.` : ""}</p>
+      ${sourceLine ? `<p class="hint" style="margin-top:0">${sourceLine}</p>` : ""}
 
+      <div class="klar-eyebrow" style="margin:10px 2px 8px">Kommt dazu</div>
+      <div class="klar-tile-grid">
+        <div class="klar-tile"><div class="val">${p.consumption}</div><div class="lbl">Tage</div></div>
+        <div class="klar-tile"><div class="val">${p.recipes}</div><div class="lbl">Rezepte</div></div>
+        <div class="klar-tile"><div class="val">${p.favorites}</div><div class="lbl">Favoriten</div></div>
+        <div class="klar-tile"><div class="val">${p.shoppingList}</div><div class="lbl">Einkauf</div></div>
+      </div>
+      ${p.recipesUpdated > 0 ? `<p class="hint">${p.recipesUpdated} Rezept(e) werden aktualisiert.</p>` : ""}
       ${p.recipeNameClashes.length ? `
-        <p class="hint" style="color:var(--yellow-fg)">⚠️ Gleicher Name, getrennt angelegt — kommt zusätzlich in die Liste:
+        <p class="hint" style="color:var(--warm)">⚠️ Gleicher Name, getrennt angelegt — kommt zusätzlich in die Liste:
         ${esc(p.recipeNameClashes.join(", "))}</p>` : ""}
+
+      <div class="divider"></div>
+      <p class="hint" style="margin-top:0">Wie soll eingespielt werden?</p>
+      <label class="klar-choice-card active" data-mode="merge">
+        <input type="radio" name="mergeMode" value="merge" checked style="display:none">
+        <span class="klar-choice-mark">✓</span>
+        <span class="klar-choice-body">
+          <span class="klar-choice-title">Zusammenführen</span>
+          <span class="klar-choice-sub">Nichts geht verloren — beide Stände werden vereinigt.</span>
+        </span>
+      </label>
+      <label class="klar-choice-card" data-mode="replace">
+        <input type="radio" name="mergeMode" value="replace" style="display:none">
+        <span class="klar-choice-mark">✓</span>
+        <span class="klar-choice-body">
+          <span class="klar-choice-title">Datei gewinnt</span>
+          <span class="klar-choice-sub">${lost.length
+            ? `Löscht ${lost.map(([n, l]) => `${n} ${l}`).join(", ")}, die es nur hier gibt.`
+            : "Auf diesem Gerät gibt es nichts, was die Datei nicht hätte."}</span>
+        </span>
+      </label>
 
       ${p.profileDiffs.length ? `
         <div class="divider"></div>
-        <p class="hint" style="margin-top:0">Die Profileinstellungen unterscheiden sich. Welche sollen gelten?</p>
         ${p.profileDiffs.map(d => `
-          <div style="margin-top:10px">
-            <div style="font-weight:700;font-size:.9rem">${esc(d.name)}</div>
-            <div class="hint" style="margin-top:0">Abweichend: ${esc(d.fields.map(fieldLabel).join(", "))}</div>
-            <div class="btn-row" style="margin-top:6px">
+          <div style="margin-top:4px">
+            <div style="font-weight:700;font-size:.9rem">Profil ${esc(d.name)} — welche Werte gelten?</div>
+            <div class="klar-diff-table">
+              <div class="klar-diff-row klar-diff-head">
+                <span>Abweichend</span><span>Hier</span><span>Datei</span>
+              </div>
+              ${d.fields.map(f => `
+                <div class="klar-diff-row">
+                  <span>${esc(fieldLabel(f))}</span>
+                  <span>${esc(formatFieldValue(f, d.local[f]))}</span>
+                  <span>${esc(formatFieldValue(f, d.file[f]))}</span>
+                </div>
+              `).join("")}
+            </div>
+            <div class="btn-row" style="margin-top:8px">
               <button type="button" class="btn secondary profile-choice active" data-id="${d.id}" data-choice="local">Dieses Gerät</button>
               <button type="button" class="btn secondary profile-choice" data-id="${d.id}" data-choice="file">Datei</button>
             </div>
@@ -428,14 +496,11 @@ function openMergeDialog(container, json) {
         `).join("")}
       ` : ""}
 
-      <div class="divider"></div>
-      <button type="button" class="btn" id="mergeBtn">🔀 Zusammenführen</button>
-      <p class="hint" style="text-align:center">Nichts geht verloren — beide Stände werden vereinigt.</p>
-      <button type="button" class="btn secondary" id="replaceBtn" style="margin-top:10px">Datei gewinnt (ersetzen)</button>
-      <p class="hint" style="text-align:center;${lost.length ? "color:var(--red-fg)" : ""}">${lost.length
-        ? `Dabei gehen verloren: ${lost.map(([n, l]) => `${n} ${l}`).join(" · ")}`
-        : "Auf diesem Gerät gibt es nichts, was die Datei nicht hätte."}</p>
-      <button type="button" class="btn ghost" id="mergeCancel" style="margin-top:6px">Abbrechen</button>
+      <div class="btn-row" style="margin-top:18px">
+        <button type="button" class="btn secondary" id="mergeCancel">Abbrechen</button>
+        <button type="button" class="btn" id="mergeConfirm">Zusammenführen</button>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:8px">Der Stand von jetzt wird vorher gesichert — im Profil unter „Letzten Import rückgängig machen".</p>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -444,8 +509,19 @@ function openMergeDialog(container, json) {
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#mergeCancel").addEventListener("click", close);
 
+  const confirmBtn = overlay.querySelector("#mergeConfirm");
+  overlay.querySelectorAll(".klar-choice-card").forEach(card => {
+    card.addEventListener("click", () => {
+      mode = card.dataset.mode;
+      overlay.querySelectorAll(".klar-choice-card").forEach(c => c.classList.toggle("active", c === card));
+      confirmBtn.textContent = mode === "replace" ? "Ersetzen" : "Zusammenführen";
+      confirmBtn.classList.toggle("danger-ish", mode === "replace");
+    });
+  });
+
   overlay.querySelectorAll(".profile-choice").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       profileChoice[btn.dataset.id] = btn.dataset.choice;
       overlay.querySelectorAll(`.profile-choice[data-id="${btn.dataset.id}"]`)
         .forEach(b => b.classList.toggle("active", b === btn));
@@ -458,22 +534,22 @@ function openMergeDialog(container, json) {
     renderProfile(container, () => {});
   };
 
-  overlay.querySelector("#mergeBtn").addEventListener("click", () => {
+  confirmBtn.addEventListener("click", () => {
+    if (mode === "replace") {
+      if (!confirm("Wirklich ersetzen? Alles auf diesem Gerät, was nicht in der Datei steht, geht verloren.")) return;
+      try {
+        Store.importJSON(json);
+        finish("Ersetzt");
+      } catch (e) {
+        showToast("Import fehlgeschlagen: " + e.message);
+      }
+      return;
+    }
     try {
       Store.mergeJSON(json, { profileChoice });
       finish("Zusammengeführt");
     } catch (e) {
       showToast("Zusammenführen fehlgeschlagen: " + e.message);
-    }
-  });
-
-  overlay.querySelector("#replaceBtn").addEventListener("click", () => {
-    if (!confirm("Wirklich ersetzen? Alles auf diesem Gerät, was nicht in der Datei steht, geht verloren.")) return;
-    try {
-      Store.importJSON(json);
-      finish("Ersetzt");
-    } catch (e) {
-      showToast("Import fehlgeschlagen: " + e.message);
     }
   });
 }
@@ -512,7 +588,7 @@ function wireExportImport(container) {
       const text = await file.text();
       // Nicht mehr sofort ersetzen: erst zeigen, was passieren würde. Ein Vollbackup vom
       // anderen Handy enthält dessen kompletten Stand — blind einspielen löscht den eigenen.
-      openMergeDialog(container, text);
+      openMergeDialog(container, text, { size: file.size, lastModified: file.lastModified });
     } catch (e) {
       showToast("Import fehlgeschlagen: " + e.message);
     }

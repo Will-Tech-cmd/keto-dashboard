@@ -614,6 +614,33 @@ body[data-design="klar"] .fab-btn {
 .klar-appearance-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .klar-appearance-name { font-size: 13.5px; font-weight: 700; }
 .klar-appearance-desc { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+/* Zwei wählbare Karten (Backup einspielen: Zusammenführen / Datei gewinnt) statt zweier
+   Knöpfe, die sofort ausführen. */
+.klar-choice-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; margin-top: 8px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--bg); cursor: pointer;
+}
+.klar-choice-card.active { border-color: var(--accent-soft-border); background: var(--accent-soft); }
+.klar-choice-mark {
+  flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%;
+  border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: transparent;
+}
+.klar-choice-card.active .klar-choice-mark { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.klar-choice-title { display: block; font-weight: 700; font-size: 13.5px; }
+.klar-choice-sub { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+#mergeConfirm.danger-ish { background: var(--warm); }
+
+/* Profil-Vergleichstabelle beim Backup-Import: Feld, Wert hier, Wert in der Datei. */
+.klar-diff-table { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.klar-diff-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; padding: 8px 10px; font-size: 11.5px; }
+.klar-diff-row:not(:last-child) { border-bottom: 1px solid var(--divider); }
+.klar-diff-row span:first-child { font-weight: 700; color: var(--text-muted); }
+.klar-diff-row span:not(:first-child) { text-align: right; }
+.klar-diff-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; }
+.klar-diff-head span:first-child { font-weight: 700; }
+
 .klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
 .klar-switch.on { background: var(--accent); }
