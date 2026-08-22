@@ -274,7 +274,7 @@ function renderEditor(container, recipeId) {
 
     <div class="btn-row" style="margin-top:20px">
       <button class="btn secondary" id="ingToShoppingBtn">🛒 Auf Einkaufsliste</button>
-      <button class="btn secondary" id="toKochbuchBtn">📖 Ins Kochbuch</button>
+      <button class="btn secondary" id="toKochbuchBtn">📖 Im Kochbuch öffnen</button>
       <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">🗑️ Löschen</button>
     </div>
   `;

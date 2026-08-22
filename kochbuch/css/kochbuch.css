@@ -130,6 +130,7 @@ span.kb-tag-chip { cursor: default; }
   background: var(--accent); color: var(--accent-contrast); font-size: 1.6rem;
   box-shadow: var(--shadow); cursor: pointer;
 }
+.kb-fab:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- Sterne ---------- */
 .kb-stars { display: inline-flex; gap: 2px; }

@@ -5,12 +5,13 @@ import { renderListe } from "./views/liste.js";
 import { renderRezeptDetail } from "./views/rezept.js";
 import { renderEditor } from "./views/editor.js";
 import { renderImport } from "./views/import.js";
+import { syncRezepteFromKetoSync } from "./keto-sync-import.js";
 import { getWhoAmI } from "./identity.js";
 import { esc, showToast } from "./ui.js";
 
 const view = document.getElementById("view");
 
-// ?import=<ketoId> kommt vom "📖 Ins Kochbuch"-Knopf im Rezept-Editor der Keto-App — einmalig
+// ?import=<ketoId> kommt vom "📖 Im Kochbuch öffnen"-Knopf im Rezept-Editor der Keto-App — einmalig
 // lesen und die Adressleiste säubern, damit ein Neuladen nicht denselben Import wiederholt.
 const params = new URLSearchParams(location.search);
 const importKetoId = params.get("import");
@@ -23,7 +24,7 @@ function route() {
   const hash = location.hash.slice(1) || "/";
 
   if (!isLoggedIn()) {
-    renderLogin(view, () => route());
+    renderLogin(view, () => { route(); maybeAutoSyncFromKeto(); });
     return;
   }
 
@@ -50,7 +51,7 @@ function route() {
   } else if (hash === "/import") {
     renderImport(view, {
       onBack: () => { location.hash = "#/"; },
-      onImported: (rid) => { location.hash = `#/bearbeiten/${rid}`; },
+      onImported: (rid) => { location.hash = `#/rezept/${rid}`; },
       preselectKetoId: importKetoId,
     });
   } else {
@@ -58,13 +59,23 @@ function route() {
   }
 }
 
+let creatingRezept = false;
+
 async function createAndEdit() {
+  // Das Anlegen braucht einen Netzwerk-Roundtrip und zeigt bis zum Seitenwechsel keine
+  // Rückmeldung — ohne diese Sperre legt ungeduldiges Mehrfachtippen mehrere leere Rezepte an.
+  if (creatingRezept) return;
+  creatingRezept = true;
+  document.getElementById("newBtn")?.setAttribute("disabled", "true");
   const wer = getWhoAmI();
   try {
     const created = await createRezeptHead({ titel: "Neues Rezept", portionen: 2, erstellt_von: wer, geaendert_von: wer });
     location.hash = `#/bearbeiten/${created.id}`;
   } catch (err) {
     showToast(err.message || "Anlegen fehlgeschlagen — offline?");
+  } finally {
+    creatingRezept = false;
+    document.getElementById("newBtn")?.removeAttribute("disabled");
   }
 }
 
@@ -112,3 +123,25 @@ if ("serviceWorker" in navigator) {
 }
 
 route();
+
+// Sobald mindestens ein Gerät die Online-Synchronisierung der Keto-App aktiviert hat, liegen
+// alle ihre Rezepte zentral bei Supabase — dann automatisch übernehmen statt auf das manuelle
+// "Aus der Keto-App übernehmen" zu warten. Der ?import=-Direktsprung übernimmt sein eines
+// Rezept schon selbst, deshalb hier aussetzen, um nicht doppelt zu arbeiten. Läuft sowohl direkt
+// beim Start (schon angemeldete Sitzung) als auch nach einem frischen Login (siehe route()) —
+// beim allerersten Laden vor dem Einloggen ist isLoggedIn() sonst immer noch false.
+function maybeAutoSyncFromKeto() {
+  if (!isLoggedIn() || importKetoId) return;
+  syncRezepteFromKetoSync().then(({ imported, updated }) => {
+    if (imported + updated === 0) return;
+    const teile = [];
+    if (imported) teile.push(`${imported} neu`);
+    if (updated) teile.push(`${updated} aktualisiert`);
+    showToast(`Aus der Keto-App übernommen: ${teile.join(", ")}`);
+    if (location.hash === "" || location.hash === "#/") route();
+  }).catch(() => {
+    // Kein Sync-Datensatz vorhanden oder offline — bewusst still, kein Fehler-Toast beim
+    // ganz normalen Start ohne aktivierte Keto-Synchronisierung.
+  });
+}
+maybeAutoSyncFromKeto();
