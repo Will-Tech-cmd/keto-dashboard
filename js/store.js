@@ -140,7 +140,9 @@ function parseBackup(json) {
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error("Datei ist keine gültige JSON-Datei.");
+    // Bewusst nicht "keine gültige JSON-Datei": Backups werden als .txt exportiert (damit sie
+    // sich über WhatsApp teilen lassen), die Meldung ließ Nutzer nach einer .json-Datei suchen.
+    throw new Error("Das ist keine Backup-Datei aus dieser App.");
   }
   if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.profiles)) {
     throw new Error("Ungültige Datei: kein gültiges Keto-Dashboard-Backup.");

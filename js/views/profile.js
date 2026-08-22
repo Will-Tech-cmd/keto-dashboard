@@ -31,7 +31,10 @@ export function renderProfile(container, onProfileChanged) {
         <button class="btn" id="shareBtn">📤 Alles teilen</button>
         <button class="btn secondary" id="importBtn">⬇️ Einspielen</button>
       </div>
-      <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+      <!-- Kein accept-Filter: über WhatsApp & Co. weitergereichte Backups kommen oft ohne
+           erkannten Typ (application/octet-stream) an und wären damit im Dateidialog gar
+           nicht auswählbar. Ob die Datei taugt, entscheidet ohnehin Store.parseBackup(). -->
+      <input type="file" id="importFile" style="display:none">
     </div>
 
     <div class="klar-list-card" style="margin-top:10px">
@@ -708,7 +711,8 @@ function openRecipesOnlySheet() {
         <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
         <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
       </div>
-      <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+      <!-- Kein accept-Filter, siehe #importFile. -->
+      <input type="file" id="importRecipesFile" style="display:none">
     </div>
   `;
   document.body.appendChild(overlay);
