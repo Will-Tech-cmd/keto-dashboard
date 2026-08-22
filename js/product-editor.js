@@ -3,7 +3,7 @@
 // Ergebniskarte) und aus den Listen heraus als Dialog.
 import { Store } from "./store.js";
 import { saveOwnProduct } from "./off.js";
-import { esc, showToast, bindBackClose, keepActionsInView } from "./ui.js";
+import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
 
 /**
  * existing: Produkt mit aktuellen Werten (aus Scan/OFF), wenn als Korrektur geöffnet.
@@ -86,15 +86,26 @@ export function wireOwnProductForm(root, barcode, { onSaved, onCancel } = {}) {
   });
 }
 
-/** Dasselbe Formular als Dialog — aus den Listen heraus, ohne den Umweg über den Scan-Tab. */
+/** Dasselbe Formular als eigener Screen — aus den Listen heraus, ohne den Umweg über den Scan-Tab. */
 export function openProductEditor(product, onSaved) {
   const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `<div class="modal-card">${ownProductFormHtml(product.barcode, product, "", { inCard: false })}</div>`;
+  overlay.className = "klar-fullscreen-overlay";
+  overlay.innerHTML = `
+    <div class="klar-fullscreen-head">
+      <button type="button" class="klar-back-btn" id="opBack" aria-label="Zurück">‹</button>
+      <div class="klar-fullscreen-head-name">
+        <div class="klar-fullscreen-title">${esc(product.name || product.barcode)}</div>
+        <div class="klar-fullscreen-sub">Werte korrigieren</div>
+      </div>
+    </div>
+    <div class="klar-fullscreen-body">
+      ${ownProductFormHtml(product.barcode, product, "", { inCard: false })}
+    </div>
+  `;
   document.body.appendChild(overlay);
 
   const close = bindBackClose(() => overlay.remove());
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#opBack").addEventListener("click", close);
   overlay.querySelector("#opCancel").addEventListener("click", close);
   overlay.querySelector("#opSave").addEventListener("click", () => {
     const saved = readAndSave(overlay, product.barcode);
@@ -102,5 +113,7 @@ export function openProductEditor(product, onSaved) {
     close();
     onSaved?.(saved);
   });
-  keepActionsInView(overlay);
+  // Kein keepActionsInView: der Vollbild-Screen scrollt seinen Inhalt ohnehin selbst, die
+  // Tastatur verdeckt nur den unteren Teil davon statt eine schwebende Karte zu überlagern.
+  selectOnFocus(overlay);
 }

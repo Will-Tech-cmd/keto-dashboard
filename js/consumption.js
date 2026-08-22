@@ -447,7 +447,7 @@ export function openEditConsumptionModal(entry, onDone) {
       <div class="klar-sheet-title">${esc(entry.name)}</div>
       <div class="klar-sheet-sub">Menge anpassen — Nährwerte werden automatisch neu berechnet.</div>
 
-      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams, { multiples: [1, 2, 3] }) : `
+      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams) : `
         <label for="qtyGramsInput">Portionen</label>
         <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
       `}

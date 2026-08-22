@@ -8,6 +8,7 @@ import {
   logWater, getWaterForDate, sumWater, undoLastWater,
 } from "../consumption.js";
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
+import { openTodayQuestionModal } from "../analysis.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -91,13 +92,17 @@ async function renderStartKlar(container, goToTab, profile) {
       <span class="klar-meals-count">${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"}</span>
     </div>
     <div id="klarMeals"></div>
-    <button class="btn ghost" id="saveImageBtn" style="margin-top:20px">📸 Screenshot</button>
+    <div class="klar-day-actions">
+      <button type="button" class="klar-pill-btn" id="saveImageBtn">📸 Screenshot</button>
+      <button type="button" class="klar-pill-btn" id="todayQuestionBtn">🤖 Was geht noch?</button>
+    </div>
   `;
 
   container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
+  container.querySelector("#todayQuestionBtn").addEventListener("click", () => openTodayQuestionModal());
 
   renderKlarWeekStrip(container, dateKey, refresh);
-  renderKlarMacros(container, totals, targets, goToTab, profile);
+  renderKlarMacros(container, totals, targets, goToTab, profile, refresh);
   renderKlarWater(container, profile, dateKey, refresh);
   renderKlarMeals(container, entries, refresh);
 }
@@ -131,13 +136,23 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
     btn.addEventListener("click", () => { setActiveDateKey(btn.dataset.key); refresh(); });
   });
 
-  // Wischen blättert wochenweise. Der Streifen folgt dabei sichtbar dem Finger und rastet
-  // beim Loslassen ein — ohne diese Rückmeldung wirkt die Geste, als würde sie nicht erkannt.
+  wireDateSwipe(el, 7, refresh);
+}
+
+/**
+ * Wischen blättert den aktiven Tag weiter — `days` ist die Schrittweite (Wochenstreifen
+ * wochenweise, Nährwertkarte tageweise). Das Element folgt dabei gedämpft dem Finger und
+ * rastet beim Loslassen ein; ohne diese Rückmeldung wirkt die Geste, als würde sie nicht
+ * erkannt.
+ */
+function wireDateSwipe(el, days, refresh) {
   let startX = null;
+  let startY = null;
   let dragging = false;
 
   el.addEventListener("touchstart", (e) => {
     startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
     dragging = false;
     el.style.transition = "none";
   }, { passive: true });
@@ -145,9 +160,13 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
   el.addEventListener("touchmove", (e) => {
     if (startX == null) return;
     const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    // Überwiegend senkrecht = die Seite scrollen, nicht blättern. Ohne diese Unterscheidung
+    // zuckt die hohe Nährwertkarte bei jedem Scrollen durch die Startseite.
+    if (!dragging && Math.abs(dy) > Math.abs(dx)) { startX = null; return; }
     if (!dragging && Math.abs(dx) < 8) return;
     dragging = true;
-    // Gedämpft mitziehen: deutlich sichtbar, aber der Streifen wandert nicht aus dem Bild.
+    // Gedämpft mitziehen: deutlich sichtbar, aber das Element wandert nicht aus dem Bild.
     el.style.transform = `translateX(${dx * 0.35}px)`;
     el.style.opacity = String(Math.max(0.45, 1 - Math.abs(dx) / 420));
   }, { passive: true });
@@ -164,14 +183,14 @@ function renderKlarWeekStrip(container, activeKey, refresh) {
     startX = null;
     settle();
     if (Math.abs(dx) < 50) return;
-    shiftActiveDate(dx < 0 ? 7 : -7);
+    shiftActiveDate(dx < 0 ? days : -days);
     refresh();
   }, { passive: true });
 
   el.addEventListener("touchcancel", () => { startX = null; settle(); }, { passive: true });
 }
 
-function renderKlarMacros(container, totals, targets, goToTab, profile) {
+function renderKlarMacros(container, totals, targets, goToTab, profile, refresh) {
   const el = container.querySelector("#klarMacros");
   const rings = [
     { label: "Kalorien", unit: "kcal", target: targets.kcal, consumed: totals.kcal },
@@ -197,6 +216,10 @@ function renderKlarMacros(container, totals, targets, goToTab, profile) {
 
   el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
   el.querySelector("#klarScanBtn").addEventListener("click", () => goToTab("scan"));
+
+  // Über der Nährwertkarte tageweise blättern — dieselbe Geste wie im Wochenstreifen, nur
+  // eine Schrittweite feiner.
+  wireDateSwipe(el, 1, refresh);
 }
 
 /** Wählt zwischen den drei Anzeigeformen (Profil-Einstellung, siehe views/profile.js). */
@@ -375,14 +398,20 @@ function renderKlarMeals(container, entries, refresh) {
   for (const key of [...MEAL_ORDER, "none"]) {
     const items = groups.get(key);
     if (items.length === 0) continue;
-    const kcal = Math.round(items.reduce((s, e) => s + (e.kcal || 0), 0));
+    const sum = (f) => items.reduce((s, e) => s + (e[f] || 0), 0);
     const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key].replace(/^\S+\s/, "");
     blocks.push(`
-      <div class="klar-meal-group-title">${esc(label)} · ${kcal} kcal</div>
+      <div class="klar-meal-group-title">${esc(label)}</div>
+      <div class="klar-meal-group-macros">
+        <span><b>${Math.round(sum("kcal"))}</b> kcal</span>
+        <span><b>${round1(sum("netCarbs"))}</b> g KH</span>
+        <span><b>${round1(sum("fat"))}</b> g Fett</span>
+        <span><b>${round1(sum("protein"))}</b> g Eiweiß</span>
+      </div>
       ${items.map(e => `
         <div class="klar-meal-row" data-id="${e.id}">
           <span class="name">${esc(e.name)}</span>
-          <span class="meta">${entryAmountLabel(e)} · ${e.kcal ?? "–"} kcal</span>
+          <span class="meta">${entryAmountLabel(e)} · ${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g KH</span>
           <span class="chevron">›</span>
         </div>
       `).join("")}
@@ -402,5 +431,7 @@ function renderKlarMeals(container, entries, refresh) {
 function entryAmountLabel(e) {
   if (e.servings == null) return `${e.grams} g`;
   const grams = e.servingG ? ` (${Math.round(e.servingG * e.servings)} g)` : "";
-  return `${e.servings} P.${grams}`;
+  // servings wird bewusst ungerundet gespeichert (250 g eines 345-g-Rezepts sind
+  // 0.7246376811594203 Portionen) — ungerundet angezeigt stand genau diese Zahl in der Zeile.
+  return `${round1(e.servings)} P.${grams}`;
 }

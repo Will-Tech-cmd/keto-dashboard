@@ -147,6 +147,78 @@ export function buildAnalysisReport(profile, days) {
   return lines.join("\n");
 }
 
+/**
+ * Tagesbericht mit fertiger Frage: was geht heute noch, ohne die Vorgaben zu reißen.
+ * Anders als buildAnalysisReport (Rückblick über Wochen) beschreibt das hier genau einen Tag
+ * und endet mit einem konkreten Auftrag — der Prompt wird also gleich mitgegeben und muss
+ * nicht in der Claude-App noch dazugetippt werden.
+ */
+export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
+  const entries = getConsumptionForDate(profile.id, dateKey);
+  const s = sumConsumption(entries);
+  const t = getTargetsForDate(profile, dateKey);
+  const left = {
+    kcal: Math.round(t.kcal - s.kcal),
+    netCarbs: round1(t.netCarbG - s.netCarbs),
+    fat: round1(t.fatG - s.fat),
+    protein: round1(t.proteinG - s.protein),
+  };
+
+  const lines = [];
+  lines.push(`# Was kann ich heute noch essen? (${dateKey})`);
+  lines.push("");
+  lines.push("## Meine Tagesziele");
+  lines.push(`- ${t.kcal} kcal · ${t.netCarbG} g Netto-KH · ${t.fatG} g Fett · ${t.proteinG} g Eiweiß`);
+  lines.push(`- Ernährungsform: ${profile.dietType}, Ziel: ${Goals[profile.goal] || profile.goal}`);
+  lines.push("");
+
+  lines.push("## Heute schon gegessen");
+  if (entries.length === 0) {
+    lines.push("_Heute noch nichts eingetragen._");
+  } else {
+    for (const key of Object.keys(MEAL_LABELS)) {
+      const items = entries.filter(e => e.meal === key);
+      if (items.length === 0) continue;
+      lines.push(`**${MEAL_LABELS[key].replace(/^\S+\s/, "")}**`);
+      for (const e of items) {
+        const amount = e.servings != null ? `${round1(e.servings)} Portion(en)` : `${e.grams} g`;
+        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH · ${round1(e.fat || 0)} g Fett · ${round1(e.protein || 0)} g Eiweiß`);
+      }
+    }
+    const noMeal = entries.filter(e => !MEAL_LABELS[e.meal]);
+    if (noMeal.length) {
+      lines.push("**Ohne Zuordnung**");
+      for (const e of noMeal) {
+        const amount = e.servings != null ? `${round1(e.servings)} Portion(en)` : `${e.grams} g`;
+        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH`);
+      }
+    }
+  }
+  lines.push("");
+  lines.push(`**Summe heute:** ${Math.round(s.kcal)} kcal · ${round1(s.netCarbs)} g Netto-KH · ${round1(s.fat)} g Fett · ${round1(s.protein)} g Eiweiß`);
+  lines.push("");
+
+  lines.push("## Was heute noch frei ist");
+  const overshoot = (v, unit) => v < 0 ? `${Math.abs(v)} ${unit} **darüber**` : `${v} ${unit}`;
+  lines.push(`- Kalorien: ${overshoot(left.kcal, "kcal")}`);
+  lines.push(`- Netto-KH: ${overshoot(left.netCarbs, "g")}`);
+  lines.push(`- Fett: ${overshoot(left.fat, "g")}`);
+  lines.push(`- Eiweiß: ${overshoot(left.protein, "g")}`);
+  lines.push("");
+
+  // --- Der eigentliche Auftrag ---
+  lines.push("## Meine Frage");
+  lines.push("Was kann ich heute noch essen, ohne meine Vorgaben zu reißen? Bitte:");
+  lines.push("1. Nenne mir 3–5 konkrete Vorschläge (einzelne Lebensmittel oder einfache Mahlzeiten) mit Menge in Gramm und den zugehörigen Nährwerten.");
+  lines.push("2. Achte dabei zuerst auf das Netto-KH-Limit — das ist die harte Grenze; Kalorien, Fett und Eiweiß sind Richtwerte.");
+  lines.push("3. Sag mir, falls ich heute schon über einem Wert liege und was das praktisch bedeutet.");
+  lines.push("4. Halte dich an das, was zu meiner Ernährungsform passt.");
+  lines.push("");
+  lines.push("_Hinweis: Netto-Kohlenhydrate sind nach EU-Konvention angegeben (Ballaststoffe sind in den Kohlenhydraten nicht enthalten)._");
+
+  return lines.join("\n");
+}
+
 /** Dialog: Zeitraum wählen, Bericht erzeugen, kopieren oder teilen. */
 export function openAnalysisModal() {
   const profile = Store.getActiveProfile();
@@ -215,6 +287,63 @@ export function openAnalysisModal() {
     shareBtn.addEventListener("click", async () => {
       try {
         await navigator.share({ text: buildAnalysisReport(profile, days), title: "Keto-Auswertung" });
+        close();
+      } catch (e) {
+        if (e.name !== "AbortError") showToast("Teilen fehlgeschlagen — nutze stattdessen Kopieren");
+      }
+    });
+  }
+}
+
+/** Dialog: Tageswerte samt fertiger Frage kopieren oder teilen. */
+export function openTodayQuestionModal() {
+  const profile = Store.getActiveProfile();
+  const report = buildTodayReport(profile);
+  const entries = getConsumptionForDate(profile.id, dateKeyOf(Date.now()));
+  const s = sumConsumption(entries);
+  const t = getTargetsForDate(profile, dateKeyOf(Date.now()));
+  const leftCarbs = round1(t.netCarbG - s.netCarbs);
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Was kann ich heute noch essen?</h2>
+      <p class="hint">Schickt deine heutigen Werte samt fertiger Frage — in der Claude-App nur noch einfügen, nichts dazutippen.</p>
+      <div class="klar-portion-panel gray" style="margin-top:12px">
+        <div class="klar-portion-head">Heute noch frei</div>
+        <div class="klar-portion-value">${leftCarbs < 0 ? `${Math.abs(leftCarbs)} g drüber` : `${leftCarbs} g`}<span>Netto-KH · ${Math.round(t.kcal - s.kcal)} kcal</span></div>
+        <div class="klar-portion-sub">${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"} heute · ca. ${Math.round(report.length / 100) / 10} KB Text</div>
+      </div>
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn secondary" id="todayCancel">Abbrechen</button>
+        <button type="button" class="btn" id="todayCopy">📋 Kopieren</button>
+      </div>
+      <button type="button" class="btn ghost" id="todayShare" style="margin-top:8px;display:none">📤 Teilen</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#todayCancel").addEventListener("click", close);
+
+  overlay.querySelector("#todayCopy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      showToast("Kopiert — jetzt in Claude einfügen");
+      close();
+    } catch {
+      showFallbackText(overlay, report);
+    }
+  });
+
+  const shareBtn = overlay.querySelector("#todayShare");
+  if (navigator.share) {
+    shareBtn.style.display = "";
+    shareBtn.addEventListener("click", async () => {
+      try {
+        await navigator.share({ text: report, title: "Was kann ich heute noch essen?" });
         close();
       } catch (e) {
         if (e.name !== "AbortError") showToast("Teilen fehlgeschlagen — nutze stattdessen Kopieren");

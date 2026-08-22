@@ -37,6 +37,7 @@ export function renderRecipes(container) {
 let recipeFilter = "";
 
 function renderList(container) {
+  document.body.classList.remove("chrome-hidden");
   const recipes = Store.getRecipes();
   container.innerHTML = `
     <h1 class="section-title">Rezepte</h1>
@@ -143,7 +144,7 @@ function openServingsModal(recipe) {
       <div class="klar-sheet-title">${esc(recipe.name)}</div>
       <div class="klar-sheet-sub">${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal · Eintrag für ${esc(dayLabel)}</div>
 
-      ${gramsPer ? amountFieldsHtml(gramsPer, currentGrams, { multiples: [1, 2, 3] }) : `
+      ${gramsPer ? amountFieldsHtml(gramsPer, currentGrams) : `
         <label for="qtyGramsInput">Portionen</label>
         <input type="number" id="qtyGramsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
       `}
@@ -227,6 +228,9 @@ function renderEditor(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   if (!recipe) { openRecipeId = null; renderList(container); return; }
   reviewRows = null;
+  // Der Rezeptname ist hier die Kopfzeile — die App-Leiste darüber wäre eine zweite und
+  // kostet nur Platz. Zurückgesetzt in renderList() und bei jedem Tabwechsel (app.js).
+  document.body.classList.add("chrome-hidden");
 
   container.innerHTML = `
     <div class="klar-recipe-head">
@@ -241,7 +245,10 @@ function renderEditor(container, recipeId) {
     <div class="klar-result-card" id="totalsCard"></div>
     <button class="btn" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
 
-    <h2 class="section-title">Zutaten</h2>
+    <div class="klar-section-head">
+      <h2 class="section-title">Zutaten</h2>
+      <span class="klar-eyebrow" id="ingCount"></span>
+    </div>
     <div id="ingredientList"></div>
 
     <div class="card">
@@ -416,6 +423,9 @@ function renderIngredientList(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   const el = container.querySelector("#ingredientList");
   if (recipe.ingredients.length === 0) {
+    // Zähler neben der Überschrift mit leeren — sonst bliebe der Stand vor dem Löschen stehen.
+    const emptyCount = container.querySelector("#ingCount");
+    if (emptyCount) emptyCount.textContent = "";
     el.innerHTML = `<div class="empty-state"><span class="emoji">🥄</span>Noch keine Zutaten. Unten suchen, manuell eintragen oder importieren.</div>`;
     return;
   }
@@ -431,8 +441,11 @@ function renderIngredientList(container, recipeId) {
   const topKcId = withNc.reduce((best, cur) =>
     cur.nc != null && (best == null || cur.nc > best.nc) ? cur : best, null)?.ing.id;
 
+  // Anzahl/Gesamtgewicht stehen neben der Überschrift „Zutaten", nicht als eigene Zeile darunter.
+  const countEl = container.querySelector("#ingCount");
+  if (countEl) countEl.textContent = `${recipe.ingredients.length} · ${totalGrams} g`;
+
   el.innerHTML = `
-    <div class="klar-eyebrow" style="margin:0 2px 8px">${recipe.ingredients.length} · ${totalGrams} g</div>
     <div class="klar-list-card">
       ${withNc.map(({ ing, nc, netCarbs100 }) => {
         const kcal = ing.per100.kcal != null ? Math.round(ing.per100.kcal * (ing.grams || 0) / 100) : null;
@@ -517,6 +530,10 @@ function renderIngredientList(container, recipeId) {
       gramsInput.select();
     });
   });
+
+  // Direkt ins Mengenfeld tippen markiert den Wert genauso wie der Knopf „Menge eingeben" —
+  // sonst muss man die bestehende Zahl erst löschen, bevor man die neue tippen kann.
+  selectOnFocus(el);
 }
 
 /**
@@ -532,10 +549,16 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
   const p = ing.per100 || {};
 
   const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
+  overlay.className = "klar-fullscreen-overlay";
   overlay.innerHTML = `
-    <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Zutat bearbeiten</h2>
+    <div class="klar-fullscreen-head">
+      <button type="button" class="klar-back-btn" id="ieBack" aria-label="Zurück">‹</button>
+      <div class="klar-fullscreen-head-name">
+        <div class="klar-fullscreen-title">${esc(ing.name)}</div>
+        <div class="klar-fullscreen-sub">Zutat bearbeiten</div>
+      </div>
+    </div>
+    <div class="klar-fullscreen-body">
       <p class="hint">Nährwerte pro 100 g. Änderungen gelten ab jetzt — bereits eingetragene Tage bleiben unverändert.</p>
       <label for="ieName">Name</label>
       <input type="text" id="ieName" value="${esc(ing.name)}">
@@ -566,7 +589,7 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
   document.body.appendChild(overlay);
 
   const close = bindBackClose(() => overlay.remove());
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#ieBack").addEventListener("click", close);
   overlay.querySelector("#ieCancel").addEventListener("click", close);
 
   overlay.querySelector("#ieSave").addEventListener("click", () => {
@@ -598,8 +621,8 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
     showToast("Zutat aktualisiert");
   });
 
-  keepActionsInView(overlay);
-  overlay.querySelector("#ieName").focus();
+  // Kein keepActionsInView: der Vollbild-Screen scrollt seinen Inhalt selbst.
+  selectOnFocus(overlay);
 }
 
 function wireIngredientSearch(container, recipeId) {

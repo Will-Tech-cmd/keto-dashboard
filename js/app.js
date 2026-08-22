@@ -61,6 +61,10 @@ function goToTab(tab, opts = {}) {
       history.pushState({ nav: "tab", tab }, "");
     }
   }
+  // Vollbild-Ansichten (Rezept-Editor) blenden die Kopfleiste aus und melden das über eine
+  // Klasse am <body>. Beim Tabwechsel hier zurücksetzen — die Renderer setzen sie danach
+  // selbst wieder, falls sie noch gilt. Sonst bliebe die Kopfleiste in anderen Tabs weg.
+  document.body.classList.remove("chrome-hidden");
   RENDERERS[tab]();
 }
 

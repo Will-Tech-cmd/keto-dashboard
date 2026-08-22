@@ -111,10 +111,12 @@ export function keepActionsInView(overlay) {
     overlay.style.paddingBottom = `${covered + AUTOFILL_BAR_PX}px`;
     card.style.maxHeight = `${Math.max(160, vv.height - AUTOFILL_BAR_PX - 24)}px`;
 
-    // Die Knöpfe sind das letzte Element im Dialog — ans Ende zu scrollen bringt sie
-    // zuverlässig ins Bild, egal wie viele Felder darüber stehen.
+    // Das gerade bearbeitete Feld muss sichtbar bleiben. Früher wurde stattdessen ans Ende
+    // der Karte gescrollt, damit die Knöpfe im Bild sind — bei einem Feld weiter oben schob
+    // das genau die Zeile aus dem Bild, die man gerade tippt. "nearest" scrollt nur so weit
+    // wie nötig und lässt ein bereits sichtbares Feld in Ruhe.
     if (overlay.contains(document.activeElement) && card.scrollHeight > card.clientHeight) {
-      card.scrollTo({ top: card.scrollHeight, behavior: "smooth" });
+      document.activeElement.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   };
 
