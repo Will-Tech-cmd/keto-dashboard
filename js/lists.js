@@ -227,12 +227,19 @@ function toggleDetail(entry) {
  * dann mitgespeichert — so wandert er beim nächsten Abgleich auf das andere Handy mit.
  */
 function nutriOf(item, listName) {
-  if (item.nutri100) return item.nutri100;
+  // Ein Schnappschuss, in dem *alle* Werte null sind, entsteht beim Merken eines damals noch
+  // unbekannten Produkts. Er ist so gut wie keiner — würde er hier als vorhanden durchgehen,
+  // bliebe der Eintrag für immer grau, auch nachdem die Werte längst nachgetragen wurden.
+  if (item.nutri100 && Object.values(item.nutri100).some(v => v != null)) return item.nutri100;
   const product = getProductOffline(item.barcode);
   if (!product) return null;
   const snapshot = nutriSnapshot(product);
   if (listName === "favorites" || listName === "noGo") {
-    Store.updateListEntry(listName, item.barcode, { nutri100: snapshot });
+    // Mit den Werten auch die Ampel nachziehen: sie stammt vom Zeitpunkt des Merkens und
+    // stünde sonst weiter auf grau, obwohl die Kacheln daneben echte Werte zeigen.
+    const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds);
+    item.grade = grade;
+    Store.updateListEntry(listName, item.barcode, { nutri100: snapshot, grade });
   }
   return snapshot;
 }
