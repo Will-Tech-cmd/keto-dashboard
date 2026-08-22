@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v43";
+const CACHE_NAME = "keto-dashboard-v44";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -21,6 +21,7 @@ const APP_SHELL = [
   "./js/keto.js",
   "./js/consumption.js",
   "./js/recipes.js",
+  "./js/ingredient-parser.js",
   "./js/scanner.js",
   "./js/lists.js",
   "./js/analysis.js",
@@ -60,6 +61,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  // Das Kochbuch (kochbuch/) ist eine eigene App mit eigenem Service Worker und eigenem
+  // CACHE_NAME. Dessen genauerer Scope gewinnt zwar ohnehin laut Spezifikation, aber dieser
+  // frühe Ausstieg macht die Trennung explizit und unabhängig von Registrierungsreihenfolge.
+  if (url.pathname.includes("/kochbuch/")) return;
   const isOff = url.hostname.endsWith("openfoodfacts.org");
   const isAppShell = url.origin === self.location.origin;
 

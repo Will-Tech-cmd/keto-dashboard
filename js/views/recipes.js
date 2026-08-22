@@ -274,6 +274,7 @@ function renderEditor(container, recipeId) {
 
     <div class="btn-row" style="margin-top:20px">
       <button class="btn secondary" id="ingToShoppingBtn">🛒 Auf Einkaufsliste</button>
+      <button class="btn secondary" id="toKochbuchBtn">📖 Ins Kochbuch</button>
       <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">🗑️ Löschen</button>
     </div>
   `;
@@ -318,6 +319,15 @@ function renderEditor(container, recipeId) {
     if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
     const added = addIngredientsToShoppingList(current.ingredients);
     showToast(added > 0 ? `${added} Zutat(en) auf die Einkaufsliste gesetzt` : "Bereits alle auf der Einkaufsliste");
+  });
+
+  container.querySelector("#toKochbuchBtn").addEventListener("click", () => {
+    const current = Store.getRecipe(recipeId);
+    if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
+    // Gleiche Origin wie das Kochbuch: der Aufruf übergibt nur die id, die Kochbuch-App liest
+    // das Rezept selbst aus diesem localStorage (siehe kochbuch/js/keto-bridge.js). Von
+    // js/views/ aus zwei Ebenen hoch zur App-Wurzel, dann nach kochbuch/.
+    window.open(new URL(`../../kochbuch/?import=${current.id}`, import.meta.url), "_blank");
   });
 
   renderTotals(container, recipeId);

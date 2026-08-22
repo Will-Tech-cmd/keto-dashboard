@@ -366,6 +366,28 @@ export const Store = {
     persist();
   },
 
+  /**
+   * Holt Zutaten ab, die das Kochbuch (kochbuch/) unter einem eigenen Schlüssel abgelegt hat
+   * ("Zutaten auf die Einkaufsliste" dort), und übernimmt sie in die eigene Einkaufsliste.
+   * Über einen separaten Inbox-Schlüssel statt direktem Schreiben in den App-Zustand: ein
+   * offener Keto-Tab würde dessen Zustand sonst beim eigenen nächsten Speichern überschreiben.
+   * Gibt die Anzahl übernommener Einträge zurück (0 = nichts zu tun).
+   */
+  drainKochbuchInbox() {
+    const KOCHBUCH_INBOX_KEY = "keto-dashboard-inbox";
+    let names;
+    try { names = JSON.parse(localStorage.getItem(KOCHBUCH_INBOX_KEY)); } catch { names = null; }
+    if (!Array.isArray(names) || names.length === 0) return 0;
+    for (const text of names) {
+      if (typeof text === "string" && text.trim()) {
+        state.shoppingList.unshift({ id: crypto.randomUUID(), text: text.trim(), checked: false, barcode: null });
+      }
+    }
+    localStorage.removeItem(KOCHBUCH_INBOX_KEY);
+    persist();
+    return names.length;
+  },
+
   // --- Export / Import ---
   /**
    * Backup ohne den Produkt-Cache: der macht ~68% der Dateigröße aus, lässt sich aber
