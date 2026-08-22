@@ -31,10 +31,13 @@ export function renderProfile(container, onProfileChanged) {
         <button class="btn" id="shareBtn">📤 Alles teilen</button>
         <button class="btn secondary" id="importBtn">⬇️ Einspielen</button>
       </div>
-      <!-- Kein accept-Filter: über WhatsApp & Co. weitergereichte Backups kommen oft ohne
-           erkannten Typ (application/octet-stream) an und wären damit im Dateidialog gar
-           nicht auswählbar. Ob die Datei taugt, entscheidet ohnehin Store.parseBackup(). -->
-      <input type="file" id="importFile" style="display:none">
+      <!-- application/octet-stream muss mit rein: über WhatsApp & Co. weitergereichte Backups
+           kommen häufig mit diesem Typ an und wären sonst im Dateidialog ausgegraut. Der
+           Filter darf aber nicht ganz entfallen — ohne accept bietet Android zusätzlich
+           Kamera und Video an, und die helfen hier niemandem. Kein image/* oder video/* in
+           der Liste heißt: reiner Dateidialog. Ob die Datei taugt, entscheidet ohnehin
+           Store.parseBackup(). -->
+      <input type="file" id="importFile" accept=".txt,.json,text/plain,application/json,application/octet-stream" style="display:none">
     </div>
 
     <div class="klar-list-card" style="margin-top:10px">
@@ -711,8 +714,8 @@ function openRecipesOnlySheet() {
         <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
         <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
       </div>
-      <!-- Kein accept-Filter, siehe #importFile. -->
-      <input type="file" id="importRecipesFile" style="display:none">
+      <!-- Gleicher Filter wie bei #importFile, siehe Begründung dort. -->
+      <input type="file" id="importRecipesFile" accept=".txt,.json,text/plain,application/json,application/octet-stream" style="display:none">
     </div>
   `;
   document.body.appendChild(overlay);
