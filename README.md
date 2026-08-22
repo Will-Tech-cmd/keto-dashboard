@@ -95,8 +95,9 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
 
 ## Daten, Abgleich und Datenschutz
 
-**Das Keto-Dashboard selbst:** kein Server, kein Konto. Alles liegt im `localStorage` des
-Browsers — das Kochbuch (siehe oben) ist bewusst die Ausnahme davon.
+**Das Keto-Dashboard selbst:** standardmäßig kein Server, kein Konto — alles liegt im
+`localStorage` des Browsers. Die Online-Synchronisierung (siehe unten) ist eine bewusste,
+abschaltbare Ausnahme davon, genau wie das Kochbuch.
 
 - **Export/Import/Teilen** im Profil-Tab schreibt bzw. liest eine JSON-Datei. Der
   Produkt-Cache bleibt draußen — er lässt sich jederzeit nachladen und macht den Großteil
@@ -105,13 +106,27 @@ Browsers — das Kochbuch (siehe oben) ist bewusst die Ausnahme davon.
   echten Zahlen, was dazukommt und was ein Ersetzen kosten würde. Vereinigt wird über die
   IDs (Zufalls-UUIDs, deshalb verlustfrei); bei Rezepten gewinnt die neuere Fassung, bei
   abweichenden Profileinstellungen wird nachgefragt.
-- Vor jedem Import wird eine Sicherung angelegt: **„Letzten Import rückgängig machen"**.
-- **Üblicher Ablauf zwischen zwei Geräten:** auf Gerät A exportieren, per Teilen
-  rüberschicken, auf Gerät B importieren und zusammenführen — danach in die Gegenrichtung.
+- Vor jedem manuellen Import wird eine Sicherung angelegt: **„Letzten Import rückgängig
+  machen"**. Die automatische Online-Synchronisierung legt diese Sicherung bewusst nicht bei
+  jedem Durchlauf neu an — sie bleibt dem bewussten, manuellen Datei-Import vorbehalten.
+- **Üblicher Ablauf zwischen zwei Geräten ohne Synchronisierung:** auf Gerät A exportieren,
+  per Teilen rüberschicken, auf Gerät B importieren und zusammenführen — danach in die
+  Gegenrichtung.
+- **Online-Synchronisierung (optional, Profil-Tab):** mit dem gemeinsamen Kochbuch-
+  Zugangswort gleicht die App automatisch zwischen euren Geräten ab, statt Dateien hin- und
+  herzuschicken — technisch derselbe Merge wie beim manuellen Import, nur automatisch über
+  Supabase transportiert. Ausgeschaltet standardmäßig; wer sie nie aktiviert, für den ändert
+  sich nichts. **Achtung beim ersten Aktivieren auf zwei bereits eigenständig eingerichteten
+  Geräten:** da jedes Gerät seine zwei Profile mit eigenen, zufälligen IDs anlegt, erkennt der
+  Abgleich sie nicht automatisch als "dasselbe" Profil — nach dem ersten Sync stehen deshalb
+  gegebenenfalls vier Profil-Reiter da. Ab dem dritten Profil erscheint neben jedem
+  nicht-aktiven Profil ein ✕ zum Aufräumen.
 - Ein **Gemini-API-Schlüssel** (falls hinterlegt) liegt unter einem eigenen Speicherschlüssel
-  und wird weder exportiert noch geteilt.
-- Nach außen gehen nur: Anfragen an Open Food Facts beim Suchen/Scannen und — nur wenn ein
-  Schlüssel hinterlegt ist und du den KI-Knopf drückst — Bilder bzw. Texte an die Gemini-API.
+  und wird weder exportiert noch geteilt noch synchronisiert.
+- Nach außen gehen nur: Anfragen an Open Food Facts beim Suchen/Scannen, nur wenn ein
+  Gemini-Schlüssel hinterlegt ist und du den KI-Knopf drückst Bilder/Texte an die Gemini-API,
+  und nur wenn die Synchronisierung aktiviert ist Anfragen an das Supabase-Projekt des
+  Kochbuchs (siehe oben) — dort landet dann der komplette App-Zustand als ein JSON-Datensatz.
 
 ---
 
@@ -154,6 +169,7 @@ js/
   lists.js              Listen-Tab und Auswertungsseite
   analysis.js           Textbericht für die KI-Analyse
   ai.js                 optionale Gemini-Anbindung
+  sync.js               optionale Online-Synchronisierung über Supabase (Profil-Tab)
   scanner.js            Kamera und Barcode-Erkennung
   product-editor.js     gemeinsames Formular „Produkt anlegen / Werte korrigieren"
   ui.js                 geteilte Helfer: Dialoge, Snackbar, Tastaturabstand, Theme

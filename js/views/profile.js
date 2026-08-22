@@ -4,6 +4,7 @@ import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
 import { showToast, esc, applyDesignTheme, bindBackClose, keepActionsInView, getAppVersion } from "../ui.js";
+import { isSyncEnabled, needsReauth, enableSync, disableSync, syncNow, getLastSyncAt, SyncAuthError } from "../sync.js";
 
 const RING_STYLES = [
   { key: "rings", label: "Vier Ringe" },
@@ -13,14 +14,23 @@ const RING_STYLES = [
 
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
+  const syncOn = isSyncEnabled();
+  const syncReauth = needsReauth();
+  const syncLastAt = getLastSyncAt();
 
   container.innerHTML = `
     <h1 class="section-title">Profil</h1>
     <div class="subtabs">
-      ${state.profiles.map(p => `
+      ${state.profiles.map(p => state.profiles.length > 2 ? `
+        <span style="display:inline-flex;align-items:center">
+          <button class="subtab-btn ${p.id === state.activeProfileId ? "active" : ""}" data-id="${p.id}" type="button">${esc(p.name)}</button>
+          ${p.id !== state.activeProfileId ? `<button type="button" data-delete-profile="${p.id}" title="Profil löschen" style="background:none;border:none;color:var(--red-fg);font-size:.85rem;padding:2px 6px;cursor:pointer">✕</button>` : ""}
+        </span>
+      ` : `
         <button class="subtab-btn ${p.id === state.activeProfileId ? "active" : ""}" data-id="${p.id}" type="button">${esc(p.name)}</button>
       `).join("")}
     </div>
+    ${state.profiles.length > 2 ? `<p class="hint" style="margin-top:4px">Mehr als zwei Profile — meist durch einen ersten Sync-Abgleich zweier bereits eingerichteter Geräte entstanden. Überzählige mit ✕ entfernen.</p>` : ""}
     <div id="profileForm"></div>
 
     <div class="divider"></div>
@@ -55,6 +65,28 @@ export function renderProfile(container, onProfileChanged) {
           <span class="chevron">›</span>
         </div>
       ` : ""}
+    </div>
+
+    <div class="card">
+      <h2>Online-Synchronisierung (optional)</h2>
+      <p class="hint" style="margin-top:0">Mit dem Kochbuch-Zugangswort gleicht die App alle Daten automatisch zwischen euren Geräten ab — wie das manuelle Einspielen oben, nur automatisch über das Netz statt per Datei. Ohne Aktivierung bleibt hier alles ausschließlich auf diesem Gerät, wie bisher.</p>
+      ${syncOn && !syncReauth ? `
+        <p class="hint">Status: ✅ aktiv · zuletzt synchronisiert: ${esc(syncLastAt ? new Date(syncLastAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie")}</p>
+        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
+        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+          <button class="btn secondary" id="syncNowBtn">Jetzt synchronisieren</button>
+          <button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>
+        </div>
+      ` : `
+        ${syncReauth ? `<p class="hint" style="color:var(--red-fg)">Anmeldung abgelaufen — bitte Zugangswort erneut eingeben.</p>` : ""}
+        <label for="syncPwInput">Zugangswort</label>
+        <input type="password" id="syncPwInput" autocomplete="current-password" placeholder="Gemeinsames Zugangswort">
+        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
+        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+          <button class="btn secondary" id="syncOnBtn">${syncReauth ? "Erneut anmelden" : "Aktivieren"}</button>
+          ${syncReauth ? `<button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>` : ""}
+        </div>
+      `}
     </div>
 
     <div class="card">
@@ -109,8 +141,25 @@ export function renderProfile(container, onProfileChanged) {
     });
   });
 
+  container.querySelectorAll("[data-delete-profile]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteProfile;
+      const name = state.profiles.find(p => p.id === id)?.name || "dieses Profil";
+      if (!confirm(`„${name}" wirklich löschen? Das lässt sich nicht rückgängig machen.`)) return;
+      if (Store.deleteProfile(id)) {
+        showToast("Profil gelöscht");
+        onProfileChanged?.();
+        renderProfile(container, onProfileChanged);
+      } else {
+        showToast("Konnte nicht gelöscht werden");
+      }
+    });
+  });
+
   renderProfileForm(container, onProfileChanged);
   wireExportImport(container);
+  wireSyncCard(container, onProfileChanged);
   wireAiKey(container);
   renderAppearanceCard(container, onProfileChanged);
   renderRingStyleCard(container, onProfileChanged);
@@ -166,6 +215,50 @@ function renderRingStyleCard(container, onProfileChanged) {
       onProfileChanged?.();
       renderProfile(container, onProfileChanged);
     });
+  });
+}
+
+function wireSyncCard(container, onProfileChanged) {
+  const status = container.querySelector("#syncStatus");
+  const pwInput = container.querySelector("#syncPwInput");
+
+  container.querySelector("#syncOnBtn")?.addEventListener("click", async (e) => {
+    const password = pwInput.value;
+    if (!password) { showToast("Bitte das Zugangswort eingeben"); return; }
+    e.target.disabled = true;
+    status.textContent = "Verbinde …";
+    try {
+      await enableSync(password);
+      showToast("Synchronisierung aktiviert");
+      renderProfile(container, onProfileChanged);
+    } catch (err) {
+      status.textContent = err.message || "Verbindung fehlgeschlagen";
+      e.target.disabled = false;
+    }
+  });
+
+  container.querySelector("#syncNowBtn")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    status.textContent = "Synchronisiert …";
+    try {
+      await syncNow();
+      showToast("Synchronisiert");
+      renderProfile(container, onProfileChanged);
+    } catch (err) {
+      if (err instanceof SyncAuthError) {
+        renderProfile(container, onProfileChanged);
+      } else {
+        status.textContent = err.message || "Synchronisierung fehlgeschlagen — offline?";
+        e.target.disabled = false;
+      }
+    }
+  });
+
+  container.querySelector("#syncOffBtn")?.addEventListener("click", () => {
+    if (!confirm("Synchronisierung deaktivieren? Die Daten bleiben auf diesem Gerät erhalten.")) return;
+    disableSync();
+    showToast("Synchronisierung deaktiviert");
+    renderProfile(container, onProfileChanged);
   });
 }
 
