@@ -59,8 +59,8 @@ async function saveDashboardAsImage(container) {
   }
 }
 
-export async function renderStart(container, goToTab) {
-  return renderStartKlar(container, goToTab, Store.getActiveProfile());
+export async function renderStart(container, goToTab, openEntrySheet) {
+  return renderStartKlar(container, goToTab, Store.getActiveProfile(), openEntrySheet);
 }
 
 const WATER_STEPS = [200, 330, 500];
@@ -77,10 +77,10 @@ function round1(v) {
 const KLAR_WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const KLAR_RING_CIRCUMFERENCE = 270.2; // 2πr bei r=43 im viewBox 0 0 100 100
 
-async function renderStartKlar(container, goToTab, profile) {
+async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
   const dateKey = getActiveDateKey();
   const targets = getTargetsForDate(profile, dateKey);
-  const refresh = () => renderStart(container, goToTab);
+  const refresh = () => renderStart(container, goToTab, openEntrySheet);
   const entries = getConsumptionForDate(profile.id, dateKey);
   const totals = sumConsumption(entries);
 
@@ -104,7 +104,7 @@ async function renderStartKlar(container, goToTab, profile) {
   renderKlarWeekStrip(container, dateKey, refresh);
   renderKlarMacros(container, totals, targets, goToTab, profile, refresh);
   renderKlarWater(container, profile, dateKey, refresh);
-  renderKlarMeals(container, entries, refresh);
+  renderKlarMeals(container, entries, refresh, openEntrySheet);
 }
 
 function renderKlarWeekStrip(container, activeKey, refresh) {
@@ -381,10 +381,11 @@ function renderKlarWater(container, profile, dateKey, refresh) {
   });
 }
 
-function renderKlarMeals(container, entries, refresh) {
+function renderKlarMeals(container, entries, refresh, openEntrySheet) {
   const el = container.querySelector("#klarMeals");
   if (entries.length === 0) {
-    el.innerHTML = `<div class="klar-empty-row"><span class="plus">+</span>Noch nichts eingetragen</div>`;
+    el.innerHTML = `<div class="klar-empty-row" id="klarEmptyRow"><span class="plus">+</span>Noch nichts eingetragen</div>`;
+    el.querySelector("#klarEmptyRow").addEventListener("click", () => openEntrySheet());
     return;
   }
 
