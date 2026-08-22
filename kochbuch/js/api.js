@@ -124,8 +124,11 @@ const sortByPos = (a, b) => (a.pos ?? 0) - (b.pos ?? 0);
 // Rezepte lesen
 // ---------------------------------------------------------------------------
 
-const LIST_SELECT = "id,titel,untertitel,portionen,vorbereitung_min,koch_min,schwierigkeit,tags,bewertung,zuletzt_gekocht,naehrwerte,updated_at,titelbild_id,kochbuch_bilder(id,pfad)";
-const DETAIL_SELECT = "*,kochbuch_zutaten(*),kochbuch_schritte(*),kochbuch_bilder(*),kochbuch_kommentare(*)";
+// kochbuch_rezepte hat zwei Fremdschlüssel zu kochbuch_bilder (die Bilder-Liste über
+// kochbuch_bilder.rezept_id und das einzelne titelbild_id) — PostgREST kann die Beziehung
+// deshalb nicht mehr von selbst erraten (Fehler PGRST201) und braucht den Constraint-Namen.
+const LIST_SELECT = "id,titel,untertitel,portionen,vorbereitung_min,koch_min,schwierigkeit,tags,bewertung,zuletzt_gekocht,naehrwerte,updated_at,titelbild_id,kochbuch_bilder!kochbuch_bilder_rezept_id_fkey(id,pfad)";
+const DETAIL_SELECT = "*,kochbuch_zutaten(*),kochbuch_schritte(*),kochbuch_bilder!kochbuch_bilder_rezept_id_fkey(*),kochbuch_kommentare(*)";
 
 export async function listRezepte() {
   const rows = await restFetch(`kochbuch_rezepte?select=${LIST_SELECT}&geloescht_am=is.null&order=updated_at.desc`);
