@@ -641,30 +641,47 @@ body[data-design="klar"] .fab-btn {
 .klar-diff-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; }
 .klar-diff-head span:first-child { font-weight: 700; }
 
-/* Zutatenzeile im Rezept-Editor: Name/Menge auf eigenen, vollbreiten Zeilen statt in einer
-   engen Reihe mit ✎/🗑️ gequetscht — genau das war schlecht bedienbar. ✎/🗑️ und die
-   Kennwerte je 100g wandern in den Aufklappbereich (Tippen auf Name/Menge), der Stepper
-   nutzt dieselben 44px-Knöpfe wie der Mengendialog. */
-.klar-ing-row { padding: 14px 16px; }
+/* Zutatenzeile im Rezept-Editor: Name/Menge links, kompakter Stepper + Pfeil rechts, eine
+   Zeile — genau die Vorlage, die der Nutzer 1:1 vorgegeben hat. ✎/🗑️ und die Kennwerte je
+   100g wandern in den Aufklappbereich (Tippen auf Name/Meta oder den Pfeil). */
+.klar-ing-row { padding: 12px 16px; }
 .klar-ing-row + .klar-ing-row { border-top: 1px solid var(--divider); }
-.klar-ing-row-info { cursor: pointer; }
+.klar-ing-row-top { display: flex; align-items: center; gap: 8px; }
+.klar-ing-row-info { flex: 1; min-width: 0; cursor: pointer; }
 .klar-ing-row-info .name { font-weight: 700; font-size: 14px; }
 .klar-ing-row-info .meta {
-  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+  font-size: 12px; color: var(--warm); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.klar-ing-stepper-full { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-.klar-ing-amount {
-  flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 5px;
-  height: 44px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
+.klar-ing-stepper-compact {
+  flex: none; display: flex; align-items: center;
+  height: 34px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+  padding: 0 2px;
 }
-.klar-ing-amount input {
-  border: none; background: none; text-align: right; font-size: 18px; font-weight: 800;
-  color: var(--text); width: 70px; padding: 0; min-height: auto;
+.klar-stepper-btn-sm {
+  flex: none; width: 28px; height: 28px; border: none; background: none; border-radius: 8px;
+  font-size: 16px; font-weight: 800; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
-.klar-ing-amount input::-webkit-outer-spin-button, .klar-ing-amount input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.klar-ing-amount span { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.klar-stepper-btn-sm:active { background: var(--bg-elevated); }
+.klar-ing-amount-compact { display: flex; align-items: baseline; gap: 2px; padding: 0 3px; }
+body[data-design="klar"] .klar-ing-amount-compact input {
+  appearance: none; -webkit-appearance: none;
+  border: none; background: none !important; text-align: right; font-size: 14px; font-weight: 800;
+  color: var(--text); width: 52px; padding: 0; min-height: auto; border-radius: 0;
+}
+.klar-ing-amount-compact input::-webkit-outer-spin-button, .klar-ing-amount-compact input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.klar-ing-amount-compact span { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+.klar-ing-chevron {
+  flex: none; width: 20px; height: 20px; border: none; background: none; padding: 0;
+  color: var(--text-faint); font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s;
+}
+.klar-ing-row.open .klar-ing-chevron { transform: rotate(90deg); }
 .klar-ing-row .list-detail { border: none; background: none; padding: 12px 0 0; margin-top: 0; }
+.klar-ing-detail-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.klar-ing-detail-actions .btn { flex: 1; min-height: 44px; }
 
 .klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
@@ -722,6 +739,7 @@ body[data-design="klar"] #addItemForm .btn {
   color: var(--text-muted); font-size: 15px;
   display: flex; align-items: center; justify-content: center;
 }
+.klar-icon-btn.warm { border-color: var(--warm-border); background: var(--warm-bg); color: var(--warm); }
 .klar-product-name { font-size: 21px; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; margin-top: 10px; }
 .klar-product-meta { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
 

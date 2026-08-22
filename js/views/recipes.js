@@ -246,7 +246,7 @@ function renderEditor(container, recipeId) {
     </div>
 
     <div class="klar-result-card" id="totalsCard"></div>
-    <button class="btn secondary" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
+    <button class="btn" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
 
     <h2 class="section-title">Zutaten</h2>
     <div id="ingredientList"></div>
@@ -449,23 +449,27 @@ function renderIngredientList(container, recipeId) {
           : share != null ? `${share}% des Gewichts` : "";
         return `
           <div class="klar-ing-row" data-id="${ing.id}">
-            <div class="klar-ing-row-info" data-action="toggle">
-              <div class="name">${esc(ing.name)}</div>
-              <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
-            </div>
-            <div class="klar-ing-stepper-full">
-              <button type="button" class="klar-stepper-btn" data-action="minus" aria-label="10 g weniger">−</button>
-              <div class="klar-ing-amount">
-                <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
-                <span>g</span>
+            <div class="klar-ing-row-top">
+              <div class="klar-ing-row-info" data-action="toggle">
+                <div class="name">${esc(ing.name)}</div>
+                <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
               </div>
-              <button type="button" class="klar-stepper-btn" data-action="plus" aria-label="10 g mehr">+</button>
+              <div class="klar-ing-stepper-compact">
+                <button type="button" class="klar-stepper-btn-sm" data-action="minus" aria-label="10 g weniger">−</button>
+                <div class="klar-ing-amount-compact">
+                  <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
+                  <span>g</span>
+                </div>
+                <button type="button" class="klar-stepper-btn-sm" data-action="plus" aria-label="10 g mehr">+</button>
+              </div>
+              <button type="button" class="klar-ing-chevron" data-action="toggle" aria-label="Details">›</button>
             </div>
             <div class="list-detail" hidden>
               ${nutriTilesHtml({ kcal: ing.per100.kcal, netCarbs: netCarbs100, fat: ing.per100.fat, protein: ing.per100.protein })}
-              <div class="btn-row" style="margin-top:10px">
-                <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
-                <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+              <div class="klar-ing-detail-actions">
+                <button class="klar-icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
+                <button class="klar-icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+                <button class="btn secondary" data-action="focusAmount">Menge eingeben</button>
               </div>
             </div>
           </div>
@@ -497,7 +501,7 @@ function renderIngredientList(container, recipeId) {
       updateIngredient(recipeId, ingId, { grams: g });
       refresh();
     });
-    row.querySelector('[data-action="toggle"]').addEventListener("click", () => {
+    row.querySelectorAll('[data-action="toggle"]').forEach(btn => btn.addEventListener("click", () => {
       const detail = row.querySelector(".list-detail");
       const open = detail.hidden;
       el.querySelectorAll(".klar-ing-row.open").forEach(other => {
@@ -507,13 +511,17 @@ function renderIngredientList(container, recipeId) {
       });
       detail.hidden = !open;
       row.classList.toggle("open", open);
-    });
+    }));
     row.querySelector('[data-action="edit"]').addEventListener("click", () => {
       openIngredientEditor(recipeId, ingId, refresh);
     });
     row.querySelector('[data-action="remove"]').addEventListener("click", () => {
       removeIngredient(recipeId, ingId);
       refresh();
+    });
+    row.querySelector('[data-action="focusAmount"]').addEventListener("click", () => {
+      gramsInput.focus();
+      gramsInput.select();
     });
   });
 }
