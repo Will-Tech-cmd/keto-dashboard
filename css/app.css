@@ -641,19 +641,30 @@ body[data-design="klar"] .fab-btn {
 .klar-diff-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; }
 .klar-diff-head span:first-child { font-weight: 700; }
 
-/* ±10g-Stepper für Zutatenmengen im Rezept-Editor — kompakter als der 44px-Stepper aus dem
-   Onboarding, weil daneben noch ✎ und 🗑️ in derselben Zeile Platz brauchen. Das Zahlenfeld
-   bleibt ein echtes <input>, direkte Eingabe funktioniert also weiterhin. */
-.klar-ing-stepper { display: flex; align-items: center; gap: 4px; flex: none; }
-.klar-ing-stepper-btn {
-  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
-  background: var(--bg-elevated); color: var(--text); font-size: 15px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; padding: 0;
+/* Zutatenzeile im Rezept-Editor: Name/Menge auf eigenen, vollbreiten Zeilen statt in einer
+   engen Reihe mit ✎/🗑️ gequetscht — genau das war schlecht bedienbar. ✎/🗑️ und die
+   Kennwerte je 100g wandern in den Aufklappbereich (Tippen auf Name/Menge), der Stepper
+   nutzt dieselben 44px-Knöpfe wie der Mengendialog. */
+.klar-ing-row { padding: 14px 16px; }
+.klar-ing-row + .klar-ing-row { border-top: 1px solid var(--divider); }
+.klar-ing-row-info { cursor: pointer; }
+.klar-ing-row-info .name { font-weight: 700; font-size: 14px; }
+.klar-ing-row-info .meta {
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.klar-ing-stepper input.ing-grams-input {
-  width: 46px; min-height: 30px; text-align: center; padding: 0 2px;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px;
+.klar-ing-stepper-full { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.klar-ing-amount {
+  flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 5px;
+  height: 44px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
 }
+.klar-ing-amount input {
+  border: none; background: none; text-align: right; font-size: 18px; font-weight: 800;
+  color: var(--text); width: 70px; padding: 0; min-height: auto;
+}
+.klar-ing-amount input::-webkit-outer-spin-button, .klar-ing-amount input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.klar-ing-amount span { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.klar-ing-row .list-detail { border: none; background: none; padding: 12px 0 0; margin-top: 0; }
 
 .klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }

@@ -14,7 +14,7 @@ import {
   qtyStepperHtml, wireQtyStepper, budgetLineText,
 } from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
-import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml } from "../ui.js";
+import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml, nutriTilesHtml } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
 let openRecipeId = null;
@@ -431,7 +431,7 @@ function renderIngredientList(container, recipeId) {
   const withNc = recipe.ingredients.map(ing => {
     const netCarbs100 = calcNetCarbs(ing.per100, { subtractFiber: ing.likelyUsLabel });
     const scale = (ing.grams || 0) / 100;
-    return { ing, nc: netCarbs100 != null ? +(netCarbs100 * scale).toFixed(1) : null };
+    return { ing, netCarbs100, nc: netCarbs100 != null ? +(netCarbs100 * scale).toFixed(1) : null };
   });
   // Die Zutat mit dem größten Netto-KH-Anteil bekommt einen eigenen Hinweis — beim Anpassen
   // eines Rezepts ist genau das die Frage: welche Zutat treibt die Kohlenhydrate.
@@ -441,25 +441,33 @@ function renderIngredientList(container, recipeId) {
   el.innerHTML = `
     <div class="klar-eyebrow" style="margin:0 2px 8px">${recipe.ingredients.length} · ${totalGrams} g</div>
     <div class="klar-list-card">
-      ${withNc.map(({ ing, nc }) => {
+      ${withNc.map(({ ing, nc, netCarbs100 }) => {
         const kcal = ing.per100.kcal != null ? Math.round(ing.per100.kcal * (ing.grams || 0) / 100) : null;
         const share = totalGrams > 0 ? Math.round((ing.grams || 0) / totalGrams * 100) : null;
         const contribution = ing.id === topKcId && nc > 0
           ? "größte KH-Quelle"
           : share != null ? `${share}% des Gewichts` : "";
         return `
-          <div class="list-item" data-id="${ing.id}">
-            <div class="info">
+          <div class="klar-ing-row" data-id="${ing.id}">
+            <div class="klar-ing-row-info" data-action="toggle">
               <div class="name">${esc(ing.name)}</div>
               <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
             </div>
-            <div class="klar-ing-stepper">
-              <button type="button" class="klar-ing-stepper-btn" data-action="minus" aria-label="10 g weniger">−</button>
-              <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
-              <button type="button" class="klar-ing-stepper-btn" data-action="plus" aria-label="10 g mehr">+</button>
+            <div class="klar-ing-stepper-full">
+              <button type="button" class="klar-stepper-btn" data-action="minus" aria-label="10 g weniger">−</button>
+              <div class="klar-ing-amount">
+                <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
+                <span>g</span>
+              </div>
+              <button type="button" class="klar-stepper-btn" data-action="plus" aria-label="10 g mehr">+</button>
             </div>
-            <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
-            <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+            <div class="list-detail" hidden>
+              ${nutriTilesHtml({ kcal: ing.per100.kcal, netCarbs: netCarbs100, fat: ing.per100.fat, protein: ing.per100.protein })}
+              <div class="btn-row" style="margin-top:10px">
+                <button class="icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
+                <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+              </div>
+            </div>
           </div>
         `;
       }).join("")}
@@ -471,7 +479,7 @@ function renderIngredientList(container, recipeId) {
     renderTotals(container, recipeId);
   };
 
-  el.querySelectorAll(".list-item").forEach(row => {
+  el.querySelectorAll(".klar-ing-row").forEach(row => {
     const ingId = row.dataset.id;
     const gramsInput = row.querySelector(".ing-grams-input");
     gramsInput.addEventListener("change", (e) => {
@@ -488,6 +496,17 @@ function renderIngredientList(container, recipeId) {
       const g = (parseFloat(gramsInput.value) || 0) + 10;
       updateIngredient(recipeId, ingId, { grams: g });
       refresh();
+    });
+    row.querySelector('[data-action="toggle"]').addEventListener("click", () => {
+      const detail = row.querySelector(".list-detail");
+      const open = detail.hidden;
+      el.querySelectorAll(".klar-ing-row.open").forEach(other => {
+        if (other === row) return;
+        other.classList.remove("open");
+        other.querySelector(".list-detail").hidden = true;
+      });
+      detail.hidden = !open;
+      row.classList.toggle("open", open);
     });
     row.querySelector('[data-action="edit"]').addEventListener("click", () => {
       openIngredientEditor(recipeId, ingId, refresh);
