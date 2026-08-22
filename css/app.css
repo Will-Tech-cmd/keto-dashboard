@@ -1084,6 +1084,32 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 }
 .klar-ob-footer .btn.ghost { min-height: 36px; font-size: .8rem; }
 
+/* Auswertung: 30-Tage-Streifen unter der Kopfzahl — jeder Tag ein Strich, grün im Ziel,
+   Terrakotta darüber, blass ohne Eintrag. Ergänzt die Kopfzahl um den zeitlichen Verlauf,
+   ohne gleich das ganze Liniendiagramm wiederholen zu müssen. */
+.klar-day-strip { display: flex; align-items: stretch; gap: 2px; margin-top: 16px; height: 28px; }
+.klar-day-strip-bar { flex: 1; min-width: 2px; border-radius: 2px; background: var(--divider); }
+.klar-day-strip-bar.ok { background: var(--accent); }
+.klar-day-strip-bar.over { background: var(--warm); }
+.klar-day-strip-bar.empty { background: var(--divider); opacity: .5; }
+.klar-day-strip-labels {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted);
+}
+
+/* Mengendialog: ein Bedienelement statt zwei sich gegenseitig umrechnender Zahlenfelder.
+   Portion (oder Gramm, wenn keine Portionsgröße bekannt ist) steht groß in der Mitte, echtes
+   <input> darunter also weiterhin direkt eingebbar, +/- daneben in den etablierten 44px. */
+.klar-qty-stepper { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 18px; }
+.klar-qty-display { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
+.klar-qty-primary {
+  border: none; background: none; text-align: center; font-size: 32px; font-weight: 800;
+  letter-spacing: -.02em; color: var(--text); width: 100%; padding: 0; min-height: auto;
+}
+.klar-qty-primary::-webkit-outer-spin-button, .klar-qty-primary::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.klar-qty-primary-unit { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: -2px; }
+.klar-qty-secondary { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+
 /* Alle Animationen (Ringe, Sheets, Toasts, Balken) für Bewegungsempfindlichkeit deaktivieren —
    nicht nur die Snackbar, die das bisher als einzige selbst berücksichtigte. */
 @media (prefers-reduced-motion: reduce) {

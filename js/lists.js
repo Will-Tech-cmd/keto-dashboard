@@ -569,6 +569,13 @@ function renderEvaluation(body, goToTab) {
         <span class="klar-result-unit">von ${withData.length} Tagen mit Einträgen</span>
       </div>
       ${withData.length > 0 ? `
+        <div class="klar-day-strip">
+          ${days.map(d => {
+            const cls = !d.hasEntries ? "empty" : d.totals.netCarbs <= d.targets.netCarbG ? "ok" : "over";
+            return `<span class="klar-day-strip-bar ${cls}"></span>`;
+          }).join("")}
+        </div>
+        <div class="klar-day-strip-labels"><span>vor 30 Tagen</span><span>heute</span></div>
         <div class="klar-tile-grid" style="margin-top:16px">
           <div class="klar-tile"><div class="val">${avg("kcal") ?? "–"}</div><div class="lbl">kcal</div></div>
           <div class="klar-tile"><div class="val">${avg("netCarbs") ?? "–"}</div><div class="lbl">g Netto-KH</div></div>

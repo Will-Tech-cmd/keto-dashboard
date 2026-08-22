@@ -24,29 +24,31 @@ export function renderProfile(container, onProfileChanged) {
     <div id="profileForm"></div>
 
     <div class="divider"></div>
-    <div class="card">
-      <h2>Daten sichern</h2>
-      <p class="hint">Exportiere eure Daten (Profile, Favoriten, Listen) als Datei, oder importiere sie auf dem anderen Handy. Beim Importieren fragt die App, ob zusammengeführt oder ersetzt werden soll.</p>
+    <div class="klar-eyebrow" style="margin:0 2px 8px">Zwei Handys abgleichen</div>
+    <div class="klar-card">
+      <p class="hint" style="margin-top:0">Beim Einspielen zeigt die App erst, was dazukommt — und fragt, ob zusammengeführt oder ersetzt wird.</p>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" id="importBtn">⬇️ Import</button>
-        <button class="btn secondary" id="exportBtn">⬆️ Export</button>
-        <button class="btn secondary" id="shareBtn">📤 Teilen</button>
+        <button class="btn" id="shareBtn">📤 Alles teilen</button>
+        <button class="btn secondary" id="importBtn">⬇️ Einspielen</button>
       </div>
       <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none">
-      ${Store.hasPreMergeBackup() ? `
-        <button class="btn ghost" id="restoreBtn" style="margin-top:8px">↩️ Letzten Import rückgängig machen</button>
-      ` : ""}
     </div>
 
-    <div class="card">
-      <h2>Nur Rezepte teilen</h2>
-      <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
-      <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" id="importRecipesBtn">⬇️ Import</button>
-        <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
-        <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
+    <div class="klar-list-card" style="margin-top:10px">
+      <div class="list-item" id="recipesOnlyRow" style="cursor:pointer">
+        <div class="info"><div class="name">Nur Rezepte</div><div class="meta">Teilen, einspielen · Profile bleiben unberührt</div></div>
+        <span class="chevron">›</span>
       </div>
-      <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+      <div class="list-item" id="exportOnlyRow" style="cursor:pointer">
+        <div class="info"><div class="name">Als Datei sichern</div><div class="meta">Export ohne Teilen-Dialog</div></div>
+        <span class="chevron">›</span>
+      </div>
+      ${Store.hasPreMergeBackup() ? `
+        <div class="list-item" id="restoreRow" style="cursor:pointer">
+          <div class="info"><div class="name">Letzten Import rückgängig machen</div><div class="meta">Stand vom ${esc(new Date(Store.getPreMergeInfo()?.at || Date.now()).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }))}</div></div>
+          <span class="chevron">›</span>
+        </div>
+      ` : ""}
     </div>
 
     <div class="card">
@@ -618,30 +620,47 @@ function openMergeDialog(container, json, fileInfo = {}) {
   });
 }
 
-function wireExportImport(container) {
-  container.querySelector("#exportBtn").addEventListener("click", () => {
+/** Teilt das komplette Backup — fällt auf Download zurück, wenn das Gerät nicht teilen kann. */
+async function shareFullBackup() {
+  const file = new File([Store.exportJSON()], backupFilename(), { type: BACKUP_MIME });
+  if (!navigator.canShare?.({ files: [file] })) {
     downloadBackup();
-    showToast("Export gestartet");
-  });
+    showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
+    return;
+  }
+  try {
+    await navigator.share({ files: [file], title: "Keto-Dashboard Backup" });
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    downloadBackup();
+    showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
+  }
+}
 
-  // Teilen-Knopf bleibt immer sichtbar: kann das Gerät keine Dateien teilen, wird
-  // stattdessen der Download ausgelöst, statt den Knopf kommentarlos zu verstecken.
-  const shareBtn = container.querySelector("#shareBtn");
-  shareBtn.addEventListener("click", async () => {
-    const file = new File([Store.exportJSON()], backupFilename(), { type: BACKUP_MIME });
-    if (!navigator.canShare?.({ files: [file] })) {
-      downloadBackup();
-      showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
-      return;
-    }
-    try {
-      await navigator.share({ files: [file], title: "Keto-Dashboard Backup" });
-    } catch (e) {
-      if (e.name === "AbortError") return;
-      downloadBackup();
-      showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
-    }
-  });
+/** Teilt nur die Rezepte — fällt ebenfalls auf Download zurück. */
+async function shareRecipesOnly() {
+  const file = new File([Store.exportRecipesJSON()], recipesFilename(), { type: BACKUP_MIME });
+  if (!navigator.canShare?.({ files: [file] })) {
+    downloadBlob(Store.exportRecipesJSON(), recipesFilename());
+    showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
+    return;
+  }
+  try {
+    await navigator.share({ files: [file], title: "Keto-Dashboard Rezepte" });
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    downloadBlob(Store.exportRecipesJSON(), recipesFilename());
+    showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
+  }
+}
+
+/**
+ * Sync-Karte: "Alles teilen" und "Einspielen" als Hauptweg, alles andere (Nur Rezepte, Datei
+ * sichern, Rückgängig) als Zeile darunter — statt sechs gleich aussehenden Knöpfen für zwei
+ * Vorgänge (Voll-Backup, Nur-Rezepte).
+ */
+function wireExportImport(container) {
+  container.querySelector("#shareBtn").addEventListener("click", shareFullBackup);
 
   const fileInput = container.querySelector("#importFile");
   container.querySelector("#importBtn").addEventListener("click", () => fileInput.click());
@@ -659,7 +678,14 @@ function wireExportImport(container) {
     fileInput.value = "";
   });
 
-  container.querySelector("#restoreBtn")?.addEventListener("click", () => {
+  container.querySelector("#exportOnlyRow").addEventListener("click", () => {
+    downloadBackup();
+    showToast("Export gestartet");
+  });
+
+  container.querySelector("#recipesOnlyRow").addEventListener("click", () => openRecipesOnlySheet());
+
+  container.querySelector("#restoreRow")?.addEventListener("click", () => {
     const info = Store.getPreMergeInfo();
     const when = info ? new Date(info.at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "";
     if (!confirm(`Stand von vor dem letzten Import (${when}) wiederherstellen? Alles, was seitdem dazugekommen ist, geht verloren.`)) return;
@@ -667,31 +693,36 @@ function wireExportImport(container) {
     showToast("Stand wiederhergestellt");
     renderProfile(container, () => {});
   });
+}
 
-  container.querySelector("#exportRecipesBtn").addEventListener("click", () => {
+/** Kleines Sheet für den selteneren Weg: nur Rezepte teilen/einspielen, ohne Profile/Verlauf/Listen. */
+function openRecipesOnlySheet() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Nur Rezepte</h2>
+      <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn secondary" id="importRecipesBtn">⬇️ Import</button>
+        <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
+        <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
+      </div>
+      <input type="file" id="importRecipesFile" accept=".json,.txt,application/json,text/plain" style="display:none">
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelector("#exportRecipesBtn").addEventListener("click", () => {
     downloadBlob(Store.exportRecipesJSON(), recipesFilename());
     showToast("Export gestartet");
   });
+  overlay.querySelector("#shareRecipesBtn").addEventListener("click", shareRecipesOnly);
 
-  const shareRecipesBtn = container.querySelector("#shareRecipesBtn");
-  shareRecipesBtn.addEventListener("click", async () => {
-    const file = new File([Store.exportRecipesJSON()], recipesFilename(), { type: BACKUP_MIME });
-    if (!navigator.canShare?.({ files: [file] })) {
-      downloadBlob(Store.exportRecipesJSON(), recipesFilename());
-      showToast("Teilen wird hier nicht unterstützt — Datei wurde gespeichert");
-      return;
-    }
-    try {
-      await navigator.share({ files: [file], title: "Keto-Dashboard Rezepte" });
-    } catch (e) {
-      if (e.name === "AbortError") return;
-      downloadBlob(Store.exportRecipesJSON(), recipesFilename());
-      showToast("Teilen fehlgeschlagen — Datei wurde stattdessen gespeichert");
-    }
-  });
-
-  const recipesFileInput = container.querySelector("#importRecipesFile");
-  container.querySelector("#importRecipesBtn").addEventListener("click", () => recipesFileInput.click());
+  const recipesFileInput = overlay.querySelector("#importRecipesFile");
+  overlay.querySelector("#importRecipesBtn").addEventListener("click", () => recipesFileInput.click());
   recipesFileInput.addEventListener("change", async () => {
     const file = recipesFileInput.files[0];
     if (!file) return;
@@ -704,4 +735,5 @@ function wireExportImport(container) {
     }
     recipesFileInput.value = "";
   });
+  keepActionsInView(overlay);
 }

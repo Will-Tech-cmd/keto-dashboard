@@ -9,7 +9,10 @@ import {
   updateIngredient, calcRecipeTotals, calcPerServing, logRecipeConsumption,
   parseIngredientText, recognizeImageText,
 } from "../recipes.js";
-import { suggestMeal, mealChipsHtml, wireMealChips, getActiveDateKey, dateLabel, wireCoupledAmountFields } from "../consumption.js";
+import {
+  suggestMeal, mealShort, MEAL_LABELS, getActiveDateKey, dateLabel,
+  qtyStepperHtml, wireQtyStepper, budgetLineText,
+} from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
@@ -128,69 +131,95 @@ function openServingsModal(recipe) {
   const gramsPer = gramsPerServing(recipe);
   let selectedMeal = suggestMeal();
   const dayLabel = dateLabel(getActiveDateKey());
+  // Derselbe Stepper wie beim Produkt-Eintragen: Portion primär, Gramm als Zeile darunter.
+  // Ohne bekanntes Portionsgewicht (keine Zutaten mit Mengenangabe) steuert er Portionen direkt.
+  let currentGrams = gramsPer || 1;
+
   const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
+  overlay.className = "klar-sheet-overlay";
   overlay.innerHTML = `
-    <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">${esc(recipe.name)}</h2>
-      <p class="hint">Rezept ergibt ${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal. Wie viele davon zu „${esc(dayLabel)}" hinzufügen?</p>
-      ${gramsPer ? `
-        <div class="btn-row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
-          ${[1, 2, 3].map(n => `<button type="button" class="btn secondary qty-chip" data-portions="${n}" style="width:auto;flex:none;padding:0 14px">${n}× (${Math.round(gramsPer * n)} g)</button>`).join("")}
+    <div class="klar-sheet">
+      <div class="klar-sheet-handle"></div>
+      <div class="klar-sheet-title">${esc(recipe.name)}</div>
+      <div class="klar-sheet-sub">${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal · Eintrag für ${esc(dayLabel)}</div>
+
+      ${gramsPer ? qtyStepperHtml(gramsPer, currentGrams) : `
+        <div class="klar-qty-stepper">
+          <button type="button" class="klar-stepper-btn" id="qtyMinus" aria-label="weniger">−</button>
+          <div class="klar-qty-display">
+            <input type="number" id="qtyGramsInput" class="klar-qty-primary" value="1" min="0.25" step="0.25" inputmode="decimal">
+            <span class="klar-qty-primary-unit">Portionen</span>
+          </div>
+          <button type="button" class="klar-stepper-btn" id="qtyPlus" aria-label="mehr">+</button>
         </div>
-      ` : ""}
-      <label for="servingsInput">Portionen</label>
-      <input type="number" id="servingsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
-      ${gramsPer ? `
-        <label for="servingsGramsInput">Menge in Gramm</label>
-        <input type="number" id="servingsGramsInput" value="${gramsPer}" min="1" inputmode="numeric">
-      ` : ""}
-      <p class="hint" id="servingsPreview" style="margin-top:8px"></p>
-      ${mealChipsHtml(selectedMeal)}
-      <div class="btn-row" style="margin-top:16px">
+      `}
+
+      <div class="klar-portion-panel gray" id="servingsPreview" style="margin-top:16px"></div>
+
+      <div class="klar-meal-select-head" style="margin-top:18px">
+        <span class="klar-eyebrow">Mahlzeit</span>
+      </div>
+      <div class="klar-meal-segments">
+        ${Object.keys(MEAL_LABELS).map(key => `
+          <button type="button" class="klar-meal-segment ${key === selectedMeal ? "active" : ""}" data-meal="${key}">${esc(mealShort(key))}</button>
+        `).join("")}
+      </div>
+
+      <div class="btn-row" style="margin-top:18px">
         <button type="button" class="btn secondary" id="servingsCancel">Abbrechen</button>
-        <button type="button" class="btn" id="servingsConfirm">Eintragen</button>
+        <button type="button" class="btn" id="servingsConfirm">Eintragen · ${esc(mealShort(selectedMeal))}</button>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
-  wireMealChips(overlay, (meal) => { selectedMeal = meal; });
 
-  const input = overlay.querySelector("#servingsInput");
-  const gramsInput = overlay.querySelector("#servingsGramsInput");
-  const preview = overlay.querySelector("#servingsPreview");
-  // Portionen und Gramm rechnen sich gegenseitig um — dieselbe Kopplung wie beim Produkt-Dialog.
-  if (gramsPer) wireCoupledAmountFields(input, gramsInput, gramsPer);
-
-  const updatePreview = () => {
-    const val = parseFloat(input.value);
-    if (!val || val <= 0) { preview.textContent = ""; return; }
-    const gramsPart = gramsPer ? `${Math.round(gramsPer * val)} g · ` : "";
-    preview.textContent = `→ ${gramsPart}${round1((perServing.kcal ?? 0) * val)} kcal · ${round1((perServing.netCarbs ?? 0) * val)} g Netto-KH werden eingetragen`;
-  };
-  input.addEventListener("input", updatePreview);
-  gramsInput?.addEventListener("input", updatePreview);
-  updatePreview();
-
-  overlay.querySelectorAll(".qty-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      input.value = chip.dataset.portions;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+  const confirmBtn = overlay.querySelector("#servingsConfirm");
+  overlay.querySelectorAll(".klar-meal-segment").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedMeal = btn.dataset.meal;
+      overlay.querySelectorAll(".klar-meal-segment").forEach(b => b.classList.toggle("active", b === btn));
+      confirmBtn.textContent = `Eintragen · ${mealShort(selectedMeal)}`;
     });
   });
+
+  const preview = overlay.querySelector("#servingsPreview");
+  const updatePreview = (grams) => {
+    currentGrams = grams;
+    const servings = gramsPer ? grams / gramsPer : grams;
+    if (!servings || servings <= 0) { preview.innerHTML = ""; return; }
+    const kcal = round1((perServing.kcal ?? 0) * servings);
+    const nc = round1((perServing.netCarbs ?? 0) * servings);
+    preview.innerHTML = `
+      <div class="klar-portion-head">Das trägt ein</div>
+      <div class="klar-portion-value">${nc} g<span>Netto-KH · ${kcal} kcal</span></div>
+      <div class="klar-portion-sub">${budgetLineText(nc)}</div>
+    `;
+  };
+
+  let getGrams;
+  if (gramsPer) {
+    ({ getGrams } = wireQtyStepper(overlay, gramsPer, currentGrams, updatePreview));
+  } else {
+    const input = overlay.querySelector("#qtyGramsInput");
+    const setVal = (v) => { input.value = Math.max(0.25, round1(v)); updatePreview(parseFloat(input.value)); };
+    overlay.querySelector("#qtyMinus").addEventListener("click", () => setVal(parseFloat(input.value) - 0.25));
+    overlay.querySelector("#qtyPlus").addEventListener("click", () => setVal(parseFloat(input.value) + 0.25));
+    input.addEventListener("input", () => updatePreview(parseFloat(input.value)));
+    getGrams = () => parseFloat(input.value);
+  }
+  updatePreview(currentGrams);
 
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#servingsCancel").addEventListener("click", close);
   overlay.querySelector("#servingsConfirm").addEventListener("click", () => {
-    const servings = parseFloat(input.value);
+    const grams = getGrams();
+    const servings = gramsPer ? grams / gramsPer : grams;
     if (!servings || servings <= 0) { showToast("Bitte eine gültige Anzahl angeben"); return; }
     logRecipeConsumption(recipe, servings, selectedMeal);
-    showToast(`${servings} Portion(en) „${recipe.name}" eingetragen`);
+    showToast(`${round1(servings)} Portion(en) „${recipe.name}" eingetragen`);
     close();
   });
-  keepActionsInView(overlay);
-  input.focus();
 }
 
 function round1(v) {
