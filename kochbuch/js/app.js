@@ -58,13 +58,23 @@ function route() {
   }
 }
 
+let creatingRezept = false;
+
 async function createAndEdit() {
+  // Das Anlegen braucht einen Netzwerk-Roundtrip und zeigt bis zum Seitenwechsel keine
+  // Rückmeldung — ohne diese Sperre legt ungeduldiges Mehrfachtippen mehrere leere Rezepte an.
+  if (creatingRezept) return;
+  creatingRezept = true;
+  document.getElementById("newBtn")?.setAttribute("disabled", "true");
   const wer = getWhoAmI();
   try {
     const created = await createRezeptHead({ titel: "Neues Rezept", portionen: 2, erstellt_von: wer, geaendert_von: wer });
     location.hash = `#/bearbeiten/${created.id}`;
   } catch (err) {
     showToast(err.message || "Anlegen fehlgeschlagen — offline?");
+  } finally {
+    creatingRezept = false;
+    document.getElementById("newBtn")?.removeAttribute("disabled");
   }
 }
 
