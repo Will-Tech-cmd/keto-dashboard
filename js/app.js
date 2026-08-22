@@ -14,6 +14,7 @@ import { logRecipeConsumption, calcPerServing } from "./recipes.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { getTargetsForDate } from "./profiles.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
+import { isSyncEnabled, syncNow } from "./sync.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -95,8 +96,14 @@ profileSwitchBtn.addEventListener("click", () => {
   updateProfileSwitchLabel();
   applyDesignTheme(); // jedes Profil hat sein eigenes Design/Erscheinungsbild
   showToast(`Profil: ${next.name}`);
-  if (activeTab === "start" || activeTab === "profile" || activeTab === "lists") RENDERERS[activeTab]();
+  refreshCurrentTabIfSafe();
 });
+
+/** Rendert den sichtbaren Tab neu, ohne die History anzufassen — nur für Tabs ohne eigenen,
+ * zwischenzeitlichen Bearbeitungszustand (Rezept-Editor und Scanner bleiben deshalb außen vor). */
+function refreshCurrentTabIfSafe() {
+  if (activeTab === "start" || activeTab === "profile" || activeTab === "lists") RENDERERS[activeTab]();
+}
 
 // ---------------------------------------------------------------------------
 // Eintragen-Sheet (nur Design "Klar", über den FAB in der Tabbar).
@@ -265,7 +272,10 @@ document.addEventListener("visibilitychange", () => {
 
 // Offline/Online Hinweis
 window.addEventListener("offline", () => showToast("Offline — gecachte Produkte funktionieren weiter"));
-window.addEventListener("online", () => showToast("Wieder online"));
+window.addEventListener("online", () => {
+  showToast("Wieder online");
+  if (isSyncEnabled()) syncNow().catch(() => {}); // Fehler zeigt die Profil-Ansicht beim nächsten Öffnen
+});
 
 // Service Worker registrieren (relativer Pfad, funktioniert unter /keto-dashboard/ Unterpfad)
 if ("serviceWorker" in navigator) {
@@ -319,6 +329,12 @@ if (Store.isOnboarded()) {
   goToTab(initialTabFromUrl());
   if (drainedFromKochbuch > 0) {
     showToast(`${drainedFromKochbuch} Zutat(en) aus dem Kochbuch auf die Einkaufsliste übernommen`);
+  }
+  if (isSyncEnabled()) {
+    syncNow().then(refreshCurrentTabIfSafe).catch(() => {
+      // Fehler (z.B. abgelaufene Anmeldung) zeigt die Profil-Ansicht beim nächsten Öffnen an —
+      // kein Toast hier, damit ein kurzer Verbindungsaussetzer beim Start nicht jedes Mal stört.
+    });
   }
 } else {
   // Auch die Ersteinrichtung schon im Design "Klar" zeigen — ohne das hier ist der allererste
