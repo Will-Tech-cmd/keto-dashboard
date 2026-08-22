@@ -11,10 +11,10 @@ import {
 } from "../recipes.js";
 import {
   suggestMeal, mealShort, MEAL_LABELS, getActiveDateKey, dateLabel,
-  qtyStepperHtml, wireQtyStepper, budgetLineText,
+  amountFieldsHtml, wireAmountFields, budgetLineText,
 } from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
-import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml, nutriTilesHtml } from "../ui.js";
+import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml, nutriTilesHtml, selectOnFocus } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
 
 let openRecipeId = null;
@@ -143,15 +143,9 @@ function openServingsModal(recipe) {
       <div class="klar-sheet-title">${esc(recipe.name)}</div>
       <div class="klar-sheet-sub">${recipe.servings} Portionen à ${gramsPer ? `${gramsPer} g, ` : ""}${perServing.kcal ?? "–"} kcal · Eintrag für ${esc(dayLabel)}</div>
 
-      ${gramsPer ? qtyStepperHtml(gramsPer, currentGrams) : `
-        <div class="klar-qty-stepper">
-          <button type="button" class="klar-stepper-btn" id="qtyMinus" aria-label="weniger">−</button>
-          <div class="klar-qty-display">
-            <input type="number" id="qtyGramsInput" class="klar-qty-primary" value="1" min="0.25" step="0.25" inputmode="decimal">
-            <span class="klar-qty-primary-unit">Portionen</span>
-          </div>
-          <button type="button" class="klar-stepper-btn" id="qtyPlus" aria-label="mehr">+</button>
-        </div>
+      ${gramsPer ? amountFieldsHtml(gramsPer, currentGrams, { multiples: [1, 2, 3] }) : `
+        <label for="qtyGramsInput">Portionen</label>
+        <input type="number" id="qtyGramsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
       `}
 
       <div class="klar-portion-panel gray" id="servingsPreview" style="margin-top:16px"></div>
@@ -198,15 +192,14 @@ function openServingsModal(recipe) {
 
   let getGrams;
   if (gramsPer) {
-    ({ getGrams } = wireQtyStepper(overlay, gramsPer, currentGrams, updatePreview));
+    ({ getGrams } = wireAmountFields(overlay, gramsPer, updatePreview));
   } else {
+    // Rezept ohne Zutatengewichte: das eine Feld trägt direkt Portionen.
     const input = overlay.querySelector("#qtyGramsInput");
-    const setVal = (v) => { input.value = Math.max(0.25, round1(v)); updatePreview(parseFloat(input.value)); };
-    overlay.querySelector("#qtyMinus").addEventListener("click", () => setVal(parseFloat(input.value) - 0.25));
-    overlay.querySelector("#qtyPlus").addEventListener("click", () => setVal(parseFloat(input.value) + 0.25));
     input.addEventListener("input", () => updatePreview(parseFloat(input.value)));
     getGrams = () => parseFloat(input.value);
   }
+  selectOnFocus(overlay);
   updatePreview(currentGrams);
 
   const close = bindBackClose(() => overlay.remove());

@@ -1126,18 +1126,11 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
   font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted);
 }
 
-/* Mengendialog: ein Bedienelement statt zwei sich gegenseitig umrechnender Zahlenfelder.
-   Portion (oder Gramm, wenn keine Portionsgröße bekannt ist) steht groß in der Mitte, echtes
-   <input> darunter also weiterhin direkt eingebbar, +/- daneben in den etablierten 44px. */
-.klar-qty-stepper { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 18px; }
-.klar-qty-display { display: flex; flex-direction: column; align-items: center; min-width: 110px; }
-.klar-qty-primary {
-  border: none; background: none; text-align: center; font-size: 32px; font-weight: 800;
-  letter-spacing: -.02em; color: var(--text); width: 100%; padding: 0; min-height: auto;
-}
-.klar-qty-primary::-webkit-outer-spin-button, .klar-qty-primary::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.klar-qty-primary-unit { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-top: -2px; }
-.klar-qty-secondary { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+/* Mengendialog: Vielfachen-Chips ("1× (60 g)") vor den beiden gekoppelten Zahlenfeldern.
+   Bewusst einzeilig (nowrap + scrollbar) statt umbrechend — bei vier Chips mit Gramm-Angabe
+   ergab der Umbruch sonst eine zweite Zeile mit nur einem Chip darin. */
+.klar-sheet .klar-chip-row::-webkit-scrollbar { display: none; }
+.klar-sheet .klar-chip-row { scrollbar-width: none; }
 
 /* Alle Animationen (Ringe, Sheets, Toasts, Balken) für Bewegungsempfindlichkeit deaktivieren —
    nicht nur die Snackbar, die das bisher als einzige selbst berücksichtigte. */

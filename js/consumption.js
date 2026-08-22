@@ -4,7 +4,7 @@
 import { Store, dateKeyOf } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
-import { esc, showToast, bindBackClose } from "./ui.js";
+import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
 
 export const MEAL_LABELS = {
   breakfast: "🌅 Frühstück",
@@ -267,96 +267,75 @@ export function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
 }
 
 /**
- * Ein Mengen-Bedienelement statt zwei Zahlenfelder, die sich gegenseitig umrechnen — das
- * versteht man erst, wenn man tippt. Ist eine Portionsgröße bekannt, ist die Portion das
- * große, primäre Feld (± verändert sie in Vierteln), Gramm steht klein als Zeile darunter und
- * lässt sich über den „g …"-Schnellwert für die freie Eingabe aufklappen. Ohne bekannte
- * Portionsgröße steuert der Stepper Gramm direkt, in 10er-Schritten.
+ * Zwei gekoppelte Zahlenfelder (Portionen / Menge in Gramm) statt eines Steppers — Eingabe in
+ * einem rechnet das andere live um. Davor Schnellwert-Chips für die üblichen Vielfachen der
+ * Portionsgröße ("1× (60 g)" usw.), in einer Zeile ohne Umbruch — bei vielen/langen Werten
+ * scrollt die Zeile statt in eine zweite umzubrechen.
  */
-export function qtyStepperHtml(servingG, grams) {
-  if (servingG) {
-    const portions = round1(grams / servingG);
-    return `
-      <div class="klar-qty-stepper">
-        <button type="button" class="klar-stepper-btn" id="qtyMinus" aria-label="weniger">−</button>
-        <div class="klar-qty-display">
-          <input type="number" id="qtyPortionsInput" class="klar-qty-primary" value="${portions}" min="0.25" step="0.25" inputmode="decimal">
-          <span class="klar-qty-primary-unit">${portions === 1 ? "Portion" : "Portionen"}</span>
-          <span class="klar-qty-secondary" id="qtyGramsDisplay">${grams} g</span>
-        </div>
-        <button type="button" class="klar-stepper-btn" id="qtyPlus" aria-label="mehr">+</button>
-      </div>
-      <div class="klar-chip-row" style="margin-top:12px">
-        ${[0.5, 1, 2, 3].map(n => `<button type="button" class="klar-chip qty-chip ${n === portions ? "top" : ""}" data-portions="${n}">${n === 0.5 ? "½" : n}</button>`).join("")}
-        <button type="button" class="klar-chip" id="qtyGramsChip">g …</button>
-      </div>
-      <div id="qtyGramsWrap" style="display:none;margin-top:10px">
-        <label for="qtyGramsInput">Menge in Gramm</label>
-        <input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">
-      </div>
-    `;
-  }
+export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4] } = {}) {
+  const portions = servingG ? round1(grams / servingG) : null;
   return `
-    <div class="klar-qty-stepper">
-      <button type="button" class="klar-stepper-btn" id="qtyMinus" aria-label="weniger">−</button>
-      <div class="klar-qty-display">
-        <input type="number" id="qtyGramsInput" class="klar-qty-primary" value="${grams}" min="1" inputmode="numeric">
-        <span class="klar-qty-primary-unit">Gramm</span>
+    ${servingG ? `
+      <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
+        ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
       </div>
-      <button type="button" class="klar-stepper-btn" id="qtyPlus" aria-label="mehr">+</button>
-    </div>
+      <label for="qtyPortionsInput">Portionen</label>
+      <input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">
+    ` : ""}
+    <label for="qtyGramsInput">Menge in Gramm</label>
+    <input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">
   `;
 }
 
-/** Verdrahtet qtyStepperHtml(): hält Portion/Gramm synchron und ruft `onChange(grams)` bei
+/** Verdrahtet amountFieldsHtml(): hält Portion/Gramm synchron und ruft `onChange(grams)` bei
  * jeder Änderung. Gibt eine getGrams()-Abfrage zurück für den Bestätigen-Knopf. */
-export function wireQtyStepper(overlay, servingG, initialGrams, onChange) {
-  let grams = initialGrams;
+export function wireAmountFields(overlay, servingG, onChange) {
   const portionsInput = overlay.querySelector("#qtyPortionsInput");
   const gramsInput = overlay.querySelector("#qtyGramsInput");
-  const gramsDisplay = overlay.querySelector("#qtyGramsDisplay");
-  const step = servingG ? servingG / 4 : 10;
+  let syncing = false;
 
-  const setGrams = (g, { fromPortions = false, fromGrams = false } = {}) => {
-    grams = Math.max(0, round1(g));
-    if (servingG) {
-      if (!fromPortions) portionsInput.value = round1(grams / servingG);
-      if (gramsDisplay) gramsDisplay.textContent = `${grams} g`;
-      if (!fromGrams) gramsInput.value = grams;
-      overlay.querySelectorAll(".qty-chip[data-portions]").forEach(c => {
-        c.classList.toggle("top", parseFloat(c.dataset.portions) === round1(grams / servingG));
-      });
-    } else if (!fromGrams) {
-      gramsInput.value = grams;
-    }
-    onChange(grams);
+  const markActiveChip = (portions) => {
+    overlay.querySelectorAll(".qty-mult-chip").forEach(c => {
+      c.classList.toggle("top", parseFloat(c.dataset.portions) === portions);
+    });
   };
 
-  overlay.querySelector("#qtyMinus").addEventListener("click", () => setGrams(grams - step));
-  overlay.querySelector("#qtyPlus").addEventListener("click", () => setGrams(grams + step));
-
-  if (servingG) {
+  if (portionsInput) {
     portionsInput.addEventListener("input", () => {
+      if (syncing) return;
       const p = parseFloat(portionsInput.value);
       if (!p || p <= 0) return;
-      setGrams(p * servingG, { fromPortions: true });
+      syncing = true;
+      gramsInput.value = round1(p * servingG);
+      markActiveChip(p);
+      syncing = false;
+      onChange(parseFloat(gramsInput.value));
     });
-    overlay.querySelectorAll(".qty-chip[data-portions]").forEach(chip => {
-      chip.addEventListener("click", () => setGrams(parseFloat(chip.dataset.portions) * servingG));
-    });
-    overlay.querySelector("#qtyGramsChip")?.addEventListener("click", () => {
-      const wrap = overlay.querySelector("#qtyGramsWrap");
-      wrap.style.display = "block";
-      overlay.querySelector("#qtyGramsInput").focus();
+    overlay.querySelectorAll(".qty-mult-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const p = parseFloat(chip.dataset.portions);
+        portionsInput.value = p;
+        gramsInput.value = round1(p * servingG);
+        markActiveChip(p);
+        onChange(parseFloat(gramsInput.value));
+      });
     });
   }
   gramsInput.addEventListener("input", () => {
+    if (syncing) return;
     const g = parseFloat(gramsInput.value);
     if (!g || g < 0) return;
-    setGrams(g, { fromGrams: true });
+    if (portionsInput) {
+      syncing = true;
+      const p = round1(g / servingG);
+      portionsInput.value = p;
+      markActiveChip(p);
+      syncing = false;
+    }
+    onChange(g);
   });
 
-  return { getGrams: () => grams };
+  return { getGrams: () => parseFloat(gramsInput.value) };
 }
 
 /**
@@ -380,7 +359,7 @@ export function openQuantityModal(product, onLogged) {
       <div class="klar-sheet-title">${esc(product.name)}</div>
       <div class="klar-sheet-sub">${esc(product.brand || "")}${product.brand ? " · " : ""}${isViewingToday() ? "Eintrag für Heute" : `Eintrag für ${esc(dateLabel(getActiveDateKey()))}`}</div>
 
-      ${qtyStepperHtml(servingG, currentGrams)}
+      ${amountFieldsHtml(servingG, currentGrams)}
 
       <div class="klar-portion-panel gray" id="qtyPreview" style="margin-top:16px"></div>
 
@@ -423,7 +402,8 @@ export function openQuantityModal(product, onLogged) {
       <div class="klar-portion-sub">${budgetLineText(netCarbs)}</div>
     `;
   };
-  wireQtyStepper(overlay, servingG, currentGrams, updatePreview);
+  wireAmountFields(overlay, servingG, updatePreview);
+  selectOnFocus(overlay);
   updatePreview(currentGrams);
 
   const close = bindBackClose(() => overlay.remove());
@@ -467,15 +447,9 @@ export function openEditConsumptionModal(entry, onDone) {
       <div class="klar-sheet-title">${esc(entry.name)}</div>
       <div class="klar-sheet-sub">Menge anpassen — Nährwerte werden automatisch neu berechnet.</div>
 
-      ${gramsBase != null ? qtyStepperHtml(servingG, currentGrams) : `
-        <div class="klar-qty-stepper">
-          <button type="button" class="klar-stepper-btn" id="qtyMinus" aria-label="weniger">−</button>
-          <div class="klar-qty-display">
-            <input type="number" id="qtyGramsInput" class="klar-qty-primary" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
-            <span class="klar-qty-primary-unit">${currentAmount === 1 ? "Portion" : "Portionen"}</span>
-          </div>
-          <button type="button" class="klar-stepper-btn" id="qtyPlus" aria-label="mehr">+</button>
-        </div>
+      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams, { multiples: [1, 2, 3] }) : `
+        <label for="qtyGramsInput">Portionen</label>
+        <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
       `}
 
       <div class="klar-portion-panel gray" id="editPreview" style="margin-top:16px"></div>
@@ -521,15 +495,15 @@ export function openEditConsumptionModal(entry, onDone) {
 
   let getGrams;
   if (gramsBase != null) {
-    ({ getGrams } = wireQtyStepper(overlay, servingG, currentGrams, updatePreview));
+    ({ getGrams } = wireAmountFields(overlay, servingG, updatePreview));
   } else {
+    // Rezept ohne Gewichts-Schnappschuss: das eine Feld trägt direkt Portionen, toVal() lässt
+    // den Wert in dem Fall unverändert durch.
     const input = overlay.querySelector("#qtyGramsInput");
-    const setVal = (v) => { input.value = Math.max(0.1, round1(v)); updatePreview(parseFloat(input.value)); };
-    overlay.querySelector("#qtyMinus").addEventListener("click", () => setVal(parseFloat(input.value) - 0.25));
-    overlay.querySelector("#qtyPlus").addEventListener("click", () => setVal(parseFloat(input.value) + 0.25));
     input.addEventListener("input", () => updatePreview(parseFloat(input.value)));
     getGrams = () => parseFloat(input.value);
   }
+  selectOnFocus(overlay);
   updatePreview(currentGrams);
 
   const close = bindBackClose(() => overlay.remove());

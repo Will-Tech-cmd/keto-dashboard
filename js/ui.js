@@ -127,6 +127,21 @@ export function keepActionsInView(overlay) {
   });
   vv.addEventListener("resize", apply);
   vv.addEventListener("scroll", apply);
+
+  selectOnFocus(overlay);
+}
+
+/**
+ * Markiert den Inhalt eines Zahlen-/Textfeldes, sobald es den Fokus bekommt. Springt man mit
+ * Enter/Tab durch ein Formular (Zutat bearbeiten hat zehn Felder), landet der Cursor sonst
+ * irgendwo im bestehenden Wert und man muss ihn erst löschen, bevor man den neuen tippen kann.
+ */
+export function selectOnFocus(root) {
+  root.querySelectorAll('input[type="text"], input[type="number"]').forEach(el => {
+    // setTimeout(0): ruft man select() direkt im focus-Handler auf, setzt der Browser die
+    // Cursor-Position danach trotzdem wieder zurück (eigene Nachbearbeitung nach dem Fokus).
+    el.addEventListener("focus", () => setTimeout(() => el.select(), 0));
+  });
 }
 
 /**
