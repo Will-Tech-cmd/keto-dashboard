@@ -43,6 +43,8 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - Portionsgewicht wird aus den Zutatenmengen abgeleitet („1 P. (240 g)")
 - Zutaten auf die Einkaufsliste übernehmen
 - Rezepte einzeln exportieren, teilen und importieren — ohne den Rest der Daten
+- „📖 Ins Kochbuch": übergibt ein Rezept an das Kochbuch (siehe unten), wo sich Zubereitung,
+  Fotos und mehr ergänzen lassen
 
 ### Profil
 - Körperdaten, Aktivitätsgrad, Ziel und Defizit; Zielwerte nach Mifflin-St Jeor bzw.
@@ -60,9 +62,41 @@ Nährwerte, die beim Eintragen galten, auch wenn ein Rezept später korrigiert w
 
 ---
 
+## Kochbuch
+
+Unter [`kochbuch/`](kochbuch/) liegt eine zweite, eigenständige PWA:
+**→ [will-tech-cmd.github.io/keto-dashboard/kochbuch](https://will-tech-cmd.github.io/keto-dashboard/kochbuch/)**
+
+Anders als das Keto-Dashboard ist das Kochbuch bewusst **online und mit Konto** — dafür lässt
+es sich vom Handy aus schreiben und ist sofort auf beiden Geräten sichtbar. Es ergänzt Rezepte
+um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und Kommentare.
+
+- **Backend:** [Supabase](https://supabase.com) (Postgres + Storage), Projektregion eu-west-2.
+  Row-Level-Security lässt nur angemeldete Zugriffe zu; ohne Anmeldung ist keine Zeile lesbar.
+- **Anmeldung:** ein gemeinsames Zugangswort für ein einziges Konto — die Registrierung neuer
+  Konten ist im Projekt gesperrt. Einmalig wird nach eurem Namen gefragt (rein lokal
+  gespeichert), damit Einträge und Kommentare erkennen lassen, von wem sie stammen.
+- **Fotos** liegen in einem öffentlich lesbaren Storage-Bucket unter nicht erratbaren
+  Zufallspfaden — kein Anmelde-Umweg beim Anzeigen, dafür kein echter Zugriffsschutz für wer
+  den Pfad kennt.
+- **Übernahme aus dem Keto-Dashboard:** über den Knopf „📖 Ins Kochbuch" im Rezept-Editor (nur
+  auf demselben Gerät/Browser, da direkt aus dessen `localStorage` gelesen wird) oder über eine
+  exportierte Rezept-Datei (Profil → „Nur Rezepte") — das ist der Weg fürs zweite Handy. Ein
+  erneuter Import über dieselbe Kochbuch-Seite aktualisiert nur Zutaten und Nährwerte;
+  Zubereitung, Fotos und Notizen bleiben erhalten.
+- **Zurück zur Einkaufsliste:** „Zutaten → Einkaufsliste" im Kochbuch legt die Namen in einer
+  kleinen Übergabe-Inbox ab, die das Keto-Dashboard beim nächsten eigenen Start abholt.
+- **Offline:** Lesen funktioniert mit dem zuletzt bekannten Stand (eigener Service Worker,
+  eigener Cache). Schreiben braucht eine Verbindung — kein Offline-Sync in dieser Version.
+- Details zu Datenmodell, RLS-Policies und Architektur: Kommentare in `kochbuch/js/api.js` und
+  die Migration `kochbuch_init` im Supabase-Projekt.
+
+---
+
 ## Daten, Abgleich und Datenschutz
 
-Es gibt keinen Server und kein Konto. Alles liegt im `localStorage` des Browsers.
+**Das Keto-Dashboard selbst:** kein Server, kein Konto. Alles liegt im `localStorage` des
+Browsers — das Kochbuch (siehe oben) ist bewusst die Ausnahme davon.
 
 - **Export/Import/Teilen** im Profil-Tab schreibt bzw. liest eine JSON-Datei. Der
   Produkt-Cache bleibt draußen — er lässt sich jederzeit nachladen und macht den Großteil
@@ -96,7 +130,8 @@ Symbole und `vendor/` bleiben cache-first — sie sind groß und ändern sich pr
 Übernimmt ein neuer Service Worker, lädt die App sich einmalig selbst neu, aber nie während
 einer Eingabe. Welcher Stand läuft, steht unten im Profil-Tab.
 
-Bei jeder Änderung an ausgelieferten Dateien wird `CACHE_NAME` in `sw.js` hochgezählt.
+Bei jeder Änderung an ausgelieferten Dateien wird `CACHE_NAME` in `sw.js` hochgezählt — das
+Kochbuch hat mit `kochbuch/sw.js` einen eigenen, unabhängig zu pflegenden Service Worker.
 
 ### Projektstruktur
 
@@ -115,6 +150,7 @@ js/
   foods-db.js           eingebaute Nährwerttabelle mit Fuzzy-Suche (offline)
   consumption.js        Mahlzeiten eintragen/bearbeiten, Wasser, Mengen-Dialoge
   recipes.js            Rezeptrechnung, Zutatenerkennung, Texterkennung
+  ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
   analysis.js           Textbericht für die KI-Analyse
   ai.js                 optionale Gemini-Anbindung
@@ -126,6 +162,8 @@ js/
 vendor/                 eingecheckte Fremdbibliotheken (siehe unten)
 icons/                  PWA-Icons
 scripts/gen_icons.py    erzeugt die Icons ohne externe Abhängigkeiten
+
+kochbuch/               eigenständige PWA mit Supabase-Backend — siehe Abschnitt "Kochbuch" oben
 ```
 
 ### Lokal starten

@@ -308,11 +308,18 @@ function initialTabFromUrl() {
   return tab && RENDERERS[tab] ? tab : "start";
 }
 
+// Vom Kochbuch (kochbuch/) auf die Einkaufsliste übernommene Zutaten abholen — bewusst vor dem
+// ersten Rendern, damit die Einkaufsliste beim allerersten Blick schon vollständig ist.
+const drainedFromKochbuch = Store.drainKochbuchInbox();
+
 // Init
 if (Store.isOnboarded()) {
   applyDesignTheme();
   updateProfileSwitchLabel();
   goToTab(initialTabFromUrl());
+  if (drainedFromKochbuch > 0) {
+    showToast(`${drainedFromKochbuch} Zutat(en) aus dem Kochbuch auf die Einkaufsliste übernommen`);
+  }
 } else {
   // Auch die Ersteinrichtung schon im Design "Klar" zeigen — ohne das hier ist der allererste
   // Bildschirm eines neuen Geräts der einzige, der ohne die Schrift und die Farbtokens läuft.

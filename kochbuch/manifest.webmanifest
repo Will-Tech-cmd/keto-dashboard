@@ -1,0 +1,19 @@
+{
+  "id": "kochbuch",
+  "name": "Kochbuch",
+  "short_name": "Kochbuch",
+  "description": "Gemeinsames Kochbuch: Rezepte mit Zubereitung, Fotos und Bewertung.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "categories": ["food", "lifestyle"],
+  "orientation": "portrait",
+  "background_color": "#fffaf3",
+  "theme_color": "#b5651d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

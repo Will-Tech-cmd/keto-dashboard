@@ -1,0 +1,233 @@
+/* kochbuch.css — eigenständige, schlanke Stilschicht für das Kochbuch. Eigene Farbwelt (warmes
+   Terrakotta statt des Keto-Grüns), damit auf einen Blick klar ist, welche der beiden Apps
+   gerade offen ist — beide laufen ja nebeneinander auf demselben Gerät. */
+
+:root {
+  --bg: #fbf7f1;
+  --bg-elevated: #ffffff;
+  --text: #2a1f16;
+  --text-muted: #7a6a5a;
+  --border: #e8ddd0;
+  --divider: #f0e8dd;
+  --accent: #b5651d;
+  --accent-contrast: #ffffff;
+  --accent-soft: #fbe8d3;
+  --accent-soft-border: #edc48f;
+  --danger: #b3261e;
+  --shadow: 0 1px 2px rgba(40, 26, 12, .05), 0 8px 24px rgba(40, 26, 12, .06);
+  --radius: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1410;
+    --bg-elevated: #241c16;
+    --text: #f3ece3;
+    --text-muted: #b7a996;
+    --border: #3a2f24;
+    --divider: #332920;
+    --accent: #e08a3e;
+    --accent-contrast: #1a1410;
+    --accent-soft: #3a2a18;
+    --accent-soft-border: #5c4022;
+    --danger: #ff9a92;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+h1, h2, h3, p { margin: 0 0 .5em; }
+button { font-family: inherit; }
+input, select, textarea {
+  font-family: inherit; font-size: 1rem; color: var(--text); background: var(--bg-elevated);
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; width: 100%;
+  margin: 4px 0 12px;
+}
+label { font-size: .85rem; color: var(--text-muted); font-weight: 600; }
+
+.kb-view { max-width: 640px; margin: 0 auto; min-height: 100vh; padding-bottom: 32px; }
+.kb-hint { color: var(--text-muted); font-size: .9rem; }
+
+/* ---------- Buttons ---------- */
+.kb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; border-radius: 999px; padding: 12px 20px; font-size: .95rem; font-weight: 700;
+  cursor: pointer; width: 100%;
+  background: var(--border); color: var(--text);
+}
+.kb-btn-primary { background: var(--accent); color: var(--accent-contrast); }
+.kb-btn-secondary { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft-border); }
+.kb-btn-ghost { background: transparent; color: var(--text-muted); border: 1px dashed var(--border); }
+.kb-btn-danger { color: var(--danger); }
+.kb-btn-small { width: auto; padding: 8px 14px; font-size: .85rem; }
+.kb-btn:disabled { opacity: .6; cursor: default; }
+.kb-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.kb-btn-row .kb-btn { width: auto; flex: 1 1 auto; }
+
+.kb-icon-btn {
+  background: none; border: none; font-size: 1.3rem; line-height: 1; padding: 8px;
+  border-radius: 999px; cursor: pointer; color: var(--text);
+}
+.kb-icon-btn:active { background: var(--divider); }
+
+/* ---------- Login ---------- */
+.kb-login { display: flex; flex-direction: column; align-items: center; padding: 20vh 20px 20px; gap: 20px; }
+.kb-login-brand { font-size: 1.6rem; font-weight: 800; }
+.kb-card {
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px; width: 100%; max-width: 360px;
+}
+form.kb-card { display: flex; flex-direction: column; }
+.kb-error { color: var(--danger); font-size: .85rem; margin: -6px 0 12px; }
+
+/* ---------- Liste ---------- */
+.kb-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 14px) 16px 8px;
+}
+.kb-brand { font-size: 1.25rem; font-weight: 800; }
+.kb-topbar-actions { display: flex; gap: 4px; }
+.kb-list-controls { display: flex; gap: 8px; padding: 4px 16px 0; align-items: center; }
+.kb-list-controls input { flex: 1; margin-bottom: 0; }
+.kb-list-controls select { width: auto; margin-bottom: 0; }
+.kb-tag-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px 4px; }
+.kb-tag-chip {
+  border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-muted);
+  border-radius: 999px; padding: 5px 12px; font-size: .8rem; cursor: pointer;
+}
+.kb-tag-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft-border); }
+span.kb-tag-chip { cursor: default; }
+
+.kb-cards { display: flex; flex-direction: column; gap: 12px; padding: 10px 16px 90px; }
+.kb-card {
+  display: flex; gap: 12px; text-align: left; background: var(--bg-elevated);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px;
+  box-shadow: var(--shadow); cursor: pointer; width: 100%;
+}
+.kb-card-img {
+  flex: none; width: 76px; height: 76px; border-radius: 10px; background: var(--accent-soft);
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+}
+.kb-card-body { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+.kb-card-title { font-weight: 700; }
+.kb-card-meta { display: flex; gap: 10px; font-size: .8rem; color: var(--text-muted); align-items: center; }
+.kb-card-nutri { font-size: .78rem; color: var(--text-muted); }
+
+.kb-fab {
+  position: fixed; right: 20px; bottom: calc(env(safe-area-inset-bottom) + 20px);
+  width: 56px; height: 56px; border-radius: 999px; border: none;
+  background: var(--accent); color: var(--accent-contrast); font-size: 1.6rem;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+
+/* ---------- Sterne ---------- */
+.kb-stars { display: inline-flex; gap: 2px; }
+.kb-star, .kb-star-btn { color: var(--accent); font-size: 1.1rem; }
+.kb-star-btn { background: none; border: none; padding: 0; cursor: pointer; }
+
+/* ---------- Detail ---------- */
+.kb-detail-head {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg); padding: calc(env(safe-area-inset-top) + 8px) 8px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.kb-detail-title { font-weight: 800; font-size: 1.05rem; flex: 1; text-align: center; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-hero { height: 220px; background-size: cover; background-position: center; }
+.kb-detail-body { padding: 16px; }
+.kb-subtitle { color: var(--text-muted); }
+.kb-meta-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: .9rem; margin: 8px 0; }
+
+.kb-nutri-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.kb-nutri-tiles > div { background: var(--accent-soft); border-radius: 10px; padding: 8px 4px; text-align: center; }
+.kb-nutri-tiles .val { font-weight: 800; }
+.kb-nutri-tiles .lbl { font-size: .68rem; color: var(--text-muted); }
+
+.kb-section-title { font-size: 1.1rem; font-weight: 800; margin: 22px 0 10px; }
+.kb-section-head { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; }
+.kb-section-head h2 { margin: 0; font-size: 1.1rem; font-weight: 800; }
+.kb-serving-scaler { display: flex; gap: 4px; }
+.kb-serving-scaler button {
+  border: 1px solid var(--border); background: var(--bg-elevated); border-radius: 999px;
+  padding: 4px 10px; font-size: .8rem; cursor: pointer; color: var(--text);
+}
+.kb-serving-scaler button.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
+.kb-ingredient-list { list-style: none; margin: 0; padding: 0; }
+.kb-ingredient-list li { padding: 8px 0; border-bottom: 1px solid var(--divider); }
+
+.kb-steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.kb-steps li { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+.kb-steps label { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; color: var(--text); cursor: pointer; }
+.kb-steps input[type="checkbox"] { width: auto; margin: 3px 0 0; flex: none; }
+.kb-steps li.done .kb-step-text { text-decoration: line-through; color: var(--text-muted); }
+.kb-step-min { color: var(--text-muted); font-size: .85em; }
+
+.kb-gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.kb-gallery img { width: 100px; height: 100px; object-fit: cover; border-radius: 10px; flex: none; cursor: pointer; }
+.kb-lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.kb-lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+
+.kb-notes { white-space: pre-wrap; }
+
+.kb-comment { padding: 10px 0; border-bottom: 1px solid var(--divider); }
+.kb-comment-head { display: flex; justify-content: space-between; font-size: .8rem; color: var(--text-muted); margin-bottom: 2px; }
+.kb-comment-form { display: flex; gap: 8px; margin-top: 10px; }
+.kb-comment-form input { margin: 0; flex: 1; }
+.kb-comment-form .kb-btn { width: auto; }
+
+/* ---------- Editor ---------- */
+.kb-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.kb-ingredient-edit-list, .kb-step-edit-list { list-style: none; margin: 0; padding: 0; }
+.kb-ingredient-edit-list li { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.kb-ingredient-edit-list input { margin: 0; }
+.kb-ingredient-edit-list .kb-ing-name { flex: 2; }
+.kb-ingredient-edit-list .kb-ing-menge { flex: 1; }
+.kb-step-edit-list li { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+.kb-step-num { color: var(--text-muted); font-weight: 700; padding-top: 10px; }
+.kb-step-text-edit { flex: 1; margin: 0; resize: vertical; }
+.kb-step-min-edit { width: 70px; margin: 0; flex: none; }
+.kb-remove { flex: none; color: var(--danger); }
+
+.kb-gallery-edit { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.kb-gallery-edit-item { position: relative; width: 100px; }
+.kb-gallery-edit-item img { width: 100px; height: 100px; object-fit: cover; border-radius: 10px; display: block; }
+.kb-gallery-edit-item.is-title img { outline: 3px solid var(--accent); outline-offset: 2px; }
+.kb-gallery-edit-actions { display: flex; justify-content: space-between; margin-top: 4px; }
+.kb-gallery-edit-actions .kb-icon-btn { font-size: 1rem; padding: 4px; }
+.kb-title-badge { font-size: .7rem; color: var(--accent); font-weight: 700; align-self: center; }
+
+/* ---------- Import ---------- */
+.kb-import-list { list-style: none; margin: 0; padding: 0; }
+.kb-import-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--divider);
+}
+
+/* ---------- Einstellungen ---------- */
+.kb-settings-card { max-width: 320px; }
+.kb-settings-card .kb-btn { margin-bottom: 8px; }
+
+/* ---------- Toast (identisch zur Keto-App) ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px);
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text); color: var(--bg);
+  padding: 10px 18px; border-radius: 999px; font-size: .85rem;
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+  z-index: 200; max-width: 90vw; text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
