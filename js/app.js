@@ -30,7 +30,7 @@ let activeTab = "start";
 let historyInitialized = false;
 
 const RENDERERS = {
-  start: () => renderStart(view, goToTab),
+  start: () => renderStart(view, goToTab, openEntrySheet),
   scan: () => renderScan(view),
   lists: () => renderLists(view, goToTab),
   recipes: () => renderRecipes(view),
@@ -112,7 +112,9 @@ function refreshCurrentTabIfSafe() {
 // ---------------------------------------------------------------------------
 fabBtn.addEventListener("click", openEntrySheet);
 
-function openEntrySheet() {
+// Exportiert, damit der "+" in der leeren Mahlzeiten-Liste auf Start denselben Weg öffnet
+// wie der FAB in der Tableiste, statt eine zweite Variante desselben Sheets zu pflegen.
+export function openEntrySheet() {
   const profile = Store.getActiveProfile();
   let meal = suggestMeal();
 

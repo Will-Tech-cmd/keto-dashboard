@@ -569,7 +569,8 @@ body[data-design="klar"] .fab-btn {
 .klar-meal-row .meta { font-size: 12px; color: var(--text-muted); font-weight: 600; flex: none; }
 .klar-meal-row .chevron { color: var(--text-faint); font-size: 13px; flex: none; }
 .klar-meal-divider { height: 1px; background: var(--divider); margin: 0 18px; }
-.klar-empty-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px dashed var(--text-faint); border-radius: 16px; color: var(--text-muted); font-size: 13.5px; font-weight: 600; }
+.klar-empty-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px dashed var(--text-faint); border-radius: 16px; color: var(--text-muted); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.klar-empty-row:active { opacity: 0.7; }
 .klar-empty-row .plus { width: 28px; height: 28px; border-radius: 999px; border: 1px dashed var(--text-faint); display: flex; align-items: center; justify-content: center; flex: none; font-size: 15px; }
 
 .klar-sheet-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(10,20,15,.42); display: flex; align-items: flex-end; justify-content: center; }
