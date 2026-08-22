@@ -43,8 +43,8 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - Portionsgewicht wird aus den Zutatenmengen abgeleitet („1 P. (240 g)")
 - Zutaten auf die Einkaufsliste übernehmen
 - Rezepte einzeln exportieren, teilen und importieren — ohne den Rest der Daten
-- „📖 Ins Kochbuch": übergibt ein Rezept an das Kochbuch (siehe unten), wo sich Zubereitung,
-  Fotos und mehr ergänzen lassen
+- „📖 Im Kochbuch öffnen": übergibt ein Rezept an das Kochbuch (siehe unten) und springt direkt
+  zu dessen Ansicht dort, wo sich Zubereitung, Fotos und mehr ergänzen lassen
 
 ### Profil
 - Körperdaten, Aktivitätsgrad, Ziel und Defizit; Zielwerte nach Mifflin-St Jeor bzw.
@@ -79,11 +79,18 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
 - **Fotos** liegen in einem öffentlich lesbaren Storage-Bucket unter nicht erratbaren
   Zufallspfaden — kein Anmelde-Umweg beim Anzeigen, dafür kein echter Zugriffsschutz für wer
   den Pfad kennt.
-- **Übernahme aus dem Keto-Dashboard:** über den Knopf „📖 Ins Kochbuch" im Rezept-Editor (nur
-  auf demselben Gerät/Browser, da direkt aus dessen `localStorage` gelesen wird) oder über eine
-  exportierte Rezept-Datei (Profil → „Nur Rezepte") — das ist der Weg fürs zweite Handy. Ein
-  erneuter Import über dieselbe Kochbuch-Seite aktualisiert nur Zutaten und Nährwerte;
-  Zubereitung, Fotos und Notizen bleiben erhalten.
+- **Übernahme aus dem Keto-Dashboard:**
+  - **Automatisch, sobald dort die Online-Synchronisierung aktiv ist:** das Kochbuch liest bei
+    jedem Start alle Rezepte aus demselben Sync-Datensatz (`keto_sync_state`) und legt neue an
+    bzw. aktualisiert geänderte — ganz ohne Klicken, auf jedem angemeldeten Gerät. Ein
+    Zeitstempel je Rezept (`keto_updated_at`) sorgt dafür, dass unveränderte Rezepte dabei
+    nicht unnötig neu geschrieben werden.
+  - **Manuell**, für den Fall ohne aktivierte Synchronisierung: über den Knopf „📖 Im Kochbuch
+    öffnen" im Rezept-Editor (nur auf demselben Gerät/Browser, da direkt aus dessen
+    `localStorage` gelesen wird) oder über eine exportierte Rezept-Datei (Profil → „Nur
+    Rezepte") — das ist der Weg fürs zweite Handy.
+  - In beiden Fällen gilt: ein erneuter Import aktualisiert nur Zutaten und Nährwerte;
+    Zubereitung, Fotos und Notizen bleiben erhalten.
 - **Zurück zur Einkaufsliste:** „Zutaten → Einkaufsliste" im Kochbuch legt die Namen in einer
   kleinen Übergabe-Inbox ab, die das Keto-Dashboard beim nächsten eigenen Start abholt.
 - **Offline:** Lesen funktioniert mit dem zuletzt bekannten Stand (eigener Service Worker,

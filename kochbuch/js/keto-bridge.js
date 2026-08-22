@@ -68,6 +68,7 @@ export function buildImportPayload(ketoRecipe) {
       naehrwerte: calcPerServingNutrition(ketoRecipe),
       naehrwerte_manuell: false,
       quelle: "keto-app",
+      keto_updated_at: ketoRecipe.updatedAt ? new Date(ketoRecipe.updatedAt).toISOString() : null,
     },
     zutaten: (ketoRecipe.ingredients || []).map((ing, i) => ({
       pos: i,

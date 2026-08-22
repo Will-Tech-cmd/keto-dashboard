@@ -149,8 +149,19 @@ export async function getRezept(id) {
 }
 
 export async function findByKetoId(ketoId) {
-  const rows = await restFetch(`kochbuch_rezepte?select=id,updated_at&keto_id=eq.${ketoId}&geloescht_am=is.null`);
+  const rows = await restFetch(`kochbuch_rezepte?select=id,updated_at,keto_updated_at&keto_id=eq.${ketoId}&geloescht_am=is.null`);
   return rows?.[0] || null;
+}
+
+/**
+ * Rezepte aus dem Blob, den die Keto-App bei aktivierter Synchronisierung nach
+ * keto_sync_state schreibt (js/sync.js dort) — select=daten->recipes lässt Postgres nur das
+ * gebrauchte Teilstück herausschneiden, statt Profile/Verlauf/Listen mit zu übertragen.
+ * Leeres Array, wenn dort noch niemand synchronisiert hat.
+ */
+export async function fetchKetoSyncRecipes() {
+  const rows = await restFetch(`keto_sync_state?select=recipes:daten->recipes&id=eq.haushalt`);
+  return Array.isArray(rows?.[0]?.recipes) ? rows[0].recipes : [];
 }
 
 // ---------------------------------------------------------------------------
