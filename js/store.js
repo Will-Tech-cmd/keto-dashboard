@@ -117,6 +117,7 @@ function writeNow() {
   persistTimer = null;
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
+    changeListeners.forEach(fn => fn());
   } catch (e) {
     console.warn("Store: persistieren fehlgeschlagen", e);
   }
@@ -174,6 +175,75 @@ function diffProfiles(mine, theirs) {
   return out;
 }
 
+/**
+ * Vereint einen eingehenden Zustand (aus Datei-Import oder Online-Sync) mit dem lokalen
+ * Zustand — union über IDs, jüngerer Zeitstempel gewinnt bei Kollisionen. Geteilt von
+ * Store.mergeJSON() (mit Sicherung) und Store.mergeJSONQuiet() (ohne, für sync.js).
+ */
+function applyMerge(incoming, profileChoice) {
+  const unionById = (mine, theirs) => {
+    const map = new Map((mine || []).map(x => [x.id, x]));
+    for (const x of theirs || []) if (!map.has(x.id)) map.set(x.id, x);
+    return [...map.values()];
+  };
+  const byTimeDesc = (a, b) => (b.at || 0) - (a.at || 0);
+
+  state.consumption = unionById(state.consumption, incoming.consumption)
+    .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
+  state.history = unionById(state.history, incoming.history)
+    .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
+  state.water = unionById(state.water, incoming.water).sort(byTimeDesc);
+  state.shoppingList = unionById(state.shoppingList, incoming.shoppingList);
+
+  // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen.
+  const recipes = new Map(state.recipes.map(r => [r.id, r]));
+  for (const r of incoming.recipes || []) {
+    const mine = recipes.get(r.id);
+    if (!mine || (r.updatedAt || 0) > (mine.updatedAt || 0)) recipes.set(r.id, r);
+  }
+  state.recipes = [...recipes.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt.
+  for (const listName of ["favorites", "noGo"]) {
+    const map = new Map(state[listName].map(e => [e.barcode, e]));
+    for (const e of incoming[listName] || []) {
+      const mine = map.get(e.barcode);
+      if (!mine || (e.addedAt || 0) > (mine.addedAt || 0)) map.set(e.barcode, e);
+    }
+    state[listName] = [...map.values()];
+  }
+
+  // Eigene Produkte und Ballaststoff-Schalter sind eigene Korrekturen: bei Kollision
+  // behält das Gerät seine Fassung, Fehlendes kommt dazu.
+  state.ownProducts = { ...(incoming.ownProducts || {}), ...state.ownProducts };
+  state.fiberOverrides = { ...(incoming.fiberOverrides || {}), ...state.fiberOverrides };
+
+  // Eingefrorene Tagesziele je Profil und Tag — lokal gewinnt (sollte ohnehin gleich sein).
+  for (const [profileId, days] of Object.entries(incoming.dayTargets || {})) {
+    state.dayTargets[profileId] = { ...days, ...(state.dayTargets[profileId] || {}) };
+  }
+
+  // Profile: je Profil entscheidet updatedAt, sonst die Wahl aus dem Dialog.
+  for (const incomingProfile of incoming.profiles || []) {
+    const i = state.profiles.findIndex(p => p.id === incomingProfile.id);
+    if (i < 0) { state.profiles.push(incomingProfile); continue; }
+    const mine = state.profiles[i];
+    const bothStamped = mine.updatedAt != null && incomingProfile.updatedAt != null;
+    const takeFile = bothStamped
+      ? incomingProfile.updatedAt > mine.updatedAt
+      : profileChoice[incomingProfile.id] === "file";
+    if (takeFile) state.profiles[i] = incomingProfile;
+  }
+}
+
+// Wird nach jedem tatsächlichen Schreiben nach localStorage aufgerufen (siehe writeNow()) —
+// sync.js hängt sich hier ein, um nach lokalen Änderungen automatisch zu synchronisieren.
+// Bewusst generisch statt sync-spezifisch: store.js weiß nichts von Supabase.
+const changeListeners = [];
+export function onStoreChange(fn) {
+  changeListeners.push(fn);
+}
+
 export const Store = {
   get() {
     return state;
@@ -203,6 +273,24 @@ export const Store = {
     // entscheiden kann, welche Fassung der Einstellungen die neuere ist.
     Object.assign(p, patch, { updatedAt: Date.now() });
     persist();
+  },
+
+  /**
+   * Entfernt ein Profil — gedacht, um doppelte Profile aufzuräumen, die durch einen ersten
+   * Sync/Import zwischen zwei bereits unabhängig voneinander eingerichteten Geräten entstehen
+   * (jedes Gerät legt bei der Ersteinrichtung eigene Profil-IDs an; eine Vereinigung über die
+   * ID erkennt "meins" und "ihres" deshalb nicht automatisch als dasselbe Profil). Lässt sich
+   * nicht auf das aktive oder das letzte verbleibende Profil anwenden. Gibt zurück, ob es
+   * geklappt hat.
+   */
+  deleteProfile(id) {
+    if (state.profiles.length <= 1) return false;
+    if (id === state.activeProfileId) return false;
+    const before = state.profiles.length;
+    state.profiles = state.profiles.filter(p => p.id !== id);
+    if (state.profiles.length === before) return false;
+    persist();
+    return true;
   },
 
   // --- Produkt-Cache (Open Food Facts Antworten) ---
@@ -463,61 +551,20 @@ export const Store = {
   mergeJSON(json, { profileChoice = {} } = {}) {
     const incoming = parseBackup(json);
     savePreMergeBackup();
+    applyMerge(incoming, profileChoice);
+    persist();
+  },
 
-    const unionById = (mine, theirs) => {
-      const map = new Map((mine || []).map(x => [x.id, x]));
-      for (const x of theirs || []) if (!map.has(x.id)) map.set(x.id, x);
-      return [...map.values()];
-    };
-    const byTimeDesc = (a, b) => (b.at || 0) - (a.at || 0);
-
-    state.consumption = unionById(state.consumption, incoming.consumption)
-      .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
-    state.history = unionById(state.history, incoming.history)
-      .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
-    state.water = unionById(state.water, incoming.water).sort(byTimeDesc);
-    state.shoppingList = unionById(state.shoppingList, incoming.shoppingList);
-
-    // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen.
-    const recipes = new Map(state.recipes.map(r => [r.id, r]));
-    for (const r of incoming.recipes || []) {
-      const mine = recipes.get(r.id);
-      if (!mine || (r.updatedAt || 0) > (mine.updatedAt || 0)) recipes.set(r.id, r);
-    }
-    state.recipes = [...recipes.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
-    // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt.
-    for (const listName of ["favorites", "noGo"]) {
-      const map = new Map(state[listName].map(e => [e.barcode, e]));
-      for (const e of incoming[listName] || []) {
-        const mine = map.get(e.barcode);
-        if (!mine || (e.addedAt || 0) > (mine.addedAt || 0)) map.set(e.barcode, e);
-      }
-      state[listName] = [...map.values()];
-    }
-
-    // Eigene Produkte und Ballaststoff-Schalter sind eigene Korrekturen: bei Kollision
-    // behält das Gerät seine Fassung, Fehlendes kommt dazu.
-    state.ownProducts = { ...(incoming.ownProducts || {}), ...state.ownProducts };
-    state.fiberOverrides = { ...(incoming.fiberOverrides || {}), ...state.fiberOverrides };
-
-    // Eingefrorene Tagesziele je Profil und Tag — lokal gewinnt (sollte ohnehin gleich sein).
-    for (const [profileId, days] of Object.entries(incoming.dayTargets || {})) {
-      state.dayTargets[profileId] = { ...days, ...(state.dayTargets[profileId] || {}) };
-    }
-
-    // Profile: je Profil entscheidet updatedAt, sonst die Wahl aus dem Dialog.
-    for (const incomingProfile of incoming.profiles || []) {
-      const i = state.profiles.findIndex(p => p.id === incomingProfile.id);
-      if (i < 0) { state.profiles.push(incomingProfile); continue; }
-      const mine = state.profiles[i];
-      const bothStamped = mine.updatedAt != null && incomingProfile.updatedAt != null;
-      const takeFile = bothStamped
-        ? incomingProfile.updatedAt > mine.updatedAt
-        : profileChoice[incomingProfile.id] === "file";
-      if (takeFile) state.profiles[i] = incomingProfile;
-    }
-
+  /**
+   * Wie mergeJSON(), aber ohne die Sicherung vor dem Zusammenführen anzulegen — für die
+   * automatische Online-Synchronisierung (sync.js), die im Hintergrund und oft mehrmals pro
+   * Minute mischt. Die "Letzten Import rückgängig machen"-Sicherung bleibt damit dem
+   * bewussten, manuellen Datei-Import vorbehalten, statt bei jedem Sync-Tick überschrieben
+   * zu werden.
+   */
+  mergeJSONQuiet(json, { profileChoice = {} } = {}) {
+    const incoming = parseBackup(json);
+    applyMerge(incoming, profileChoice);
     persist();
   },
 
