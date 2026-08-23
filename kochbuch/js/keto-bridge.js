@@ -5,6 +5,8 @@
 // stattdessen gezielt nur gelesen bzw. ein separater Inbox-Schlüssel beschrieben, den die
 // Keto-App selbst beim nächsten Start abholt (js/store.js, `drainKochbuchInbox`).
 
+import { createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "./api.js";
+
 const KETO_STATE_KEY = "keto-dashboard-v1";
 const INBOX_KEY = "keto-dashboard-inbox";
 
@@ -80,6 +82,34 @@ export function buildImportPayload(ketoRecipe) {
       likely_us_label: !!ing.likelyUsLabel,
     })),
   };
+}
+
+/**
+ * Schreibt ein Keto-Rezept ins Kochbuch — anlegen oder aktualisieren. Gibt dessen Kochbuch-id
+ * zurück. Geteilt vom automatischen Abgleich (keto-sync-import.js) und vom Knopf "Übernehmen"
+ * (views/import.js), damit beide Wege dieselbe Reihenfolge einhalten:
+ *
+ * erst die Kopfdaten OHNE keto_updated_at, dann die Zutaten, und GANZ ZULETZT der Zeitstempel.
+ * Der ist die Marke "dieses Rezept ist auf dem Stand der Keto-App". Stünde er schon vor den
+ * Zutaten da, hinterließe ein Verbindungsabbruch dazwischen ein Rezept mit leerer oder
+ * veralteter Zutatenliste, das jeder weitere Durchlauf als "schon erledigt" überspringt — es
+ * würde nie wieder repariert.
+ */
+export async function writeKetoRecipe(ketoRecipe, existing, wer) {
+  const { kopf, zutaten } = buildImportPayload(ketoRecipe);
+  const { keto_updated_at, ...kopfOhneStempel } = kopf;
+
+  let rezeptId;
+  if (existing) {
+    await forceUpdateRezeptHead(existing.id, { ...kopfOhneStempel, geaendert_von: wer });
+    rezeptId = existing.id;
+  } else {
+    const created = await createRezeptHead({ ...kopfOhneStempel, erstellt_von: wer, geaendert_von: wer });
+    rezeptId = created.id;
+  }
+  await replaceZutaten(rezeptId, zutaten);
+  await forceUpdateRezeptHead(rezeptId, { keto_updated_at });
+  return rezeptId;
 }
 
 /**

@@ -45,7 +45,10 @@ function defaultState() {
     consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at }
     water: [],          // { id, profileId, dateKey, ml, at }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
-    fiberOverrides: {},  // barcode -> true|false, überschreibt die automatische EU/US-Erkennung (Ballaststoff-Schalter)
+    fiberOverrides: {},  // barcode -> true|false|null (null = bewusst zurückgesetzt), überschreibt die EU/US-Erkennung
+    // Zeitpunkt der letzten Änderung je Schalter — ohne ihn kann ein Abgleich nicht
+    // entscheiden, welche der beiden Fassungen die neuere ist (siehe applyMerge()).
+    fiberOverridesAt: {}, // barcode -> Zeitstempel
     dayTargets: {},      // profileId -> { dateKey -> { kcal, netCarbG, fatG, proteinG } }, friert vergangene Tage ein
     // Löschungen, damit ein Merge (Datei-Import oder Online-Sync) sie nicht aus der jeweils
     // anderen, noch ahnungslosen Seite wieder aufleben lässt — siehe applyMerge(). id/barcode
@@ -65,18 +68,85 @@ export function dateKeyOf(timestamp) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * Der dateKey `deltaDays` Tage neben `dateKey` — über den lokalen Kalender statt über feste
+ * 24-Stunden-Schritte. `Date.now() - i * 86400000` verschluckt an der Zeitumstellung einen
+ * Kalendertag: steht die Uhr zwischen 0:00 und 1:00, landet der Schritt über die Märznacht
+ * hinweg im vorvergangenen Tag, und der Tag der Umstellung fehlt in Auswertung und Bericht.
+ */
+export function shiftDateKey(dateKey, deltaDays) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return dateKeyOf(new Date(y, m - 1, d + deltaDays).getTime());
+}
+
 const HISTORY_LIMIT = 500;
 const CONSUMPTION_LIMIT = 1000;
 // Sicherung des Stands unmittelbar vor einem Import/Abgleich — bewusst ein eigener Schlüssel,
 // damit sie nicht selbst wieder überschrieben oder mitexportiert wird.
 const PREMERGE_KEY = "keto-dashboard-premerge";
 
+// Nach dieser Frist gilt eine Löschung als überall angekommen und der Grabstein wird
+// weggeräumt — sonst wächst die Karte unbegrenzt und frisst irgendwann das Speicherkontingent
+// (siehe writeNow()). Der Preis: ein Gerät, das länger als diese Frist gar nicht abgeglichen
+// hat, bringt bereits gelöschte Einträge beim nächsten Mal noch einmal mit.
+const TOMBSTONE_TTL_MS = 180 * 86400000;
+// Obergrenze für den Produkt-Cache. Er ist reiner Komfort (jederzeit von Open Food Facts
+// nachladbar), macht aber den Großteil der Datenmenge aus — ohne Deckel läuft der localStorage
+// irgendwann über und ab da wird NICHTS mehr gespeichert, auch keine Mahlzeit mehr.
+const CACHE_LIMIT = 400;
+
+/** Die Listen, deren Löschungen über einen Grabstein festgehalten werden — je mit dem Feld,
+ * das einen Eintrag identifiziert, und dem Zeitpunkt seiner letzten Änderung. */
+const TOMBSTONED = [
+  { name: "consumption", keyOf: e => e.id, timeOf: e => e.updatedAt || e.at || 0 },
+  { name: "water", keyOf: e => e.id, timeOf: e => e.at || 0 },
+  { name: "shoppingList", keyOf: e => e.id, timeOf: e => e.updatedAt || 0 },
+  { name: "recipes", keyOf: e => e.id, timeOf: e => e.updatedAt || e.createdAt || 0 },
+  { name: "favorites", keyOf: e => e.barcode, timeOf: e => e.updatedAt || e.addedAt || 0 },
+  { name: "noGo", keyOf: e => e.barcode, timeOf: e => e.updatedAt || e.addedAt || 0 },
+];
+const TOMBSTONED_BY_NAME = Object.fromEntries(TOMBSTONED.map(t => [t.name, t]));
+
+// ACHTUNG: alles, was load() -> migrate() braucht, muss OBERHALB dieser Zeile stehen.
+// Funktionsdeklarationen werden hochgezogen, const/let NICHT — eine Konstante weiter unten
+// wirft hier einen "Cannot access before initialization" und die App startet mit leeren Daten.
 let state = load();
 
 /** Ergänzt Bestandsdaten (egal ob aus localStorage geladen oder importiert) um Felder, die
  * es zum Speicherzeitpunkt noch nicht gab — ohne vorhandene Werte anzutasten. */
+/**
+ * Gilt ein Eintrag als gelöscht? Nur, wenn die Löschung NEUER ist als der Eintrag selbst.
+ * Ohne diesen Vergleich gälte ein Grabstein für immer: ein Produkt, das einmal von den
+ * Favoriten entfernt und später wieder aufgenommen wurde, verschwände beim nächsten Abgleich
+ * sofort wieder, weil sein Barcode noch in der Grabstein-Karte steht.
+ */
+function isDeleted(tombMap, key, entryTime) {
+  const deletedAt = (tombMap || {})[key];
+  return deletedAt != null && deletedAt >= (entryTime || 0);
+}
+
+/** Behält nur die zuletzt geholten CACHE_LIMIT Produkte. */
+function prunedCache(cache) {
+  const entries = Object.entries(cache || {});
+  if (entries.length <= CACHE_LIMIT) return cache || {};
+  entries.sort((a, b) => (b[1]?.fetchedAt || 0) - (a[1]?.fetchedAt || 0));
+  return Object.fromEntries(entries.slice(0, CACHE_LIMIT));
+}
+
 function migrate(parsed) {
-  const merged = { ...defaultState(), ...parsed };
+  const base = defaultState();
+  const merged = { ...base, ...parsed };
+  // Grabstein-Karten vollständig machen: Sicherungen aus der Zeit vor einzelnen Karten (oder
+  // vor den Grabsteinen überhaupt) hätten sonst Lücken, über die applyMerge() stolperte.
+  merged.tombstones = { ...base.tombstones, ...(parsed.tombstones || {}) };
+  const tombCutoff = Date.now() - TOMBSTONE_TTL_MS;
+  for (const { name } of TOMBSTONED) {
+    merged.tombstones[name] = Object.fromEntries(
+      Object.entries(merged.tombstones[name] || {}).filter(([, at]) => at > tombCutoff)
+    );
+  }
+  merged.fiberOverrides = merged.fiberOverrides || {};
+  merged.fiberOverridesAt = merged.fiberOverridesAt || {};
   // Bestandsdaten von vor Einführung des Onboardings: nicht nachträglich zur
   // Ersteinrichtung zwingen, nur wirklich neue Geräte sollen den Dialog sehen.
   if (parsed.onboarded === undefined) merged.onboarded = true;
@@ -98,6 +168,7 @@ function migrate(parsed) {
     ...e,
     dateKey: e.dateKey || dateKeyOf(e.at),
   }));
+  merged.cache = prunedCache(merged.cache);
   return merged;
 }
 
@@ -119,19 +190,45 @@ function load() {
 // 5 synchrone localStorage-Schreibvorgänge auslösen. Beim Verlassen der App (Tab wechseln,
 // schließen) wird sofort geschrieben — sonst ginge eine Änderung kurz vor dem Schließen verloren.
 let persistTimer = null;
+// Stammt die noch nicht geschriebene Änderung von diesem Gerät, oder kam sie gerade über den
+// Abgleich herein? Nur eigene Änderungen dürfen einen neuen Push auslösen — sonst schaukeln
+// sich Empfangen und Senden endlos gegenseitig hoch (siehe sync.js).
+let pendingIsLocal = false;
 
 function writeNow() {
   clearTimeout(persistTimer);
   persistTimer = null;
+  const origin = pendingIsLocal ? "local" : "remote";
+  pendingIsLocal = false;
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
-    changeListeners.forEach(fn => fn());
   } catch (e) {
-    console.warn("Store: persistieren fehlgeschlagen", e);
+    // Kein Platz mehr. Der Produkt-Cache ist das einzige, was gefahrlos wegkann — er lässt
+    // sich jederzeit nachladen. Danach ein zweiter Versuch; scheitert auch der, muss der
+    // Mensch das erfahren, statt dass ab hier stillschweigend nichts mehr gespeichert wird.
+    state.cache = {};
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e2) {
+      console.warn("Store: persistieren fehlgeschlagen", e2);
+      persistErrorListeners.forEach(fn => fn(e2));
+      return;
+    }
   }
+  changeListeners.forEach(fn => fn(origin));
 }
 
 function persist() {
+  pendingIsLocal = true;
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(writeNow, 250);
+}
+
+/** Wie persist(), markiert die Änderung aber NICHT als "von hier" — für alles, was gerade erst
+ * über den Abgleich hereinkam und deshalb nicht sofort wieder hochgeladen werden muss. Eine
+ * daneben noch offene eigene Änderung bleibt dabei als solche stehen und wird weiterhin
+ * gepusht: pendingIsLocal wird hier bewusst nur nicht gesetzt, nicht zurückgenommen. */
+function persistFromRemote() {
   clearTimeout(persistTimer);
   persistTimer = setTimeout(writeNow, 250);
 }
@@ -218,66 +315,62 @@ function applyMerge(incoming, profileChoice) {
   tomb.noGo = mergeTombstoneMap(tomb.noGo, incomingTomb.noGo);
   tomb.historyClearedAt = Math.max(tomb.historyClearedAt || 0, incomingTomb.historyClearedAt || 0);
 
-  // Verbrauch: gleiche id -> neuere Fassung gewinnt (Menge kann nachträglich korrigiert
-  // werden, siehe rescaleConsumption/setConsumptionMeal), sonst dazunehmen. updatedAt fehlt
-  // bei unangetasteten Altbeständen — dann sind beide Seiten identisch und at (auf beiden
-  // Seiten gleich, da vom selben Ursprung) entscheidet nichts, was auch richtig ist.
-  const consumptionMap = new Map(state.consumption.map(e => [e.id, e]));
-  for (const e of incoming.consumption || []) {
-    if (tomb.consumption[e.id]) continue;
-    const mine = consumptionMap.get(e.id);
-    if (!mine || (e.updatedAt || e.at || 0) > (mine.updatedAt || mine.at || 0)) consumptionMap.set(e.id, e);
-  }
-  state.consumption = [...consumptionMap.values()]
-    .filter(e => !tomb.consumption[e.id])
-    .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
+  /**
+   * Vereint eine Liste: gleicher Schlüssel -> die zeitlich neuere Fassung gewinnt (Mengen,
+   * Haken und Nährwerte lassen sich nachträglich ändern, siehe rescaleConsumption /
+   * toggleShoppingItem / updateListEntry), Unbekanntes kommt dazu, Gelöschtes bleibt draußen.
+   *
+   * Der Grabstein zählt nur, wenn er NEUER ist als die Fassung, die gerade vorliegt — sonst
+   * bliebe ein einmal gelöschter Schlüssel für immer gesperrt und ein wieder aufgenommener
+   * Favorit verschwände beim nächsten Abgleich sofort erneut (siehe isDeleted()).
+   */
+  const mergeList = (name) => {
+    const { keyOf, timeOf } = TOMBSTONED_BY_NAME[name];
+    const map = new Map((state[name] || []).map(e => [keyOf(e), e]));
+    for (const e of incoming[name] || []) {
+      const key = keyOf(e);
+      if (key == null) continue;
+      const mine = map.get(key);
+      if (!mine || timeOf(e) > timeOf(mine)) map.set(key, e);
+    }
+    return [...map.values()].filter(e => !isDeleted(tomb[name], keyOf(e), timeOf(e)));
+  };
 
+  state.consumption = mergeList("consumption").sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
+  state.water = mergeList("water").sort(byTimeDesc);
+  state.shoppingList = mergeList("shoppingList");
+  state.recipes = mergeList("recipes").sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  state.favorites = mergeList("favorites");
+  state.noGo = mergeList("noGo");
+
+  // Der Verlauf ist ein reines Protokoll ohne Bearbeitung — Vereinigung reicht, Löschungen
+  // gibt es dort nur als einen Schnitt über alles (clearHistory).
   state.history = unionById(state.history, incoming.history)
     .filter(e => (e.at || 0) > tomb.historyClearedAt)
     .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
-  state.water = unionById(state.water, incoming.water)
-    .filter(e => !tomb.water[e.id]).sort(byTimeDesc);
 
-  // Einkaufsliste: gleiche id -> neuere Fassung gewinnt (Abhaken ändert den bestehenden
-  // Eintrag, keine neue id), sonst dazunehmen.
-  const shoppingMap = new Map(state.shoppingList.map(i => [i.id, i]));
-  for (const i of incoming.shoppingList || []) {
-    if (tomb.shoppingList[i.id]) continue;
-    const mine = shoppingMap.get(i.id);
-    if (!mine || (i.updatedAt || 0) > (mine.updatedAt || 0)) shoppingMap.set(i.id, i);
+  // Eigene Produkte: je Barcode gewinnt die zuletzt bearbeitete Fassung (updatedAt aus
+  // saveOwnProduct). Vorher behielt jedes Gerät stur seine eigene — eine Korrektur, die auf dem
+  // zweiten Handy gemacht wurde, kam damit nie an und beide überschrieben sich abwechselnd.
+  const own = { ...state.ownProducts };
+  for (const [barcode, product] of Object.entries(incoming.ownProducts || {})) {
+    const mine = own[barcode];
+    if (!mine || (product?.updatedAt || 0) > (mine.updatedAt || 0)) own[barcode] = product;
   }
-  state.shoppingList = [...shoppingMap.values()].filter(i => !tomb.shoppingList[i.id]);
+  state.ownProducts = own;
 
-  // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen — gelöschte nicht wieder.
-  const recipes = new Map(state.recipes.map(r => [r.id, r]));
-  for (const r of incoming.recipes || []) {
-    if (tomb.recipes[r.id]) continue;
-    const mine = recipes.get(r.id);
-    if (!mine || (r.updatedAt || 0) > (mine.updatedAt || 0)) recipes.set(r.id, r);
-  }
-  state.recipes = [...recipes.values()]
-    .filter(r => !tomb.recipes[r.id])
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
-  // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt — gelöschte nicht wieder.
-  // updatedAt (nachgefüllte Nährwerte, siehe updateListEntry) sticht addedAt, weil addedAt
-  // sich beim Nachfüllen nicht ändert und ein Bearbeitungs-Zeitpunkt fehlen würde.
-  for (const listName of ["favorites", "noGo"]) {
-    const map = new Map(state[listName].map(e => [e.barcode, e]));
-    for (const e of incoming[listName] || []) {
-      if (tomb[listName][e.barcode]) continue;
-      const mine = map.get(e.barcode);
-      const eTime = e.updatedAt || e.addedAt || 0;
-      const mineTime = mine ? (mine.updatedAt || mine.addedAt || 0) : -1;
-      if (!mine || eTime > mineTime) map.set(e.barcode, e);
+  // Ballaststoff-Schalter genauso, mit dem Zeitstempel aus der Parallel-Karte. Ein bewusst
+  // zurückgesetzter Schalter steht als null drin statt zu fehlen — sonst ließe sich
+  // "zurückgesetzt" nicht von "kennt diesen Barcode noch nicht" unterscheiden.
+  const incomingFiberAt = incoming.fiberOverridesAt || {};
+  for (const [barcode, value] of Object.entries(incoming.fiberOverrides || {})) {
+    const known = Object.prototype.hasOwnProperty.call(state.fiberOverrides, barcode);
+    const theirAt = incomingFiberAt[barcode] || 0;
+    if (!known || theirAt > (state.fiberOverridesAt[barcode] || 0)) {
+      state.fiberOverrides[barcode] = value;
+      state.fiberOverridesAt[barcode] = theirAt;
     }
-    state[listName] = [...map.values()].filter(e => !tomb[listName][e.barcode]);
   }
-
-  // Eigene Produkte und Ballaststoff-Schalter sind eigene Korrekturen: bei Kollision
-  // behält das Gerät seine Fassung, Fehlendes kommt dazu.
-  state.ownProducts = { ...(incoming.ownProducts || {}), ...state.ownProducts };
-  state.fiberOverrides = { ...(incoming.fiberOverrides || {}), ...state.fiberOverrides };
 
   // Eingefrorene Tagesziele je Profil und Tag — neuere Fassung gewinnt (frozenAt). Zwei
   // Geräte können denselben Tag zu unterschiedlichen Zeitpunkten einfrieren, wenn eine
@@ -308,8 +401,45 @@ function applyMerge(incoming, profileChoice) {
 // sync.js hängt sich hier ein, um nach lokalen Änderungen automatisch zu synchronisieren.
 // Bewusst generisch statt sync-spezifisch: store.js weiß nichts von Supabase.
 const changeListeners = [];
+const persistErrorListeners = [];
+
+/** `fn(origin)` — origin ist "local" (Änderung von diesem Gerät) oder "remote" (kam gerade über
+ * den Abgleich herein). sync.js pusht nur bei "local"; ohne diese Unterscheidung löst jedes
+ * Einmischen sofort wieder einen Push aus und die Synchronisierung läuft endlos im Kreis. */
 export function onStoreChange(fn) {
   changeListeners.push(fn);
+}
+
+/** `fn(error)` — selbst nach dem Leeren des Produkt-Cache lässt sich nichts mehr speichern.
+ * Die App muss das zeigen, statt ab hier stillschweigend nichts mehr zu sichern. */
+export function onPersistError(fn) {
+  persistErrorListeners.push(fn);
+}
+
+/**
+ * Ersetzt den kompletten Zustand — für "Datei gewinnt" und "Letzten Import rückgängig machen".
+ *
+ * Alles, was danach fehlt, wird als Löschung vermerkt. Ohne diese Grabsteine wäre ein Ersetzen
+ * bei aktivierter Online-Synchronisierung wirkungslos: der nächste Abgleich holte den noch
+ * vollständigen Serverstand und vereinigte ihn wieder mit dem gerade bereinigten Gerät — das
+ * Ersetzen wäre Sekunden später von selbst rückgängig gemacht, ohne dass es jemand merkt.
+ *
+ * Der Produkt-Cache wird übernommen statt verworfen: er steht in keiner Sicherung (siehe
+ * exportJSON) und die Listen stünden sonst ohne Nährwerte da, bis alles neu geladen ist.
+ */
+function replaceStateWith(next) {
+  const now = Date.now();
+  for (const { name, keyOf } of TOMBSTONED) {
+    const keep = new Set((next[name] || []).map(keyOf));
+    for (const entry of state[name] || []) {
+      const key = keyOf(entry);
+      if (key == null || keep.has(key)) continue;
+      if (!(next.tombstones[name][key] > now)) next.tombstones[name][key] = now;
+    }
+  }
+  next.cache = prunedCache({ ...state.cache, ...next.cache });
+  state = next;
+  persist();
 }
 
 export const Store = {
@@ -364,6 +494,7 @@ export const Store = {
   // --- Produkt-Cache (Open Food Facts Antworten) ---
   cacheProduct(barcode, product) {
     state.cache[barcode] = { product, fetchedAt: Date.now() };
+    state.cache = prunedCache(state.cache);
     persist();
   },
   getCachedProduct(barcode) {
@@ -373,15 +504,19 @@ export const Store = {
   // --- Ballaststoff-Schalter (pro Barcode, überschreibt EU/US-Standarderkennung) ---
   setFiberOverride(barcode, subtractFiber) {
     state.fiberOverrides[barcode] = subtractFiber;
+    state.fiberOverridesAt[barcode] = Date.now();
     persist();
   },
   getFiberOverride(barcode) {
-    return Object.prototype.hasOwnProperty.call(state.fiberOverrides, barcode)
-      ? state.fiberOverrides[barcode]
-      : undefined;
+    const value = state.fiberOverrides[barcode];
+    return value == null ? undefined : value;
   },
   clearFiberOverride(barcode) {
-    delete state.fiberOverrides[barcode];
+    // Nicht löschen, sondern als "bewusst zurückgesetzt" (null) festhalten — ein entfernter
+    // Schlüssel ließe sich beim Abgleich nicht von "kennt diesen Barcode noch nicht"
+    // unterscheiden und der alte Wert käme vom anderen Gerät sofort zurück.
+    state.fiberOverrides[barcode] = null;
+    state.fiberOverridesAt[barcode] = Date.now();
     persist();
   },
 
@@ -405,7 +540,9 @@ export const Store = {
 
   // --- eigene, manuell angelegte Produkte ---
   saveOwnProduct(barcode, product) {
-    state.ownProducts[barcode] = product;
+    // updatedAt zentral hier, damit ein späterer Abgleich erkennt, welche der beiden Fassungen
+    // die neuere ist (siehe applyMerge) — egal über welchen Weg das Produkt gespeichert wurde.
+    state.ownProducts[barcode] = { ...product, updatedAt: Date.now() };
     persist();
   },
   getOwnProduct(barcode) {
@@ -495,8 +632,14 @@ export const Store = {
     const stamped = { ...entry, updatedAt: Date.now() };
     if (idx >= 0) list[idx] = stamped; else list.unshift(stamped);
     // Ein Produkt kann nicht gleichzeitig auf Favoriten UND No-Go stehen
+    // Das Entfernen aus der anderen Liste braucht einen Grabstein: ohne ihn holt der nächste
+    // Abgleich den Eintrag von der noch ahnungslosen Gegenseite zurück und das Produkt stünde
+    // auf Favoriten UND No-Go gleichzeitig.
     const other = listName === "favorites" ? "noGo" : "favorites";
-    state[other] = state[other].filter(e => e.barcode !== entry.barcode);
+    if (state[other].some(e => e.barcode === entry.barcode)) {
+      state.tombstones[other][entry.barcode] = stamped.updatedAt;
+      state[other] = state[other].filter(e => e.barcode !== entry.barcode);
+    }
     persist();
   },
   /** Ergänzt/ändert einzelne Felder eines Listeneintrags (z.B. nachgefüllte Nährwerte). */
@@ -504,6 +647,18 @@ export const Store = {
     const item = state[listName].find(e => e.barcode === barcode);
     if (!item) return;
     Object.assign(item, patch, { updatedAt: Date.now() });
+    persist();
+  },
+  /**
+   * Wie updateListEntry, aber OHNE updatedAt anzufassen — für Werte, die die App beim Anzeigen
+   * aus dem nachträgt, was ohnehin auf dem Gerät liegt (siehe lists.js: nutriOf). Mit
+   * Zeitstempel machte schon das bloße Öffnen der Liste diese Fassung zur "neueren" und
+   * überschriebe beim nächsten Abgleich eine echte Änderung des anderen Geräts.
+   */
+  backfillListEntry(listName, barcode, patch) {
+    const item = state[listName].find(e => e.barcode === barcode);
+    if (!item) return;
+    Object.assign(item, patch);
     persist();
   },
   removeFromList(listName, barcode) {
@@ -553,7 +708,10 @@ export const Store = {
     if (!Array.isArray(names) || names.length === 0) return 0;
     for (const text of names) {
       if (typeof text === "string" && text.trim()) {
-        state.shoppingList.unshift({ id: crypto.randomUUID(), text: text.trim(), checked: false, barcode: null });
+        state.shoppingList.unshift({
+          id: crypto.randomUUID(), text: text.trim(), checked: false, barcode: null,
+          updatedAt: Date.now(),
+        });
       }
     }
     localStorage.removeItem(KOCHBUCH_INBOX_KEY);
@@ -574,8 +732,7 @@ export const Store = {
   importJSON(json) {
     const parsed = parseBackup(json);
     savePreMergeBackup();
-    state = migrate(parsed);
-    persist();
+    replaceStateWith(migrate(parsed));
   },
 
   /** Prüft eine Backup-Datei und liefert den geparsten Inhalt — für die Vorschau im Dialog. */
@@ -650,7 +807,7 @@ export const Store = {
   mergeJSONQuiet(json, { profileChoice = {} } = {}) {
     const incoming = parseBackup(json);
     applyMerge(incoming, profileChoice);
-    persist();
+    persistFromRemote();
   },
 
   // --- Sicherung vor dem letzten Zusammenführen ---
@@ -668,8 +825,7 @@ export const Store = {
     const raw = localStorage.getItem(PREMERGE_KEY);
     if (!raw) return false;
     const { snapshot } = JSON.parse(raw);
-    state = migrate(snapshot);
-    persist();
+    replaceStateWith(migrate(snapshot));
     localStorage.removeItem(PREMERGE_KEY);
     return true;
   },

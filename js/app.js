@@ -1,5 +1,5 @@
 // app.js — Tab-Router, Profil-Umschalter, Init, Design/Theme, Klar-Eintragen-Sheet.
-import { Store } from "./store.js";
+import { Store, onPersistError } from "./store.js";
 import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan, openScanSearch } from "./views/scan.js";
 import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
@@ -270,6 +270,16 @@ function nowLabel() {
 // Stream sauber stoppen, wenn die App in den Hintergrund geht (Akku).
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && activeTab === "scan") cleanupScan();
+});
+
+// Der Speicher des Browsers ist voll und selbst nach dem Leeren des Produkt-Cache geht nichts
+// mehr hinein. Das MUSS sichtbar sein: sonst wirkt jede weitere Eingabe, als wäre sie
+// gespeichert, und ist nach dem nächsten Neuladen weg.
+let storageWarningShown = false;
+onPersistError(() => {
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  showToast("Speicher voll — Eingaben werden gerade NICHT gesichert. Bitte Daten exportieren.");
 });
 
 // Offline/Online Hinweis

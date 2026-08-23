@@ -1,7 +1,7 @@
 // consumption.js — Menge "gegessen" eintragen und mit dem Tagesziel verrechnen.
 // Trägt außerdem die aktuell auf der Startseite angezeigte Datumsnavigation (für die
 // Essensplanung), damit Einträge aus Scan/Listen/Rezepten immer auf dem gewählten Tag landen.
-import { Store, dateKeyOf } from "./store.js";
+import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
 import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
@@ -60,8 +60,7 @@ export function resetActiveDateToToday() {
 }
 /** Verschiebt den aktiven Tag um `deltaDays` (negativ = zurück) und liefert den neuen Schlüssel. */
 export function shiftActiveDate(deltaDays) {
-  const [y, m, d] = getActiveDateKey().split("-").map(Number);
-  activeDateKey = dateKeyOf(new Date(y, m - 1, d + deltaDays).getTime());
+  activeDateKey = shiftDateKey(getActiveDateKey(), deltaDays);
   return activeDateKey;
 }
 

@@ -2,8 +2,8 @@
 // der Keto-App (js/sync.js dort), sobald mindestens ein Gerät sie aktiviert hat. Ersetzt für
 // diesen Fall die manuelle "Übernehmen"-Klickerei in views/import.js, die weiterhin als
 // Rückfalloption bestehen bleibt (Gerät ohne Keto-Sync, oder bevor der erste Sync-Tick lief).
-import { fetchKetoSyncRecipes, findByKetoId, createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "./api.js";
-import { buildImportPayload } from "./keto-bridge.js";
+import { fetchKetoSyncRecipes, listKetoIdMap } from "./api.js";
+import { writeKetoRecipe } from "./keto-bridge.js";
 import { getWhoAmI } from "./identity.js";
 
 /**
@@ -13,28 +13,22 @@ import { getWhoAmI } from "./identity.js";
  */
 export async function syncRezepteFromKetoSync() {
   const recipes = await fetchKetoSyncRecipes();
+  if (recipes.length === 0) return { imported: 0, updated: 0 };
+
+  // Einmal nachschlagen, was hier schon liegt — statt einer Abfrage je Rezept.
+  const bekannt = await listKetoIdMap();
   let imported = 0, updated = 0;
   const wer = getWhoAmI();
 
   for (const recipe of recipes) {
     if (!recipe?.id || !recipe.name || !Array.isArray(recipe.ingredients)) continue;
-    const existing = await findByKetoId(recipe.id);
+    const existing = bekannt.get(recipe.id) || null;
     const ketoUpdatedAt = recipe.updatedAt || 0;
     const knownUpdatedAt = existing?.keto_updated_at ? new Date(existing.keto_updated_at).getTime() : 0;
     if (existing && ketoUpdatedAt <= knownUpdatedAt) continue; // schon auf diesem Stand
 
-    const { kopf, zutaten } = buildImportPayload(recipe);
-    let rezeptId;
-    if (existing) {
-      await forceUpdateRezeptHead(existing.id, { ...kopf, geaendert_von: wer });
-      rezeptId = existing.id;
-      updated++;
-    } else {
-      const created = await createRezeptHead({ ...kopf, erstellt_von: wer, geaendert_von: wer });
-      rezeptId = created.id;
-      imported++;
-    }
-    await replaceZutaten(rezeptId, zutaten);
+    await writeKetoRecipe(recipe, existing, wer);
+    if (existing) updated++; else imported++;
   }
 
   return { imported, updated };

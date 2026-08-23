@@ -3,6 +3,11 @@
 const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
 
 let stream = null;
+// Zählt jeden Startversuch. Wird der Dialog geschlossen, während getUserMedia() noch auf die
+// Freigabe wartet, greift stopScanner() ins Leere: `stream` ist zu dem Zeitpunkt noch null.
+// Über die Marke erkennt der zurückkehrende Aufruf, dass er nicht mehr gebraucht wird, und
+// legt die Kamera selbst wieder hin — sonst leuchtet sie bis zum nächsten Neuladen weiter.
+let startToken = 0;
 let rafId = null;
 let detector = null;
 let zxingReader = null;
@@ -20,13 +25,20 @@ function supportsNativeDetector() {
  * @param {(status: string) => void} onStatus  optionale Statusmeldungen fürs UI
  */
 export async function startScanner(videoEl, callback, onStatus = () => {}) {
+  const token = ++startToken;
   onDetect = callback;
   scanning = true;
 
-  stream = await navigator.mediaDevices.getUserMedia({
+  const mediaStream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
     audio: false,
   });
+  if (token !== startToken || !scanning) {
+    // Zwischenzeitlich abgebrochen (Dialog geschlossen, anderer Scan gestartet).
+    mediaStream.getTracks().forEach(t => t.stop());
+    return;
+  }
+  stream = mediaStream;
   videoEl.srcObject = stream;
   await videoEl.play();
 
@@ -105,6 +117,7 @@ function handleHit(code) {
 
 export function stopScanner() {
   scanning = false;
+  startToken++; // ein noch laufendes startScanner() erkennt daran, dass es abbrechen soll
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
   if (stream) {

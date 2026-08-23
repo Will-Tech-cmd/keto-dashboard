@@ -1,6 +1,6 @@
 // analysis.js — erzeugt einen kompakten Textbericht über das Ernährungsverhalten samt
 // Analyse-Auftrag, den man in die Claude-App einfügen (oder direkt teilen) kann.
-import { Store, dateKeyOf } from "./store.js";
+import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { getTargetsForDate, Goals } from "./profiles.js";
 import { getConsumptionForDate, sumConsumption, MEAL_LABELS, dateLabel } from "./consumption.js";
 import { esc, showToast, bindBackClose } from "./ui.js";
@@ -12,8 +12,9 @@ function round1(v) {
 /** Sammelt die Tagesdaten eines Profils für die letzten `days` Tage (ältester zuerst). */
 function collectDays(profile, days) {
   const out = [];
+  const heute = dateKeyOf(Date.now());
   for (let i = days - 1; i >= 0; i--) {
-    const key = dateKeyOf(Date.now() - i * 86400000);
+    const key = shiftDateKey(heute, -i);
     const entries = getConsumptionForDate(profile.id, key);
     out.push({ key, entries, totals: sumConsumption(entries), targets: getTargetsForDate(profile, key) });
   }

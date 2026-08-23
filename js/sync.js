@@ -21,6 +21,14 @@ const ROW_ID = "haushalt";
 const ENABLED_KEY = "keto-dashboard-sync-enabled";
 const SESSION_KEY = "keto-dashboard-sync-session";
 const LAST_SYNC_KEY = "keto-dashboard-sync-last";
+// "Auf diesem Gerät gibt es Änderungen, die der Server noch nicht hat." Bewusst im
+// localStorage statt nur im Speicher: eine Eingabe kurz vor dem Schließen der App wäre sonst
+// beim nächsten Start nicht mehr als noch zu sendende Änderung erkennbar.
+const DIRTY_KEY = "keto-dashboard-sync-dirty";
+// Wie oft im Vordergrund nachgesehen wird, ob das andere Gerät etwas geschickt hat.
+const PULL_INTERVAL_MS = 60000;
+// Schreibt das andere Gerät zwischen unserem Lesen und Schreiben, wird der Durchlauf wiederholt.
+const MAX_SYNC_ATTEMPTS = 3;
 
 export class SyncAuthError extends Error {}
 
@@ -48,12 +56,27 @@ export function getLastSyncAt() {
 export async function enableSync(password) {
   await login(password);
   localStorage.setItem(ENABLED_KEY, "true");
+  markDirty(); // der bisherige Stand dieses Geräts muss einmal komplett hoch
+  startAutoPull();
   await syncNow();
 }
 
 export function disableSync() {
   localStorage.removeItem(ENABLED_KEY);
+  localStorage.removeItem(DIRTY_KEY);
+  stopAutoPull();
   clearSession();
+}
+
+// Die Marke ist ein Zähler, keine Ja/Nein-Fahne: wird während des Hochladens etwas
+// eingetragen, steht danach ein anderer Wert da und die Marke bleibt stehen — sonst gälte die
+// neue Änderung als mitgesendet und bliebe für immer liegen.
+function markDirty() {
+  localStorage.setItem(DIRTY_KEY, String(Number(localStorage.getItem(DIRTY_KEY) || 0) + 1));
+}
+function pendingPushMark() { return localStorage.getItem(DIRTY_KEY); }
+function clearPendingPush(mark) {
+  if (localStorage.getItem(DIRTY_KEY) === mark) localStorage.removeItem(DIRTY_KEY);
 }
 
 async function login(password) {
@@ -124,35 +147,84 @@ async function authedFetch(url, opts = {}, { retried = false } = {}) {
 
 let syncing = false;
 let queued = false;
-let applyingRemote = false; // während des Einmischens ausgelöste Änderungen sollen keinen zweiten Sync-Tick anstoßen
+
+/**
+ * Ein Durchlauf: lesen, einmischen, schreiben. Gibt false zurück, wenn zwischen Lesen und
+ * Schreiben ein anderes Gerät geschrieben hat — dann ist der ganze Durchlauf zu wiederholen,
+ * weil unsere Fassung dessen Änderungen noch nicht kennt.
+ */
+async function syncOnce() {
+  const res = await authedFetch(`${REST}/keto_sync_state?id=eq.${ROW_ID}&select=daten`);
+  if (!res.ok) {
+    // Lesen fehlgeschlagen (Serverfehler, geänderte Zugriffsregeln). Auf keinen Fall trotzdem
+    // schreiben: unser Stand kennt die Gegenseite dann nicht und bügelte sie glatt.
+    throw new Error(`Serverstand nicht lesbar (Status ${res.status}) — es wird nichts überschrieben.`);
+  }
+  const rows = await res.json();
+  const remote = rows[0]?.daten || null;
+  if (remote) Store.mergeJSONQuiet(JSON.stringify(remote));
+
+  // Nur hochladen, wenn es hier wirklich etwas Neues gibt. Sonst schriebe jeder Blick auf den
+  // Server denselben Stand sinnlos zurück — bei einem Zustand von einigen hundert Kilobyte ist
+  // das der Unterschied zwischen "kaum spürbar" und "läuft das Datenvolumen leer".
+  const mark = pendingPushMark();
+  if (!mark) return true;
+
+  const version = Number(remote?.syncVersion) || 0;
+  const wer = Store.getActiveProfile()?.name || null;
+  // Die Versionsnummer wandert IM Datensatz mit, statt in einer eigenen Spalte: so braucht es
+  // keine Änderung am Tabellenschema. applyMerge() kennt das Feld nicht und lässt es liegen.
+  const daten = { ...JSON.parse(Store.exportJSON()), syncVersion: version + 1 };
+
+  if (!remote) {
+    // Allererster Abgleich überhaupt — die Zeile gibt es noch gar nicht.
+    const insert = await authedFetch(`${REST}/keto_sync_state?on_conflict=id`, {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({ id: ROW_ID, daten, geaendert_von: wer }),
+    });
+    if (!insert.ok) throw new Error(`Hochladen fehlgeschlagen (Status ${insert.status}).`);
+    clearPendingPush(mark);
+    return true;
+  }
+
+  // Optimistische Sperre: der PATCH greift nur, solange dort noch die Version steht, die wir
+  // eben gelesen haben. Ohne sie gewinnt bei zwei gleichzeitigen Abgleichen schlicht der
+  // spätere Schreibvorgang — und alles, was das andere Gerät zwischendurch hochgeladen hat,
+  // wäre weg. Bestandsdaten kennen das Feld noch nicht, dort greift is.null.
+  const erwartet = version === 0 ? "is.null" : `eq.${version}`;
+  const patch = await authedFetch(
+    `${REST}/keto_sync_state?id=eq.${ROW_ID}&daten->>syncVersion=${erwartet}&select=id`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ daten, geaendert_von: wer }),
+    }
+  );
+  if (!patch.ok) throw new Error(`Hochladen fehlgeschlagen (Status ${patch.status}).`);
+  const geschrieben = await patch.json().catch(() => []);
+  if (!Array.isArray(geschrieben) || geschrieben.length === 0) return false; // jemand war schneller
+
+  clearPendingPush(mark);
+  return true;
+}
 
 /**
  * Holt den Server-Stand, mischt ihn lokal ein (wie ein manueller Datei-Import) und schreibt
- * den vereinten Stand zurück. Wirft bei fehlender/ungültiger Anmeldung eine SyncAuthError —
- * Aufrufer, die das dem Menschen zeigen wollen, fangen die spezifisch ab.
+ * den vereinten Stand zurück, FALLS dieses Gerät etwas beizusteuern hat. Wirft bei
+ * fehlender/ungültiger Anmeldung eine SyncAuthError — Aufrufer, die das dem Menschen zeigen
+ * wollen, fangen die spezifisch ab.
  */
 export async function syncNow() {
   if (!isSyncEnabled()) return;
   if (syncing) { queued = true; return; }
   syncing = true;
   try {
-    const res = await authedFetch(`${REST}/keto_sync_state?id=eq.${ROW_ID}&select=daten`);
-    if (res.ok) {
-      const rows = await res.json();
-      if (rows[0]?.daten) {
-        applyingRemote = true;
-        try { Store.mergeJSONQuiet(JSON.stringify(rows[0].daten)); }
-        finally { applyingRemote = false; }
-      }
+    let fertig = false;
+    for (let versuch = 1; versuch <= MAX_SYNC_ATTEMPTS && !fertig; versuch++) {
+      fertig = await syncOnce();
     }
-
-    const daten = JSON.parse(Store.exportJSON());
-    const wer = Store.getActiveProfile()?.name || null;
-    await authedFetch(`${REST}/keto_sync_state?on_conflict=id`, {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ id: ROW_ID, daten, geaendert_von: wer }),
-    });
+    if (!fertig) throw new Error("Das andere Gerät war schneller — gleich noch einmal versuchen.");
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
   } finally {
     syncing = false;
@@ -166,9 +238,47 @@ let pushTimer = null;
  * Eingabe — dieselbe Überlegung wie beim 250ms-Debounce des lokalen Speicherns in store.js,
  * nur mit größerem Abstand, weil hier ein Netzwerk-Roundtrip dranhängt. */
 export function scheduleSync() {
-  if (!isSyncEnabled() || applyingRemote) return;
+  if (!isSyncEnabled()) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => { syncNow().catch(() => {}); }, 4000);
 }
 
-onStoreChange(scheduleSync);
+// Nur EIGENE Änderungen stoßen einen Push an. Der frühere Versuch, das über ein Flag rund um
+// Store.mergeJSONQuiet() zu lösen, ging ins Leere: das Speichern ist um 250ms verzögert, das
+// Flag war beim Eintreffen des Ereignisses längst wieder zurückgesetzt. Jeder empfangene
+// Abgleich löste deshalb einen Push aus, dieser den nächsten Abgleich — die App synchronisierte
+// alle vier Sekunden endlos im Kreis, ohne dass jemand etwas eingetragen hatte.
+onStoreChange((origin) => {
+  if (origin !== "local") return;
+  markDirty();
+  scheduleSync();
+});
+
+// ---------------------------------------------------------------------------
+// Nachsehen, ob das andere Gerät etwas geschickt hat. Das übernahm bisher versehentlich die
+// Endlosschleife oben — jetzt bewusst, und nur solange die App im Vordergrund ist. Ohne einen
+// laufenden Push (siehe oben) ist ein Durchlauf eine einzelne, kleine Leseanfrage.
+// ---------------------------------------------------------------------------
+let pullTimer = null;
+
+function stopAutoPull() {
+  clearInterval(pullTimer);
+  pullTimer = null;
+}
+
+function startAutoPull() {
+  stopAutoPull();
+  if (!isSyncEnabled()) return;
+  pullTimer = setInterval(() => {
+    if (document.visibilityState === "visible") syncNow().catch(() => {});
+  }, PULL_INTERVAL_MS);
+}
+
+if (typeof document !== "undefined") {
+  // Zurück aus dem Hintergrund: sofort nachsehen, statt bis zum nächsten Intervall zu warten —
+  // das ist der Moment, in dem man wissen will, was der andere eingetragen hat.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && isSyncEnabled()) syncNow().catch(() => {});
+  });
+  startAutoPull();
+}
