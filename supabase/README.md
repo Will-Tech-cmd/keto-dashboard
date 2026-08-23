@@ -85,10 +85,10 @@ wurde übernommen.
 
 ## Was B1 bewusst NICHT anfasst
 
-`keto_sync_state` bleibt stehen, samt seiner offenen Policy — die ausgelieferte
-Keto-App synchronisiert noch darüber. Die Tabelle verschwindet mit B3, sobald beide
-Geräte auf das Zeilenmodell umgestiegen sind.
+`keto_sync_state` bleibt als Tabelle stehen — die ausgelieferte Keto-App
+synchronisiert noch darüber, ein Wegnehmen würde sie sofort zerreißen. Sie
+verschwindet mit B3, sobald beide Geräte auf das Zeilenmodell umgestiegen sind.
 
-> **Solange sie existiert, darf kein zweites Konto angelegt werden.** Mit der offenen
-> Policy läse es den kompletten Haushalts-Zustand mit. Die Registrierung bleibt im
-> Projekt gesperrt, bis B3 durch ist.
+Ihre offene Policy ist dagegen **geschlossen** (Migration `20260823221459`): nur
+noch Mitglieder des Bestandshaushalts kommen an die Zeile. Ein zweites Konto liest
+damit nichts mehr mit — der Weg für Stufe A ist frei.
