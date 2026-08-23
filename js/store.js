@@ -47,6 +47,14 @@ function defaultState() {
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
     fiberOverrides: {},  // barcode -> true|false, überschreibt die automatische EU/US-Erkennung (Ballaststoff-Schalter)
     dayTargets: {},      // profileId -> { dateKey -> { kcal, netCarbG, fatG, proteinG } }, friert vergangene Tage ein
+    // Löschungen, damit ein Merge (Datei-Import oder Online-Sync) sie nicht aus der jeweils
+    // anderen, noch ahnungslosen Seite wieder aufleben lässt — siehe applyMerge(). id/barcode
+    // -> Zeitpunkt der Löschung; historyClearedAt ist ein einzelner Schnitt statt vieler
+    // Einzel-Einträge, weil clearHistory() ohnehin alles auf einmal leert.
+    tombstones: {
+      consumption: {}, water: {}, shoppingList: {}, recipes: {}, favorites: {}, noGo: {},
+      historyClearedAt: 0,
+    },
   };
 }
 
@@ -180,6 +188,16 @@ function diffProfiles(mine, theirs) {
  * Zustand — union über IDs, jüngerer Zeitstempel gewinnt bei Kollisionen. Geteilt von
  * Store.mergeJSON() (mit Sicherung) und Store.mergeJSONQuiet() (ohne, für sync.js).
  */
+/** Vereint zwei Tombstone-Karten (id/barcode -> Löschzeitpunkt) — bei Kollision gewinnt der
+ * spätere Zeitpunkt, auch wenn beide Seiten dieselbe id schon mal gelöscht haben. */
+function mergeTombstoneMap(mine, theirs) {
+  const merged = { ...mine };
+  for (const [key, at] of Object.entries(theirs || {})) {
+    if (!merged[key] || at > merged[key]) merged[key] = at;
+  }
+  return merged;
+}
+
 function applyMerge(incoming, profileChoice) {
   const unionById = (mine, theirs) => {
     const map = new Map((mine || []).map(x => [x.id, x]));
@@ -188,29 +206,49 @@ function applyMerge(incoming, profileChoice) {
   };
   const byTimeDesc = (a, b) => (b.at || 0) - (a.at || 0);
 
+  // Löschungen zuerst zusammenführen: eine auf einer Seite gelöschte id darf die Vereinigung
+  // unten nicht wieder aufleben lassen, nur weil sie der anderen Seite noch fehlt.
+  const tomb = state.tombstones;
+  const incomingTomb = incoming.tombstones || {};
+  tomb.consumption = mergeTombstoneMap(tomb.consumption, incomingTomb.consumption);
+  tomb.water = mergeTombstoneMap(tomb.water, incomingTomb.water);
+  tomb.shoppingList = mergeTombstoneMap(tomb.shoppingList, incomingTomb.shoppingList);
+  tomb.recipes = mergeTombstoneMap(tomb.recipes, incomingTomb.recipes);
+  tomb.favorites = mergeTombstoneMap(tomb.favorites, incomingTomb.favorites);
+  tomb.noGo = mergeTombstoneMap(tomb.noGo, incomingTomb.noGo);
+  tomb.historyClearedAt = Math.max(tomb.historyClearedAt || 0, incomingTomb.historyClearedAt || 0);
+
   state.consumption = unionById(state.consumption, incoming.consumption)
+    .filter(e => !tomb.consumption[e.id])
     .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
   state.history = unionById(state.history, incoming.history)
+    .filter(e => (e.at || 0) > tomb.historyClearedAt)
     .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
-  state.water = unionById(state.water, incoming.water).sort(byTimeDesc);
-  state.shoppingList = unionById(state.shoppingList, incoming.shoppingList);
+  state.water = unionById(state.water, incoming.water)
+    .filter(e => !tomb.water[e.id]).sort(byTimeDesc);
+  state.shoppingList = unionById(state.shoppingList, incoming.shoppingList)
+    .filter(e => !tomb.shoppingList[e.id]);
 
-  // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen.
+  // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen — gelöschte nicht wieder.
   const recipes = new Map(state.recipes.map(r => [r.id, r]));
   for (const r of incoming.recipes || []) {
+    if (tomb.recipes[r.id]) continue;
     const mine = recipes.get(r.id);
     if (!mine || (r.updatedAt || 0) > (mine.updatedAt || 0)) recipes.set(r.id, r);
   }
-  state.recipes = [...recipes.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  state.recipes = [...recipes.values()]
+    .filter(r => !tomb.recipes[r.id])
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-  // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt.
+  // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt — gelöschte nicht wieder.
   for (const listName of ["favorites", "noGo"]) {
     const map = new Map(state[listName].map(e => [e.barcode, e]));
     for (const e of incoming[listName] || []) {
+      if (tomb[listName][e.barcode]) continue;
       const mine = map.get(e.barcode);
       if (!mine || (e.addedAt || 0) > (mine.addedAt || 0)) map.set(e.barcode, e);
     }
-    state[listName] = [...map.values()];
+    state[listName] = [...map.values()].filter(e => !tomb[listName][e.barcode]);
   }
 
   // Eigene Produkte und Ballaststoff-Schalter sind eigene Korrekturen: bei Kollision
@@ -360,6 +398,7 @@ export const Store = {
   },
   clearHistory() {
     state.history = [];
+    state.tombstones.historyClearedAt = Date.now();
     persist();
   },
 
@@ -373,6 +412,7 @@ export const Store = {
   },
   removeConsumption(id) {
     state.consumption = state.consumption.filter(e => e.id !== id);
+    state.tombstones.consumption[id] = Date.now();
     persist();
   },
   updateConsumption(entry) {
@@ -390,6 +430,7 @@ export const Store = {
   },
   removeWater(id) {
     state.water = state.water.filter(e => e.id !== id);
+    state.tombstones.water[id] = Date.now();
     persist();
   },
 
@@ -407,6 +448,7 @@ export const Store = {
   },
   deleteRecipe(id) {
     state.recipes = state.recipes.filter(r => r.id !== id);
+    state.tombstones.recipes[id] = Date.now();
     persist();
   },
 
@@ -429,6 +471,7 @@ export const Store = {
   },
   removeFromList(listName, barcode) {
     state[listName] = state[listName].filter(e => e.barcode !== barcode);
+    state.tombstones[listName][barcode] = Date.now();
     persist();
   },
   isInList(listName, barcode) {
@@ -447,9 +490,14 @@ export const Store = {
   },
   removeShoppingItem(id) {
     state.shoppingList = state.shoppingList.filter(i => i.id !== id);
+    state.tombstones.shoppingList[id] = Date.now();
     persist();
   },
   clearCheckedShoppingItems() {
+    const now = Date.now();
+    for (const item of state.shoppingList) {
+      if (item.checked) state.tombstones.shoppingList[item.id] = now;
+    }
     state.shoppingList = state.shoppingList.filter(i => !i.checked);
     persist();
   },

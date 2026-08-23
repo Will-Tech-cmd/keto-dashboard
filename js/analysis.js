@@ -2,7 +2,7 @@
 // Analyse-Auftrag, den man in die Claude-App einfügen (oder direkt teilen) kann.
 import { Store, dateKeyOf } from "./store.js";
 import { getTargetsForDate, Goals } from "./profiles.js";
-import { getConsumptionForDate, sumConsumption, MEAL_LABELS } from "./consumption.js";
+import { getConsumptionForDate, sumConsumption, MEAL_LABELS, dateLabel } from "./consumption.js";
 import { esc, showToast, bindBackClose } from "./ui.js";
 
 function round1(v) {
@@ -153,6 +153,18 @@ export function buildAnalysisReport(profile, days) {
  * und endet mit einem konkreten Auftrag — der Prompt wird also gleich mitgegeben und muss
  * nicht in der Claude-App noch dazugetippt werden.
  */
+/** "Heute"/"Gestern"/"Morgen"/Wochentag-Datum als flektierbare Redewendung ("heute" /
+ * "gestern" / "am Mo. 24.08.") — für den KI-Bericht, der auch für einen anderen Tag als
+ * heute erzeugt werden kann (siehe openTodayQuestionModal). */
+function dayPhrase(dateKey) {
+  const label = dateLabel(dateKey);
+  const lower = { Heute: "heute", Gestern: "gestern", Morgen: "morgen" }[label];
+  return lower || `am ${label}`;
+}
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
   const entries = getConsumptionForDate(profile.id, dateKey);
   const s = sumConsumption(entries);
@@ -163,18 +175,19 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
     fat: round1(t.fatG - s.fat),
     protein: round1(t.proteinG - s.protein),
   };
+  const tag = dayPhrase(dateKey);
 
   const lines = [];
-  lines.push(`# Was kann ich heute noch essen? (${dateKey})`);
+  lines.push(`# Was kann ich ${tag} noch essen? (${dateKey})`);
   lines.push("");
   lines.push("## Meine Tagesziele");
   lines.push(`- ${t.kcal} kcal · ${t.netCarbG} g Netto-KH · ${t.fatG} g Fett · ${t.proteinG} g Eiweiß`);
   lines.push(`- Ernährungsform: ${profile.dietType}, Ziel: ${Goals[profile.goal] || profile.goal}`);
   lines.push("");
 
-  lines.push("## Heute schon gegessen");
+  lines.push(`## ${capitalize(tag)} schon gegessen`);
   if (entries.length === 0) {
-    lines.push("_Heute noch nichts eingetragen._");
+    lines.push(`_${capitalize(tag)} noch nichts eingetragen._`);
   } else {
     for (const key of Object.keys(MEAL_LABELS)) {
       const items = entries.filter(e => e.meal === key);
@@ -195,10 +208,10 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
     }
   }
   lines.push("");
-  lines.push(`**Summe heute:** ${Math.round(s.kcal)} kcal · ${round1(s.netCarbs)} g Netto-KH · ${round1(s.fat)} g Fett · ${round1(s.protein)} g Eiweiß`);
+  lines.push(`**Summe ${tag}:** ${Math.round(s.kcal)} kcal · ${round1(s.netCarbs)} g Netto-KH · ${round1(s.fat)} g Fett · ${round1(s.protein)} g Eiweiß`);
   lines.push("");
 
-  lines.push("## Was heute noch frei ist");
+  lines.push(`## Was ${tag} noch frei ist`);
   const overshoot = (v, unit) => v < 0 ? `${Math.abs(v)} ${unit} **darüber**` : `${v} ${unit}`;
   lines.push(`- Kalorien: ${overshoot(left.kcal, "kcal")}`);
   lines.push(`- Netto-KH: ${overshoot(left.netCarbs, "g")}`);
@@ -208,10 +221,10 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
 
   // --- Der eigentliche Auftrag ---
   lines.push("## Meine Frage");
-  lines.push("Was kann ich heute noch essen, ohne meine Vorgaben zu reißen? Bitte:");
+  lines.push(`Was kann ich ${tag} noch essen, ohne meine Vorgaben zu reißen? Bitte:`);
   lines.push("1. Nenne mir 3–5 konkrete Vorschläge (einzelne Lebensmittel oder einfache Mahlzeiten) mit Menge in Gramm und den zugehörigen Nährwerten.");
   lines.push("2. Achte dabei zuerst auf das Netto-KH-Limit — das ist die harte Grenze; Kalorien, Fett und Eiweiß sind Richtwerte.");
-  lines.push("3. Sag mir, falls ich heute schon über einem Wert liege und was das praktisch bedeutet.");
+  lines.push(`3. Sag mir, falls ich ${tag} schon über einem Wert liege und was das praktisch bedeutet.`);
   lines.push("4. Halte dich an das, was zu meiner Ernährungsform passt.");
   lines.push("");
   lines.push("_Hinweis: Netto-Kohlenhydrate sind nach EU-Konvention angegeben (Ballaststoffe sind in den Kohlenhydraten nicht enthalten)._");
@@ -296,24 +309,25 @@ export function openAnalysisModal() {
 }
 
 /** Dialog: Tageswerte samt fertiger Frage kopieren oder teilen. */
-export function openTodayQuestionModal() {
+export function openTodayQuestionModal(dateKey = dateKeyOf(Date.now())) {
   const profile = Store.getActiveProfile();
-  const report = buildTodayReport(profile);
-  const entries = getConsumptionForDate(profile.id, dateKeyOf(Date.now()));
+  const report = buildTodayReport(profile, dateKey);
+  const entries = getConsumptionForDate(profile.id, dateKey);
   const s = sumConsumption(entries);
-  const t = getTargetsForDate(profile, dateKeyOf(Date.now()));
+  const t = getTargetsForDate(profile, dateKey);
   const leftCarbs = round1(t.netCarbG - s.netCarbs);
+  const tag = dayPhrase(dateKey);
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Was kann ich heute noch essen?</h2>
-      <p class="hint">Schickt deine heutigen Werte samt fertiger Frage — in der Claude-App nur noch einfügen, nichts dazutippen.</p>
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Was kann ich ${tag} noch essen?</h2>
+      <p class="hint">Schickt deine Werte ${tag} samt fertiger Frage — in der Claude-App nur noch einfügen, nichts dazutippen.</p>
       <div class="klar-portion-panel gray" style="margin-top:12px">
-        <div class="klar-portion-head">Heute noch frei</div>
+        <div class="klar-portion-head">${capitalize(tag)} noch frei</div>
         <div class="klar-portion-value">${leftCarbs < 0 ? `${Math.abs(leftCarbs)} g drüber` : `${leftCarbs} g`}<span>Netto-KH · ${Math.round(t.kcal - s.kcal)} kcal</span></div>
-        <div class="klar-portion-sub">${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"} heute · ca. ${Math.round(report.length / 100) / 10} KB Text</div>
+        <div class="klar-portion-sub">${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"} ${tag} · ca. ${Math.round(report.length / 100) / 10} KB Text</div>
       </div>
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="todayCancel">Abbrechen</button>
