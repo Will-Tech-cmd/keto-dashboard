@@ -99,7 +99,7 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
   `;
 
   container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
-  container.querySelector("#todayQuestionBtn").addEventListener("click", () => openTodayQuestionModal());
+  container.querySelector("#todayQuestionBtn").addEventListener("click", () => openTodayQuestionModal(dateKey));
 
   renderKlarWeekStrip(container, dateKey, refresh);
   renderKlarMacros(container, totals, targets, goToTab, profile, refresh);
