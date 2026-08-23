@@ -218,16 +218,35 @@ function applyMerge(incoming, profileChoice) {
   tomb.noGo = mergeTombstoneMap(tomb.noGo, incomingTomb.noGo);
   tomb.historyClearedAt = Math.max(tomb.historyClearedAt || 0, incomingTomb.historyClearedAt || 0);
 
-  state.consumption = unionById(state.consumption, incoming.consumption)
+  // Verbrauch: gleiche id -> neuere Fassung gewinnt (Menge kann nachträglich korrigiert
+  // werden, siehe rescaleConsumption/setConsumptionMeal), sonst dazunehmen. updatedAt fehlt
+  // bei unangetasteten Altbeständen — dann sind beide Seiten identisch und at (auf beiden
+  // Seiten gleich, da vom selben Ursprung) entscheidet nichts, was auch richtig ist.
+  const consumptionMap = new Map(state.consumption.map(e => [e.id, e]));
+  for (const e of incoming.consumption || []) {
+    if (tomb.consumption[e.id]) continue;
+    const mine = consumptionMap.get(e.id);
+    if (!mine || (e.updatedAt || e.at || 0) > (mine.updatedAt || mine.at || 0)) consumptionMap.set(e.id, e);
+  }
+  state.consumption = [...consumptionMap.values()]
     .filter(e => !tomb.consumption[e.id])
     .sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
+
   state.history = unionById(state.history, incoming.history)
     .filter(e => (e.at || 0) > tomb.historyClearedAt)
     .sort(byTimeDesc).slice(0, HISTORY_LIMIT);
   state.water = unionById(state.water, incoming.water)
     .filter(e => !tomb.water[e.id]).sort(byTimeDesc);
-  state.shoppingList = unionById(state.shoppingList, incoming.shoppingList)
-    .filter(e => !tomb.shoppingList[e.id]);
+
+  // Einkaufsliste: gleiche id -> neuere Fassung gewinnt (Abhaken ändert den bestehenden
+  // Eintrag, keine neue id), sonst dazunehmen.
+  const shoppingMap = new Map(state.shoppingList.map(i => [i.id, i]));
+  for (const i of incoming.shoppingList || []) {
+    if (tomb.shoppingList[i.id]) continue;
+    const mine = shoppingMap.get(i.id);
+    if (!mine || (i.updatedAt || 0) > (mine.updatedAt || 0)) shoppingMap.set(i.id, i);
+  }
+  state.shoppingList = [...shoppingMap.values()].filter(i => !tomb.shoppingList[i.id]);
 
   // Rezepte: gleiche id -> neuere Fassung gewinnt, sonst dazunehmen — gelöschte nicht wieder.
   const recipes = new Map(state.recipes.map(r => [r.id, r]));
@@ -241,12 +260,16 @@ function applyMerge(incoming, profileChoice) {
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   // Favoriten/No-Go über den Barcode, jüngerer Eintrag gewinnt — gelöschte nicht wieder.
+  // updatedAt (nachgefüllte Nährwerte, siehe updateListEntry) sticht addedAt, weil addedAt
+  // sich beim Nachfüllen nicht ändert und ein Bearbeitungs-Zeitpunkt fehlen würde.
   for (const listName of ["favorites", "noGo"]) {
     const map = new Map(state[listName].map(e => [e.barcode, e]));
     for (const e of incoming[listName] || []) {
       if (tomb[listName][e.barcode]) continue;
       const mine = map.get(e.barcode);
-      if (!mine || (e.addedAt || 0) > (mine.addedAt || 0)) map.set(e.barcode, e);
+      const eTime = e.updatedAt || e.addedAt || 0;
+      const mineTime = mine ? (mine.updatedAt || mine.addedAt || 0) : -1;
+      if (!mine || eTime > mineTime) map.set(e.barcode, e);
     }
     state[listName] = [...map.values()].filter(e => !tomb[listName][e.barcode]);
   }
@@ -256,9 +279,16 @@ function applyMerge(incoming, profileChoice) {
   state.ownProducts = { ...(incoming.ownProducts || {}), ...state.ownProducts };
   state.fiberOverrides = { ...(incoming.fiberOverrides || {}), ...state.fiberOverrides };
 
-  // Eingefrorene Tagesziele je Profil und Tag — lokal gewinnt (sollte ohnehin gleich sein).
+  // Eingefrorene Tagesziele je Profil und Tag — neuere Fassung gewinnt (frozenAt). Zwei
+  // Geräte können denselben Tag zu unterschiedlichen Zeitpunkten einfrieren, wenn eine
+  // Profil-Änderung erst nach Mitternacht ankommt; ohne frozenAt auf beiden Seiten (alte
+  // Bestandsdaten) gewinnt weiterhin lokal, wie bisher.
   for (const [profileId, days] of Object.entries(incoming.dayTargets || {})) {
-    state.dayTargets[profileId] = { ...days, ...(state.dayTargets[profileId] || {}) };
+    const mineDays = state.dayTargets[profileId] || (state.dayTargets[profileId] = {});
+    for (const [dateKey, targets] of Object.entries(days)) {
+      const mine = mineDays[dateKey];
+      if (!mine || (targets.frozenAt || 0) > (mine.frozenAt || 0)) mineDays[dateKey] = targets;
+    }
   }
 
   // Profile: je Profil entscheidet updatedAt, sonst die Wahl aus dem Dialog.
@@ -363,7 +393,10 @@ export const Store = {
     // beim häufigen Neuzeichnen der Startseite.
     if (existing && existing.kcal === targets.kcal && existing.netCarbG === targets.netCarbG
       && existing.fatG === targets.fatG && existing.proteinG === targets.proteinG) return;
-    state.dayTargets[profileId][dateKey] = targets;
+    // frozenAt: wird der Tag später auf einem zweiten Gerät eingefroren (z.B. weil Profil-
+    // Änderungen erst nach Mitternacht dort ankommen), entscheidet der Zeitpunkt, welche
+    // Fassung beim Abgleich gewinnt — siehe applyMerge().
+    state.dayTargets[profileId][dateKey] = { ...targets, frozenAt: Date.now() };
     persist();
   },
   getDayTargets(profileId, dateKey) {
@@ -415,9 +448,12 @@ export const Store = {
     state.tombstones.consumption[id] = Date.now();
     persist();
   },
+  /** Ersetzt einen bestehenden Verbrauchseintrag (z.B. nachträglich angepasste Menge) —
+   * updatedAt wird hier zentral gesetzt, damit ein späterer Abgleich zwischen zwei Geräten
+   * erkennt, welche Fassung die neuere ist (siehe applyMerge). */
   updateConsumption(entry) {
     const i = state.consumption.findIndex(e => e.id === entry.id);
-    if (i >= 0) { state.consumption[i] = entry; persist(); }
+    if (i >= 0) { state.consumption[i] = { ...entry, updatedAt: Date.now() }; persist(); }
   },
 
   // --- Wasser (getrennt vom Makro-Verbrauch, kein historisches Einfrieren nötig) ---
@@ -456,7 +492,8 @@ export const Store = {
   addToList(listName, entry) {
     const list = state[listName];
     const idx = list.findIndex(e => e.barcode === entry.barcode);
-    if (idx >= 0) list[idx] = entry; else list.unshift(entry);
+    const stamped = { ...entry, updatedAt: Date.now() };
+    if (idx >= 0) list[idx] = stamped; else list.unshift(stamped);
     // Ein Produkt kann nicht gleichzeitig auf Favoriten UND No-Go stehen
     const other = listName === "favorites" ? "noGo" : "favorites";
     state[other] = state[other].filter(e => e.barcode !== entry.barcode);
@@ -466,7 +503,7 @@ export const Store = {
   updateListEntry(listName, barcode, patch) {
     const item = state[listName].find(e => e.barcode === barcode);
     if (!item) return;
-    Object.assign(item, patch);
+    Object.assign(item, patch, { updatedAt: Date.now() });
     persist();
   },
   removeFromList(listName, barcode) {
@@ -480,12 +517,12 @@ export const Store = {
 
   // --- Einkaufsliste ---
   addShoppingItem(text, barcode = null) {
-    state.shoppingList.unshift({ id: crypto.randomUUID(), text, checked: false, barcode });
+    state.shoppingList.unshift({ id: crypto.randomUUID(), text, checked: false, barcode, updatedAt: Date.now() });
     persist();
   },
   toggleShoppingItem(id) {
     const item = state.shoppingList.find(i => i.id === id);
-    if (item) item.checked = !item.checked;
+    if (item) { item.checked = !item.checked; item.updatedAt = Date.now(); }
     persist();
   },
   removeShoppingItem(id) {
