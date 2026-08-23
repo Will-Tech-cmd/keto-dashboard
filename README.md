@@ -111,11 +111,15 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   der Dateigröße aus.
 - **Import führt zusammen statt zu ersetzen.** Vor dem Einspielen zeigt ein Dialog mit
   echten Zahlen, was dazukommt und was ein Ersetzen kosten würde. Vereinigt wird über die
-  IDs (Zufalls-UUIDs, deshalb verlustfrei); bei Rezepten gewinnt die neuere Fassung, bei
-  abweichenden Profileinstellungen wird nachgefragt. Löschungen (Mahlzeit, Wasser, Rezept,
+  IDs (Zufalls-UUIDs, deshalb verlustfrei). Löschungen (Mahlzeit, Wasser, Rezept,
   Einkaufslisten-Eintrag, Favorit/No-Go) werden dabei als solche vermerkt (`tombstones` im
   Zustand) — sonst würde ein Merge sie aus der jeweils anderen, noch ahnungslosen Seite immer
   wieder aufleben lassen, was bei der automatischen Online-Synchronisierung sofort auffiele.
+  Bei allem, was sich nachträglich bearbeiten lässt (Menge/Zeitpunkt einer Mahlzeit, Haken auf
+  der Einkaufsliste, nachgefüllte Nährwerte bei Favoriten/No-Go, Rezepte, eingefrorene
+  Tagesziele, Profileinstellungen), gewinnt die zeitlich neuere Fassung (`updatedAt` bzw.
+  `frozenAt`) — bei abweichenden Profileinstellungen wird zusätzlich nachgefragt, falls beide
+  Seiten gleichzeitig und ohne Zeitstempel geändert wurden.
 - Vor jedem manuellen Import wird eine Sicherung angelegt: **„Letzten Import rückgängig
   machen"**. Die automatische Online-Synchronisierung legt diese Sicherung bewusst nicht bei
   jedem Durchlauf neu an — sie bleibt dem bewussten, manuellen Datei-Import vorbehalten.
