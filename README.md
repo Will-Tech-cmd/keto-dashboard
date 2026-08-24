@@ -158,6 +158,14 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   Nicht abgeglichen werden Verlauf, Produkt-Cache, „zuletzt gescannt" und das aktive Profil.
   Die bleiben absichtlich auf dem Gerät.
 
+  **Noch offen:** Rezept*zutaten* wandern auf diesem Weg noch nicht mit. Der Server führt sie
+  in `kochbuch_zutaten` — einer Tabelle ohne `haushalt_id` und ohne `updated_at`, die am
+  zeilenweisen Abgleich deshalb gar nicht teilnehmen kann. Ein Rezept, das auf Gerät A neu
+  entsteht, kommt auf Gerät B ohne Zutatenliste an. Auf dem Gerät, auf dem es angelegt wurde,
+  bleibt es vollständig: die Zutaten werden beim Übernehmen einer Serverzeile ausdrücklich
+  bewahrt (`teilweise` in `rows.js`). Solange das offen ist, taugt der neue Weg zum Messen,
+  aber nicht zum Rezepte-Anlegen auf zwei Geräten.
+
 - Ein **Gemini-API-Schlüssel** (falls hinterlegt) liegt unter einem eigenen Speicherschlüssel
   und wird weder exportiert noch geteilt noch synchronisiert.
 - Nach außen gehen nur: Anfragen an Open Food Facts beim Suchen/Scannen, nur wenn ein

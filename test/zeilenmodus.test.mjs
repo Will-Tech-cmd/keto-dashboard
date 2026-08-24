@@ -210,6 +210,31 @@ ok("Server kennt beide Wassereintraege", serverZeilen("wasser").filter(z => !z.g
    JSON.stringify(serverZeilen("wasser").map(z => z.id)));
 ok("Server kennt den Einkaufszettel", serverZeilen("einkauf").length === 1);
 
+console.log("\n13b) Ein Rezept behaelt seine Zutaten ueber den Abgleich");
+// Der Server kennt nur Titel, Portionen und Zeitstempel eines Rezepts — die Zutaten liegen
+// in einer eigenen Tabelle, die am zeilenweisen Abgleich nicht teilnimmt. Ohne besondere
+// Behandlung ueberschriebe die zurueckkommende Serverzeile das lokale Rezept und alle
+// Zutaten waeren weg. Genau das ist hier passiert, bevor rows.js `teilweise` bekam.
+store3.Store.saveRecipe({
+  id: "r-zutaten", name: "Cheesecake", servings: 8, createdAt: 5000, updatedAt: 6000,
+  notes: "Ofen 160 Grad",
+  ingredients: [
+    { name: "Frischkaese", grams: 400, per100: { kcal: 250, netCarbs: 3, fat: 24, protein: 6 } },
+    { name: "Ei", grams: 120, per100: { kcal: 140, netCarbs: 1, fat: 10, protein: 12 } },
+  ],
+});
+await flush();
+await sync2.abgleichen();
+await store3.neuLadenAusAblage();
+const r = store3.Store.getRecipe("r-zutaten");
+ok("Rezept noch da", !!r);
+ok("Zutaten ueberleben das Hochladen", r?.ingredients?.length === 2,
+   JSON.stringify(r?.ingredients?.length));
+ok("Notiz ueberlebt", r?.notes === "Ofen 160 Grad", String(r?.notes));
+ok("createdAt ueberlebt", r?.createdAt === 5000, String(r?.createdAt));
+ok("und die id vom Server kam dazu", !!r?.serverId, String(r?.serverId));
+ok("Titel und Portionen vom Server", r?.name === "Cheesecake" && r?.servings === 8);
+
 console.log("\n14) Frisches Geraet, dessen Ablage der Abgleich vor dem Start gefuellt hat");
 // Der gefaehrliche Fall: der Umzugsvermerk fehlt (nie umgezogen), aber es stehen schon
 // Zeilen da. Wuerde jetzt umgezogen, raeumte ersetze() genau die wieder weg.

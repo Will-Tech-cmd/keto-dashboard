@@ -302,9 +302,15 @@ const produkt_korrektur = {
 // Zutaten wandern (noch) nicht mit — kochbuch_zutaten ist eine eigene Tabelle mit
 // eigenen Zeilen. Das ist der nächste Schritt, siehe supabase/README.md.
 // ---------------------------------------------------------------------------
+// ACHTUNG: die Zutaten stehen NICHT in dieser Zeile, sondern in kochbuch_zutaten — einer
+// Tabelle ohne haushalt_id und ohne updated_at, die am zeilenweisen Abgleich deshalb gar
+// nicht teilnehmen kann. `ausZeile` beschreibt ein Rezept also nur zum Teil, und was hier
+// fehlt (Zutaten, Notizen, createdAt), darf beim Übernehmen einer Serverzeile NICHT
+// verlorengehen. Dafür steht `teilweise`.
 const rezept = {
   tabelle: "kochbuch_rezepte",
   konflikt: "keto_id",
+  teilweise: true,
   filter: (k) => `keto_id=eq.${q(k)}`,
   schluessel: (r) => r.id,
   zeit: (r) => stempel(r.updatedAt, r.createdAt),

@@ -164,6 +164,22 @@ async function uebernehme(entitaet, zeilen) {
     if (zeile.geloescht_am) loeschen.push(schluessel);
     else schreiben.push({ schluessel, wert: objekt });
   }
+  // Datenarten, deren Serverzeile das App-Objekt nur zum Teil beschreibt (siehe `teilweise`
+  // in rows.js), ergänzen das Vorhandene, statt es zu ersetzen. Ohne das verlöre ein Rezept
+  // beim ersten Hochladen seine Zutaten: der Server schickt seine Zeile zurück, und in der
+  // stehen sie nicht — sie liegen in einer eigenen Tabelle.
+  //
+  // Nur für diese Datenarten, nicht allgemein: bei der Mahlzeit ist die Zuordnung
+  // "entweder Gramm ODER Portionen" eine echte Aussage, und ein Verschmelzen ließe beide
+  // Felder gleichzeitig stehen.
+  if (def.teilweise && schreiben.length) {
+    const vorhanden = new Map((await db.alle(entitaet)).map(x => [String(x.schluessel), x.wert]));
+    for (const e of schreiben) {
+      const alt = vorhanden.get(e.schluessel);
+      if (alt) e.wert = { ...alt, ...e.wert };
+    }
+  }
+
   if (schreiben.length) await db.schreibe(entitaet, schreiben);
   if (loeschen.length) await db.entferne(entitaet, loeschen);
   return { geschrieben: schreiben.length, entfernt: loeschen.length };

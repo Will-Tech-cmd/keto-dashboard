@@ -93,7 +93,8 @@ export function renderProfile(container, onProfileChanged) {
     <div class="card">
       <h2>Neuer Speicher (Test)</h2>
       <p class="hint" style="margin-top:0">Der neue Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln ab statt alles zusammen in einem Block, und gleicht auch einzeln ab. Damit kann eine Änderung auf einem Gerät keine auf dem anderen mehr überschreiben — genau das war die Ursache der bisherigen Datenverluste.</p>
-      <p class="hint">Zum Ausprobieren gedacht. Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; verloren geht dabei nichts. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
+      <p class="hint">Zum Ausprobieren gedacht. Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; auf dem Gerät selbst geht dabei nichts verloren. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
+      <p class="hint" style="color:var(--red-fg)"><strong>Noch nicht fertig:</strong> Rezept<em>zutaten</em> wandern auf diesem Weg noch nicht mit. Ein Rezept, das auf einem Gerät neu entsteht, kommt auf dem anderen ohne Zutatenliste an — auf dem Gerät, auf dem es angelegt wurde, bleibt es vollständig. Solange das so ist: zum Anschauen und Messen ja, zum Rezepte-Anlegen auf zwei Geräten noch nicht.</p>
       <p class="hint">Status: ${zeilen ? "✅ neuer Speicher aktiv" : "bisheriger Speicher"}</p>
       <p class="hint" id="zeilenStatus" style="margin-top:0;min-height:1.2em"></p>
       <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
