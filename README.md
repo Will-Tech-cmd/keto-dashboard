@@ -18,18 +18,31 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - Vier Zielringe — Kalorien, Netto-Kohlenhydrate, Fett, Eiweiß — mit Restbudget
 - Wasserzähler mit +200/+330/+500 ml und Rückgängig
 - Mahlzeiten nach Frühstück/Mittag/Abend/Snack gruppiert, jede Zeile bearbeitbar
+- **Portion ans zweite Profil weiterreichen:** Der Eintragen-Knopf ist geteilt — links „+ Name"
+  trägt bei beiden ein, rechts wie gewohnt nur bei dir. „Rückgängig" nimmt beide zurück. Ein
+  Eintrag ist dabei eine Kopie, keine neue Rechnung: ändert sich das Produkt später, bleiben
+  beide auf ihrem Stand
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
-  (offline) und die selbst angelegten Produkte
+  (offline) und die selbst angelegten Produkte. Die Trefferliste zeigt Bezeichnung und Marke;
+  Einträge ohne jede Nährwertangabe bleiben draußen
+- Die Suche filtert auf in Deutschland erhältliche Produkte und wiederholt bei Serverfehlern
+  bis zu dreimal. Beides ist nötig, nicht Kosmetik: gemessen kam nur jede vierte Anfrage beim
+  ersten Versuch durch, und ohne Länderfilter waren von fünfzehn „Gouda"-Treffern zwei hier
+  überhaupt zu kaufen. Antwortet Open Food Facts gar nicht, steht das da — statt eines stillen
+  „keine Treffer"
 - Keto-Ampel je 100 g mit frei einstellbaren Grenzwerten, Portionsbezug und Anteil am Tagesziel
 - Warnhinweise bei zuckerhaltigen Zutaten, Hinweis auf Zuckeralkohole
 - Plausibilitätsprüfung: passt die kcal-Angabe nicht zu Fett/KH/Eiweiß, wird das gemeldet
 - Ballaststoff-Schalter je Produkt (EU- vs. US-Etikettkonvention)
 - Eigene Produkte anlegen oder fehlerhafte Werte korrigieren — eigene Angaben haben ab dann
   immer Vorrang
+- **Selbst erfasste Produkte an Open Food Facts zurückgeben** (optional, eigenes Konto nötig):
+  ein Knopf am einzelnen Produkt, der vorher zeigt, was genau gesendet würde. Nie automatisch,
+  nie mit den erfundenen Barcodes für Produkte ohne Scan, nie ohne Nährwerte
 
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
@@ -53,6 +66,9 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - Erscheinungsbild je Profil (System/hell/dunkel)
 - Export, Import und Teilen der Daten — siehe unten
 - Optionaler Gemini-Schlüssel für die KI-gestützte Rezepterkennung
+- Optionales Open-Food-Facts-Konto, um eigene Produkte zurückzugeben
+- Synchronisierung, Speicherweg, KI-Erkennung und Open Food Facts liegen als vier Zeilen
+  zusammen, jede mit ihrem aktuellen Stand
 
 ### Zielwerte werden eingefroren
 Änderst du heute dein Gewicht oder dein Defizit, ändert das **nicht** rückwirkend die
@@ -91,11 +107,19 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
     Rezepte") — das ist der Weg fürs zweite Handy.
   - In beiden Fällen gilt: ein erneuter Import aktualisiert nur Zutaten und Nährwerte;
     Zubereitung, Fotos und Notizen bleiben erhalten.
-  - **Die Übernahme läuft nur in eine Richtung.** Änderst du im Kochbuch eine Zutat,
-    erfährt die Keto-App davon nichts — und der nächste Abgleich von dort ersetzt die
-    Zutatenliste wieder durch ihre eigene. Zutaten gehören deshalb in die Keto-App;
-    Zubereitung, Fotos, Bewertung und Kommentare ins Kochbuch. (Fällt weg, sobald beide
-    Apps auf dieselbe Rezept-Tabelle zugreifen — siehe `supabase/README.md`.)
+  - **Auf dem bisherigen Speicherweg läuft die Übernahme nur in eine Richtung.** Änderst du
+    im Kochbuch eine Zutat, erfährt die Keto-App davon nichts — und der nächste Abgleich von
+    dort ersetzt die Zutatenliste wieder durch ihre eigene. Zutaten gehören dann in die
+    Keto-App; Zubereitung, Fotos, Bewertung und Kommentare ins Kochbuch.
+  - **Mit dem neuen Speicher (siehe unten) fällt das weg:** Rezepte wandern samt Zutatenliste
+    in beide Richtungen, und der automatische Rezept-Import des Kochbuchs hält sich dann
+    zurück, damit nicht zwei Stellen dieselben Zeilen schreiben.
+- **Titelbilder:** Rezepte ohne Foto bekommen eine erzeugte Kachel — ein Farbverlauf, der aus
+  dem Titel gerechnet wird (dasselbe Rezept also überall dieselbe Kachel), und ein Symbol nach
+  Art des Gerichts. Sobald ein echtes Foto hochgeladen ist, tritt sie zurück.
+- **Beim Kochen:** Die Zubereitungsschritte lassen sich einzeln abhaken, und „Bildschirm
+  anlassen" hält das Display wach — im aktiven Zustand farbig, damit man es aus einem Meter
+  Abstand sieht.
 - **Zurück zur Einkaufsliste:** „Zutaten → Einkaufsliste" im Kochbuch legt die Namen in einer
   kleinen Übergabe-Inbox ab, die das Keto-Dashboard beim nächsten eigenen Start abholt.
 - **Offline:** Lesen funktioniert mit dem zuletzt bekannten Stand (eigener Service Worker,
@@ -139,7 +163,8 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   Geräten:** da jedes Gerät seine zwei Profile mit eigenen, zufälligen IDs anlegt, erkennt der
   Abgleich sie nicht automatisch als "dasselbe" Profil — nach dem ersten Sync stehen deshalb
   gegebenenfalls vier Profil-Reiter da. Ab dem dritten Profil erscheint neben jedem
-  nicht-aktiven Profil ein ✕ zum Aufräumen.
+  nicht-aktiven Profil ein ✕ zum Aufräumen — und das hält jetzt: gelöschte Profile haben
+  einen Grabstein wie jede andere Liste und kommen beim nächsten Abgleich nicht zurück.
 - **Neuer Speicher (Profil-Tab, standardmäßig aus).** Der bisherige Weg legt den kompletten
   Zustand als *ein* JSON ab und gleicht ihn auch als Ganzes ab — die Zusammenführung muss
   deshalb im Client nachgebaut werden, und genau dort steckten die Datenverluste. Der neue
@@ -177,10 +202,18 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
 
 - Ein **Gemini-API-Schlüssel** (falls hinterlegt) liegt unter einem eigenen Speicherschlüssel
   und wird weder exportiert noch geteilt noch synchronisiert.
-- Nach außen gehen nur: Anfragen an Open Food Facts beim Suchen/Scannen, nur wenn ein
-  Gemini-Schlüssel hinterlegt ist und du den KI-Knopf drückst Bilder/Texte an die Gemini-API,
-  und nur wenn die Synchronisierung aktiviert ist Anfragen an das Supabase-Projekt des
-  Kochbuchs (siehe oben) — dort landet dann der komplette App-Zustand als ein JSON-Datensatz.
+- Ein **Open-Food-Facts-Konto** (falls hinterlegt) liegt ebenso unter einem eigenen
+  Speicherschlüssel und wird weder exportiert noch geteilt noch synchronisiert.
+- Nach außen gehen nur:
+  - Anfragen an Open Food Facts beim Suchen und Scannen.
+  - Bilder und Texte an die Gemini-API — nur mit hinterlegtem Schlüssel und nur, wenn du den
+    KI-Knopf drückst.
+  - Anfragen an das Supabase-Projekt des Kochbuchs — nur bei aktivierter Synchronisierung.
+    Auf dem bisherigen Weg landet dort der komplette App-Zustand als ein JSON-Datensatz, auf
+    dem neuen die einzelnen Zeilen.
+  - **Ein Produkt an Open Food Facts** — nur mit hinterlegtem Konto und nur, wenn du bei
+    diesem einen Produkt auf „beitragen" tippst. Was dabei gesendet wird, steht vorher auf
+    dem Bildschirm. Ein Beitrag ist öffentlich, dauerhaft und trägt deinen Kontonamen.
 
 ---
 
@@ -215,7 +248,8 @@ js/
   store.js              Zustand im Speicher, Speicherweg, Export/Import, Zusammenführen
   profiles.js           Zielwertberechnung (Mifflin-St Jeor / Katch-McArdle)
   keto.js               Netto-KH, Ampel, Zutatenwarnungen, Plausibilität
-  off.js                Open Food Facts, Normalisierung, Cache, eigene Produkte
+  off.js                Open Food Facts: Suche, Normalisierung, Cache, eigene Produkte
+  off-beitrag.js        eigene Produkte an Open Food Facts zurückgeben (optional)
   foods-db.js           eingebaute Nährwerttabelle mit Fuzzy-Suche (offline)
   consumption.js        Mahlzeiten eintragen/bearbeiten, Wasser, Mengen-Dialoge
   recipes.js            Rezeptrechnung, Zutatenerkennung, Texterkennung
@@ -242,6 +276,8 @@ icons/                  PWA-Icons
 scripts/gen_icons.py    erzeugt die Icons ohne externe Abhängigkeiten
 
 kochbuch/               eigenständige PWA mit Supabase-Backend — siehe Abschnitt "Kochbuch" oben
+  js/titelbild.js       erzeugte Titelkachel für Rezepte ohne Foto
+  js/keto-bridge.js     Übersetzung Keto-Rezept -> Kochbuch (nutzt js/rows.js mit)
 ```
 
 ### Lokal starten
