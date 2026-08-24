@@ -5,6 +5,7 @@ import { saveRezeptCache, loadRezeptCache } from "../cache.js";
 import { pushToKetoShoppingList } from "../keto-bridge.js";
 import { getWhoAmI } from "../identity.js";
 import { esc, showToast, starsHtml, formatMinutes } from "../ui.js";
+import { titelbildAttribute } from "../titelbild.js";
 
 let servingFactor = 1;
 let checkedSteps = new Set();
@@ -56,7 +57,10 @@ function draw(container, r, { onEdit, onBack, onDeleted }) {
       <button class="kb-icon-btn" id="editBtn" aria-label="Bearbeiten">✎</button>
     </div>
 
-    ${titelbild ? `<div class="kb-hero" style="background-image:url('${esc(publicFotoUrl(titelbild.pfad))}')"></div>` : ""}
+    ${(() => {
+      const k = titelbildAttribute(r.titel, titelbild && esc(publicFotoUrl(titelbild.pfad)));
+      return `<div class="kb-hero ${k.klasse}" style="${k.stil}">${k.symbol}</div>`;
+    })()}
 
     <div class="kb-detail-body">
       ${r.untertitel ? `<p class="kb-subtitle">${esc(r.untertitel)}</p>` : ""}
@@ -105,7 +109,7 @@ function draw(container, r, { onEdit, onBack, onDeleted }) {
           </li>
         `).join("") || `<p class="kb-hint">Keine Zubereitungsschritte hinterlegt.</p>`}
       </ol>
-      ${r.kochbuch_schritte?.length ? `<button class="kb-btn kb-btn-ghost" id="wakeLockBtn">📱 Bildschirm anlassen</button>` : ""}
+      ${r.kochbuch_schritte?.length ? `<button class="kb-btn kb-btn-ghost" id="wakeLockBtn" aria-pressed="false">📱 Bildschirm anlassen</button>` : ""}
 
       ${bilder.length ? `
         <h2 class="kb-section-title">Fotos</h2>
@@ -153,18 +157,36 @@ function draw(container, r, { onEdit, onBack, onDeleted }) {
     if (cb.checked) cb.closest("li").classList.add("done");
   });
 
-  container.querySelector("#wakeLockBtn")?.addEventListener("click", async (e) => {
+  const wakeLockBtn = container.querySelector("#wakeLockBtn");
+
+  /**
+   * Der Knopf zeigt seinen Zustand, nicht nur seine Beschriftung. Vorher wechselte allein
+   * der Text zwischen „anlassen" und „bleibt an" — beim Kochen, mit fettigen Fingern und aus
+   * einem Meter Abstand, sieht man das nicht. Jetzt trägt er im aktiven Zustand die
+   * Akzentfarbe und einen ruhigen Puls.
+   */
+  const zeigeWakeLock = () => {
+    if (!wakeLockBtn) return;
+    const an = !!wakeLock;
+    wakeLockBtn.classList.toggle("is-active", an);
+    wakeLockBtn.setAttribute("aria-pressed", String(an));
+    wakeLockBtn.textContent = an ? "📱 Bildschirm bleibt an" : "📱 Bildschirm anlassen";
+  };
+
+  wakeLockBtn?.addEventListener("click", async () => {
     if (wakeLock) {
       releaseWakeLock();
-      e.target.textContent = "📱 Bildschirm anlassen";
-    } else {
-      try {
-        wakeLock = await navigator.wakeLock.request("screen");
-        wakeLock.addEventListener("release", () => { wakeLock = null; });
-        e.target.textContent = "📱 Bildschirm bleibt an";
-      } catch {
-        showToast("Bildschirm-Sperre konnte nicht deaktiviert werden");
-      }
+      zeigeWakeLock();
+      return;
+    }
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      // Das System gibt die Sperre von sich aus zurück, sobald die Seite in den Hintergrund
+      // geht. Ohne diesen Rückweg behauptet der Knopf danach weiter, der Bildschirm bliebe an.
+      wakeLock.addEventListener("release", () => { wakeLock = null; zeigeWakeLock(); });
+      zeigeWakeLock();
+    } catch {
+      showToast("Bildschirm-Sperre konnte nicht deaktiviert werden");
     }
   });
 
