@@ -500,18 +500,19 @@ export function openQuantityModal(product, onLogged) {
         `).join("")}
       </div>
 
-      ${logButtonRowHtml(`Eintragen · ${mealShort(selectedMeal)}`,
+      ${logButtonRowHtml("Eintragen",
         { cancelId: "qtyCancel", confirmId: "qtyConfirm", shareId: "qtyShare" })}
     </div>
   `;
   document.body.appendChild(overlay);
 
   const confirmBtn = overlay.querySelector("#qtyConfirm");
+  // Die gewählte Mahlzeit steht direkt darüber hervorgehoben — sie noch einmal auf den Knopf
+  // zu schreiben kostete nur Breite, und die braucht der geteilte Knopf.
   overlay.querySelectorAll(".klar-meal-segment").forEach(btn => {
     btn.addEventListener("click", () => {
       selectedMeal = btn.dataset.meal;
       overlay.querySelectorAll(".klar-meal-segment").forEach(b => b.classList.toggle("active", b === btn));
-      confirmBtn.textContent = `Eintragen · ${mealShort(selectedMeal)}`;
     });
   });
 

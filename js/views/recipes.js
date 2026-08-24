@@ -161,18 +161,17 @@ function openServingsModal(recipe) {
         `).join("")}
       </div>
 
-      ${logButtonRowHtml(`Eintragen · ${mealShort(selectedMeal)}`,
+      ${logButtonRowHtml("Eintragen",
         { cancelId: "servingsCancel", confirmId: "servingsConfirm", shareId: "servingsShare" })}
     </div>
   `;
   document.body.appendChild(overlay);
 
-  const confirmBtn = overlay.querySelector("#servingsConfirm");
+  // Die Mahlzeit steht direkt darüber — siehe consumption.js, openQuantityModal.
   overlay.querySelectorAll(".klar-meal-segment").forEach(btn => {
     btn.addEventListener("click", () => {
       selectedMeal = btn.dataset.meal;
       overlay.querySelectorAll(".klar-meal-segment").forEach(b => b.classList.toggle("active", b === btn));
-      confirmBtn.textContent = `Eintragen · ${mealShort(selectedMeal)}`;
     });
   });
 

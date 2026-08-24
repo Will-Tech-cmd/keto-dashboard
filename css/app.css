@@ -247,21 +247,22 @@ body.chrome-hidden .klar-recipe-head { padding-top: calc(env(safe-area-inset-top
    Der Trennstrich macht sichtbar, dass es zwei Ziele sind; die gemeinsame Pille macht
    sichtbar, dass es dieselbe Handlung ist. Zwei Drittel der Zeile, damit die
    Hauptbeschriftung neben "Abbrechen" lesbar bleibt. */
-.klar-split-btn { display: flex; flex: 3; min-width: 0; border-radius: 12px; overflow: hidden; }
+.klar-split-btn { display: flex; flex: 2; min-width: 0; border-radius: 12px; overflow: hidden; }
 .klar-split-btn > button {
   border: none; min-height: 48px; cursor: pointer;
   background: var(--accent); color: var(--accent-contrast); font-weight: 700;
 }
+/* Dieselbe Schriftgroesse wie "Abbrechen" (.btn, 1rem): drei Knoepfe in einer Zeile, die
+   sich in der Groesse unterscheiden, sehen nach Versehen aus. Moeglich wurde das erst,
+   als der Haupttext auf "Eintragen" kuerzte - die Mahlzeit steht direkt darueber. */
 .klar-split-share {
-  flex: none; padding: 0 11px; font-size: .8rem; letter-spacing: .01em;
+  flex: none; padding: 0 13px; font-size: 1rem;
   box-shadow: inset -1px 0 0 rgba(0, 0, 0, .22);
 }
 .klar-split-main {
-  flex: 1; min-width: 0; padding: 0 10px; font-size: .95rem;
+  flex: 1; min-width: 0; padding: 0 12px; font-size: 1rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Neben dem geteilten Knopf braucht "Abbrechen" nicht die halbe Zeile. */
-.btn-row .klar-split-btn ~ .btn, .btn-row .btn:has(~ .klar-split-btn) { flex: 1; }
 .klar-split-btn > button:active { filter: brightness(.9); }
 
 /* Beschriftungszeile mit einer kleinen Aktion rechts — die Eingabefelder darunter behalten
