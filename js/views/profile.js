@@ -271,8 +271,8 @@ function openExtraSheet(key, neuZeichnen) {
     `,
     speicher: `
       <p class="hint" style="margin-top:0">Der neue Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln ab statt alles zusammen in einem Block, und gleicht auch einzeln ab. Damit kann eine Änderung auf einem Gerät keine auf dem anderen mehr überschreiben — genau das war die Ursache der bisherigen Datenverluste.</p>
+      <p class="hint">Rezepte wandern samt Zutatenliste — auch Veränderungen aus dem Kochbuch kommen damit hier an, was auf dem bisherigen Weg nie der Fall war.</p>
       <p class="hint">Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; auf dem Gerät selbst geht dabei nichts verloren. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
-      <p class="hint" style="color:var(--red-fg)"><strong>Noch nicht fertig:</strong> Rezept<em>zutaten</em> wandern auf diesem Weg noch nicht mit. Ein Rezept, das auf einem Gerät neu entsteht, kommt auf dem anderen ohne Zutatenliste an.</p>
       <p class="hint">Status: ${zeilenAn ? "✅ neuer Speicher aktiv" : "bisheriger Speicher"}</p>
       <p class="hint" id="zeilenStatus" style="margin-top:0;min-height:1.2em"></p>
       <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">

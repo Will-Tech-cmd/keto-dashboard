@@ -302,11 +302,19 @@ const produkt_korrektur = {
 // Zutaten wandern (noch) nicht mit — kochbuch_zutaten ist eine eigene Tabelle mit
 // eigenen Zeilen. Das ist der nächste Schritt, siehe supabase/README.md.
 // ---------------------------------------------------------------------------
-// ACHTUNG: die Zutaten stehen NICHT in dieser Zeile, sondern in kochbuch_zutaten — einer
-// Tabelle ohne haushalt_id und ohne updated_at, die am zeilenweisen Abgleich deshalb gar
-// nicht teilnehmen kann. `ausZeile` beschreibt ein Rezept also nur zum Teil, und was hier
-// fehlt (Zutaten, Notizen, createdAt), darf beim Übernehmen einer Serverzeile NICHT
-// verlorengehen. Dafür steht `teilweise`.
+// Die Zutaten stehen NICHT in dieser Zeile, sondern in kochbuch_zutaten — einer Tabelle
+// ohne haushalt_id und ohne updated_at, die am zeilenweisen Abgleich (Zeiger über
+// updated_at) deshalb nicht selbst teilnehmen kann.
+//
+// Sie ist auch keine eigene Datenart, sondern ein Teil des Rezepts: die App führt die
+// Zutaten als geordnete Liste IM Rezept, und beide Editoren ersetzen sie immer als Ganzes.
+// Deshalb wandern sie hier als `kinder` mit dem Rezept mit — wer den Rezeptkopf gewinnt,
+// gewinnt seine Zutaten. Ein Streit je einzelner Zutat wäre eine Genauigkeit, die es in
+// der Bedienung gar nicht gibt.
+//
+// `teilweise` bleibt trotzdem nötig: die Serverzeile allein beschreibt ein Rezept nur zum
+// Teil (keine Zutaten, keine Notizen, kein createdAt), und beim Übernehmen darf davon
+// nichts verlorengehen.
 const rezept = {
   tabelle: "kochbuch_rezepte",
   konflikt: "keto_id",
@@ -330,7 +338,52 @@ const rezept = {
     servings: Number(z.portionen) || 1,
     updatedAt: millis(z.keto_updated_at) ?? millis(z.updated_at),
   }),
+  kinder: {
+    tabelle: "kochbuch_zutaten",
+    elternSpalte: "rezept_id",
+    feld: "ingredients",
+    zuZeilen: zutatenZuZeilen,
+    ausZeilen: zutatenAusZeilen,
+  },
 };
+
+/**
+ * Zutaten der App -> Zeilen in kochbuch_zutaten.
+ *
+ * Die `id` der App wird die `id` der Zeile. Sie ist in der App keine Zierde: der Editor
+ * findet und entfernt eine Zutat darüber (siehe recipes.js). Ohne sie mitzuschicken bekäme
+ * jedes Gerät nach dem Abgleich andere Zutaten-ids für dieselbe Zutat, und jeder weitere
+ * Abgleich schriebe sie gegenseitig um.
+ *
+ * `pos` haelt die Reihenfolge fest — in der Liste steht die Reihenfolge für das Rezept, in
+ * der Datenbank gibt es keine.
+ */
+export function zutatenZuZeilen(rezeptObjekt, rezeptServerId) {
+  return (rezeptObjekt.ingredients || []).map((zutat, i) => ({
+    id: zutat.id,
+    rezept_id: rezeptServerId,
+    pos: i,
+    abschnitt: null,
+    name: zutat.name,
+    gramm: zahl(zutat.grams),
+    mengentext: null,
+    per100: zutat.per100 || null,
+    likely_us_label: !!zutat.likelyUsLabel,
+  }));
+}
+
+/** Und zurück. Die Reihenfolge kommt aus `pos`, nicht aus der Reihenfolge der Antwort. */
+export function zutatenAusZeilen(zeilen) {
+  return [...(zeilen || [])]
+    .sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0))
+    .map(z => ({
+      id: z.id,
+      name: z.name,
+      grams: z.gramm == null ? null : Number(z.gramm),
+      per100: z.per100 || null,
+      likelyUsLabel: !!z.likely_us_label,
+    }));
+}
 
 export const ENTITAETEN = {
   profil, mahlzeit, wasser, tagesziel, listen_eintrag, einkauf, produkt_korrektur, rezept,

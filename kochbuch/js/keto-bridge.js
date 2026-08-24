@@ -6,6 +6,11 @@
 // Keto-App selbst beim nächsten Start abholt (js/store.js, `drainKochbuchInbox`).
 
 import { createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "./api.js";
+// Die Übersetzung Keto-Zutat <-> kochbuch_zutaten steht in der Keto-App, weil sie dort
+// auch der zeilenweise Abgleich braucht. Eine zweite Fassung hier daneben wäre zwei
+// Wahrheiten über dieselben Spalten — und sie würden auseinanderlaufen.
+// rows.js ist reine Umrechnung ohne Nebenwirkungen beim Laden (anders als store.js, siehe oben).
+import { zutatenZuZeilen } from "../../js/rows.js";
 
 const KETO_STATE_KEY = "keto-dashboard-v1";
 const INBOX_KEY = "keto-dashboard-inbox";
@@ -91,15 +96,13 @@ export function buildImportPayload(ketoRecipe) {
       quelle: "keto-app",
       keto_updated_at: ketoRecipe.updatedAt ? new Date(ketoRecipe.updatedAt).toISOString() : null,
     },
-    zutaten: (ketoRecipe.ingredients || []).map((ing, i) => ({
-      pos: i,
-      abschnitt: null,
-      name: ing.name,
-      gramm: ing.grams ?? null,
-      mengentext: null,
-      per100: ing.per100 || null,
-      likely_us_label: !!ing.likelyUsLabel,
-    })),
+    // rezept_id setzt replaceZutaten() selbst — hier ist sie noch nicht bekannt.
+    //
+    // Und die id der Keto-Zutat bleibt draußen: replaceZutaten() legt hier immer neue
+    // Zeilen an (und räumt die alten danach weg). Käme eine id mit, die der zeilenweise
+    // Abgleich schon einmal geschrieben hat, liefe das Anlegen in einen Schlüsselkonflikt.
+    // Wer welche Zeilen schreibt, entscheidet der Zeilenmodus — siehe keto-sync-import.js.
+    zutaten: zutatenZuZeilen(ketoRecipe, null).map(({ id, ...rest }) => rest),
   };
 }
 

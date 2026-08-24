@@ -234,6 +234,32 @@ ok("Notiz ueberlebt", r?.notes === "Ofen 160 Grad", String(r?.notes));
 ok("createdAt ueberlebt", r?.createdAt === 5000, String(r?.createdAt));
 ok("und die id vom Server kam dazu", !!r?.serverId, String(r?.serverId));
 ok("Titel und Portionen vom Server", r?.name === "Cheesecake" && r?.servings === 8);
+ok("jede Zutat hat jetzt eine id", r?.ingredients?.every(z => !!z.id),
+   JSON.stringify(r?.ingredients?.map(z => z.id)));
+
+// Der Rueckweg (Server -> App) muss dasselbe ergeben, was hier stand. Tut er das nicht,
+// sieht der Vergleich in ablage.js bei JEDEM Abgleich eine Aenderung, meldet sie in die
+// Outbox, laedt sie hoch, bekommt sie wieder anders zurueck — und die App synchronisiert
+// im Kreis, ohne dass jemand etwas eingetragen hat. Genau die Schleife, die schon einmal da war.
+console.log("\n13c) Der Rundlauf beruhigt sich");
+await flush();
+const offenNachRundlauf = (await db.outboxAlle()).length;
+const eRuhe1 = await sync2.abgleichen();
+await store3.neuLadenAusAblage();
+await flush();
+const eRuhe2 = await sync2.abgleichen();
+await store3.neuLadenAusAblage();
+await flush();
+ok("zweiter Durchlauf sendet nichts", eRuhe2.gesendet === 0 && eRuhe2.geloescht === 0,
+   JSON.stringify(eRuhe2));
+ok("Outbox bleibt leer", (await db.outboxAlle()).length === 0,
+   JSON.stringify((await db.outboxAlle()).map(e => e.entitaet + "/" + e.art)));
+ok("Zutaten immer noch vollstaendig",
+   store3.Store.getRecipe("r-zutaten")?.ingredients?.length === 2,
+   String(store3.Store.getRecipe("r-zutaten")?.ingredients?.length));
+ok("und unveraendert",
+   store3.Store.getRecipe("r-zutaten")?.ingredients?.map(z => z.name).join("|") === "Frischkaese|Ei",
+   store3.Store.getRecipe("r-zutaten")?.ingredients?.map(z => z.name).join("|"));
 
 console.log("\n14) Frisches Geraet, dessen Ablage der Abgleich vor dem Start gefuellt hat");
 // Der gefaehrliche Fall: der Umzugsvermerk fehlt (nie umgezogen), aber es stehen schon

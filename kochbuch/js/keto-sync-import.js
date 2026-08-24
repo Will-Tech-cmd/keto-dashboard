@@ -12,6 +12,20 @@ import { getWhoAmI } from "./identity.js";
  * unveränderte in Ruhe. Liefert Zähler für eine Meldung an den Menschen, falls gewünscht.
  */
 export async function syncRezepteFromKetoSync() {
+  // Im Zeilenmodus pflegt die Keto-App die Rezeptzeilen selbst (js/sync2.js) — samt
+  // Zutaten. Der Klumpen in keto_sync_state wird dann nicht mehr fortgeschrieben und ist
+  // eingefroren; ihn darüberzuspielen ergäbe zwei Schreiber auf denselben Zeilen.
+  //
+  // Die Marke gilt für DIESES Gerät: das Kochbuch liegt unter derselben Herkunft wie die
+  // Keto-App und liest ihren Schalter direkt (wie keto-bridge.js den Zustand). Ein Gerät,
+  // dessen Keto-App noch den alten Weg geht, importiert also weiter — und das ist richtig,
+  // denn dort schreibt niemand sonst die Zeilen.
+  try {
+    if (localStorage.getItem("keto-dashboard-zeilenmodus") === "an") {
+      return { imported: 0, updated: 0, uebersprungen: "Zeilenmodus" };
+    }
+  } catch { /* kein localStorage: dann eben importieren */ }
+
   const recipes = await fetchKetoSyncRecipes();
   if (recipes.length === 0) return { imported: 0, updated: 0 };
 

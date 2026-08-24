@@ -191,6 +191,14 @@ function migrate(parsed) {
     ...e,
     dateKey: e.dateKey || dateKeyOf(e.at),
   }));
+  // Jede Zutat braucht eine id: der Rezept-Editor findet und entfernt eine Zutat darueber
+  // (recipes.js), und der Abgleich haengt die Identitaet der Zutatenzeile daran. Eine Zutat
+  // ohne id waere schon in der Bedienung kaputt — hier wird sie einmalig nachgetragen.
+  merged.recipes = merged.recipes.map(r => (
+    Array.isArray(r?.ingredients) && r.ingredients.some(z => z && !z.id)
+      ? { ...r, ingredients: r.ingredients.map(z => (z && !z.id ? { ...z, id: crypto.randomUUID() } : z)) }
+      : r
+  ));
   merged.cache = prunedCache(merged.cache);
   return merged;
 }

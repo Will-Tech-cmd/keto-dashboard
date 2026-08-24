@@ -18,6 +18,8 @@
 
 import * as db from "./db.js";
 import { ENTITAETEN, REIHENFOLGE, filterFuer } from "./rows.js";
+
+const q = (v) => encodeURIComponent(String(v));
 import { rest as restEcht, istAngemeldet as angemeldetEcht, AnmeldeFehler } from "./supabase.js";
 
 // Die Server-Anbindung ist austauschbar. Im Betrieb ist es supabase.js; die Tests hängen
@@ -113,6 +115,11 @@ async function hochladen(ctx) {
           body: JSON.stringify(paare.map(p => def.zuZeile(p.objekt, ctx))),
         }) || [];
 
+        // Der Kopf ist angekommen — jetzt die Teile, die in einer eigenen Tabelle liegen.
+        // Nur für die angenommenen: wessen Kopf der Server verworfen hat, dessen Zutaten
+        // dürfen die dortigen erst recht nicht überschreiben.
+        if (def.kinder) await kinderErsetzen(def, gespeichert, paare);
+
         await uebernehme(entitaet, gespeichert);
 
         // Was nicht zurückkam, hat der Server abgewiesen — dessen Fassung ist neuer.
@@ -122,7 +129,8 @@ async function hochladen(ctx) {
           .filter(k => !angekommen.has(k));
         for (const k of abgewiesen) {
           const zeilen = await rest(`${def.tabelle}?select=*&${filterFuer(entitaet, k, ctx)}`);
-          await uebernehme(entitaet, zeilen || []);
+          // Hier mit Kindern: die Fassung des Servers gilt, also auch deren Zutatenliste.
+          await uebernehme(entitaet, zeilen || [], { kinderHolen: true });
           verworfen++;
         }
         gesendet += paare.length - abgewiesen.length;
@@ -150,20 +158,105 @@ async function hochladen(ctx) {
 }
 
 /**
+ * Ersetzt die Zutatenzeilen der Rezepte, deren Kopf der Server gerade angenommen hat.
+ *
+ * Erst schreiben, dann die überzähligen entfernen — PostgREST kennt keine Transaktion über
+ * zwei Anfragen hinweg. Andersherum stünde ein Rezept nach einem Verbindungsabbruch
+ * dazwischen ohne jede Zutat da; so bleiben im schlimmsten Fall zu viele stehen, und das
+ * ist sichtbar statt still.
+ *
+ * Der Upsert läuft über die `id` der Zutat, die aus der App kommt. Damit behält dieselbe
+ * Zutat auf allen Geräten dieselbe id, und ein erneutes Hochladen ändert nichts, statt
+ * jedes Mal neue Zeilen anzulegen.
+ *
+ * Was danach weggeräumt wird, richtet sich aber NICHT nach diesen ids, sondern nach dem,
+ * was der Server zurückmeldet. Eine Zutat ohne id (ältere Daten, oder von Hand angelegt)
+ * bekäme sonst eine vom Server — und stünde damit nicht in der Liste der zu behaltenden,
+ * würde also unmittelbar nach dem Anlegen wieder gelöscht. Genau das ist passiert.
+ */
+async function kinderErsetzen(def, gespeichert, paare) {
+  const lokalNach = new Map(paare.map(p => [String(def.schluessel(p.objekt)), p.objekt]));
+  const alleZeilen = [];
+  const rezepte = [];
+
+  for (const zeile of gespeichert) {
+    const schluessel = String(def.schluessel(def.ausZeile(zeile)));
+    const objekt = lokalNach.get(schluessel);
+    if (!objekt || !zeile.id) continue;
+    alleZeilen.push(...def.kinder.zuZeilen(objekt, zeile.id));
+    rezepte.push({ id: zeile.id, behalten: [] });
+  }
+  if (rezepte.length === 0) return;
+
+  if (alleZeilen.length > 0) {
+    const geschrieben = await rest(`${def.kinder.tabelle}?on_conflict=id`, {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify(alleZeilen),
+    }) || [];
+    const nachEltern = new Map(rezepte.map(r => [r.id, r]));
+    for (const z of geschrieben) {
+      const r = nachEltern.get(z[def.kinder.elternSpalte]);
+      if (r && z.id != null) r.behalten.push(z.id);
+    }
+  }
+
+  // Je Rezept aufräumen statt in einem Rutsch: die Liste der zu behaltenden ids steht in
+  // der Adresse, und über alle Rezepte zusammen wird die irgendwann länger als das, was
+  // ein Server als Adresse annimmt.
+  for (const r of rezepte) {
+    const ausnehmen = r.behalten.length ? `&id=not.in.(${r.behalten.map(q).join(",")})` : "";
+    await rest(`${def.kinder.tabelle}?${def.kinder.elternSpalte}=eq.${q(r.id)}${ausnehmen}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
+  }
+}
+
+/**
  * Schreibt Server-Zeilen in die lokale Ablage — gelöschte werden entfernt statt
  * gespeichert. Gemeinsam benutzt vom Hochladen (Rückmeldung des Servers) und vom
  * Herunterladen, damit beide Wege dieselbe Zeile gleich behandeln.
  */
-async function uebernehme(entitaet, zeilen) {
+async function uebernehme(entitaet, zeilen, { kinderHolen = false } = {}) {
   const def = ENTITAETEN[entitaet];
   const schreiben = [];
   const loeschen = [];
   for (const zeile of zeilen || []) {
     const objekt = def.ausZeile(zeile);
-    const schluessel = String(def.schluessel(objekt));
-    if (zeile.geloescht_am) loeschen.push(schluessel);
-    else schreiben.push({ schluessel, wert: objekt });
+    const schluessel = def.schluessel(objekt);
+    // Ohne fachlichen Schlüssel gibt es hier nichts abzulegen. Betrifft heute genau einen
+    // Fall: ein Rezept, das im Kochbuch entstanden ist und deshalb keine keto_id hat.
+    // Das würde sonst als Rezept mit der id "null" in der App landen. Ob solche Rezepte in
+    // die Keto-App übernommen werden sollen, ist eine eigene Frage — bis dahin bleiben sie
+    // draußen, statt als Bruchstück hereinzukommen.
+    if (schluessel == null) continue;
+    if (zeile.geloescht_am) loeschen.push(String(schluessel));
+    else schreiben.push({ schluessel: String(schluessel), wert: objekt, zeile });
   }
+
+  // Teile, die in einer eigenen Tabelle liegen und mit dem Rezept mitwandern (Zutaten).
+  // Nur auf Zuruf: nach einem eigenen erfolgreichen Hochladen ist die lokale Liste die,
+  // die gerade hochgegangen ist — die noch einmal zurückzulesen wäre nur Arbeit.
+  if (kinderHolen && def.kinder && schreiben.length) {
+    const elternIds = schreiben.map(e => e.zeile?.id).filter(Boolean);
+    if (elternIds.length) {
+      const kinderZeilen = await rest(
+        `${def.kinder.tabelle}?select=*&${def.kinder.elternSpalte}=in.(${elternIds.map(q).join(",")})`
+      ) || [];
+      const nachEltern = new Map();
+      for (const k of kinderZeilen) {
+        const eltern = k[def.kinder.elternSpalte];
+        if (!nachEltern.has(eltern)) nachEltern.set(eltern, []);
+        nachEltern.get(eltern).push(k);
+      }
+      for (const e of schreiben) {
+        if (!e.zeile?.id) continue;
+        e.wert = { ...e.wert, [def.kinder.feld]: def.kinder.ausZeilen(nachEltern.get(e.zeile.id) || []) };
+      }
+    }
+  }
+  for (const e of schreiben) delete e.zeile;
   // Datenarten, deren Serverzeile das App-Objekt nur zum Teil beschreibt (siehe `teilweise`
   // in rows.js), ergänzen das Vorhandene, statt es zu ersetzen. Ohne das verlöre ein Rezept
   // beim ersten Hochladen seine Zutaten: der Server schickt seine Zeile zurück, und in der
@@ -223,7 +316,9 @@ async function herunterladen(ctx) {
         const schluessel = String(def.schluessel(def.ausZeile(zeile)));
         return !offen.has(`${entitaet} ${schluessel}`);
       });
-      const bilanz = await uebernehme(entitaet, uebernehmbar);
+      // Beim Herunterladen immer mit Kindern: was hier ankommt, hat sich auf dem Server
+      // seit dem letzten Blick geändert — und damit gilt auch dessen Zutatenliste.
+      const bilanz = await uebernehme(entitaet, uebernehmbar, { kinderHolen: true });
       neu += bilanz.geschrieben;
       entfernt += bilanz.entfernt;
 

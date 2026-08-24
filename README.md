@@ -158,13 +158,22 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   Nicht abgeglichen werden Verlauf, Produkt-Cache, „zuletzt gescannt" und das aktive Profil.
   Die bleiben absichtlich auf dem Gerät.
 
-  **Noch offen:** Rezept*zutaten* wandern auf diesem Weg noch nicht mit. Der Server führt sie
-  in `kochbuch_zutaten` — einer Tabelle ohne `haushalt_id` und ohne `updated_at`, die am
-  zeilenweisen Abgleich deshalb gar nicht teilnehmen kann. Ein Rezept, das auf Gerät A neu
-  entsteht, kommt auf Gerät B ohne Zutatenliste an. Auf dem Gerät, auf dem es angelegt wurde,
-  bleibt es vollständig: die Zutaten werden beim Übernehmen einer Serverzeile ausdrücklich
-  bewahrt (`teilweise` in `rows.js`). Solange das offen ist, taugt der neue Weg zum Messen,
-  aber nicht zum Rezepte-Anlegen auf zwei Geräten.
+  **Rezepte wandern samt Zutatenliste.** Die Zutaten stehen serverseitig in
+  `kochbuch_zutaten` — einer Tabelle ohne `haushalt_id` und ohne `updated_at`, die am
+  Abgleich über den Zeiger deshalb nicht selbst teilnehmen kann. Sie sind aber auch keine
+  eigene Datenart, sondern ein Teil des Rezepts: die App führt sie als geordnete Liste, und
+  beide Editoren ersetzen sie immer als Ganzes. Sie wandern deshalb als `kinder` des Rezepts
+  mit — wer den Rezeptkopf gewinnt, gewinnt seine Zutaten. Die `id` einer Zutat wird dabei
+  zur `id` der Zeile, damit dieselbe Zutat auf allen Geräten dieselbe id behält.
+
+  Damit läuft der Weg **Kochbuch → Keto-App** zum ersten Mal: eine dort geänderte oder
+  gelöschte Zutat kommt in der Keto-App an. Auf dem bisherigen Weg ging das nur in eine
+  Richtung. Solange auf einem Gerät der Zeilenmodus läuft, lässt der automatische
+  Rezept-Import des Kochbuchs (`keto-sync-import.js`) die Finger davon — sonst schrieben
+  zwei Stellen dieselben Zeilen.
+
+  Ein Rezept, das **im Kochbuch** entstanden ist, hat keine `keto_id` und bleibt vorerst
+  draußen, statt als Bruchstück ohne id in der App zu landen.
 
 - Ein **Gemini-API-Schlüssel** (falls hinterlegt) liegt unter einem eigenen Speicherschlüssel
   und wird weder exportiert noch geteilt noch synchronisiert.

@@ -7,9 +7,10 @@ export function istAngemeldet() { return true; }
 export const tabellen = new Map();      // name -> Map(schluessel -> zeile)
 export const verlauf = [];              // was angefragt wurde, fuer Zusicherungen im Test
 let uhr = 1000;                         // steigende "Transaktionszeit"
+let laufendeNummer = 0;                 // fuer Zeilen, deren Schluessel der Server vergibt
 export function tick(n = 1) { uhr += n; }
 export function jetztISO() { return new Date(uhr).toISOString(); }
-export function zuruecksetzen() { tabellen.clear(); verlauf.length = 0; uhr = 1000; }
+export function zuruecksetzen() { tabellen.clear(); verlauf.length = 0; uhr = 1000; laufendeNummer = 0; }
 
 const tab = (name) => {
   if (!tabellen.has(name)) tabellen.set(name, new Map());
@@ -45,15 +46,27 @@ function schreibeMitWaechter(karte, schluessel, neu) {
   return true;
 }
 
+/** "(a,b,c)" -> ["a","b","c"] — URLSearchParams hat schon dekodiert. */
+function listeAus(wert) {
+  return wert.replace(/^\(|\)$/g, "").split(",").filter(Boolean);
+}
+
+function pruefe(istWert, op, wert) {
+  if (op === "eq") return String(istWert) === wert;
+  if (op === "gt") return String(istWert) > wert;
+  if (op === "is") return wert === "null" ? istWert == null : true;
+  if (op === "in") return listeAus(wert).includes(String(istWert));
+  throw new Error("Filter nicht nachgebildet: " + op);
+}
+
 function passt(zeile, p) {
   for (const [feld, ausdruck] of p.entries()) {
     if (["select", "order", "limit", "on_conflict", "offset"].includes(feld)) continue;
-    const [op, ...rest] = ausdruck.split(".");
-    const wert = rest.join(".");
-    const istWert = zeile[feld];
-    if (op === "eq" && String(istWert) !== wert) return false;
-    if (op === "gt" && !(String(istWert) > wert)) return false;
-    if (op === "is" && wert === "null" && istWert != null) return false;
+    let [op, ...rest] = ausdruck.split(".");
+    let negiert = false;
+    if (op === "not") { negiert = true; op = rest.shift(); }
+    const treffer = pruefe(zeile[feld], op, rest.join("."));
+    if (negiert === treffer) return false;
   }
   return true;
 }
@@ -81,7 +94,10 @@ export async function rest(pfad, opts = {}) {
     const stempel = new Date(uhr).toISOString();
     const gespeichert = [];
     for (const z of zeilen) {
-      const k = schluesselVon(z);
+      // Ohne Schluessel im Rumpf vergibt Postgres einen (DEFAULT gen_random_uuid()).
+      // Ohne diese Nachbildung fielen zwei Zeilen ohne id auf denselben Schluessel und
+      // die zweite ueberschriebe die erste — ein Fehler, den es in echt nicht gibt.
+      const k = schluesselVon(z) ?? ("neu-" + (++laufendeNummer));
       const alt = karte.get(k);
       // Waechter-Trigger: aeltere Fassung wird verworfen und NICHT zurueckgegeben
       if (alt && z.geaendert_am && alt.geaendert_am && z.geaendert_am < alt.geaendert_am) continue;
@@ -91,6 +107,11 @@ export async function rest(pfad, opts = {}) {
     }
     const prefer = String(opts.headers?.Prefer || "");
     return prefer.includes("return=representation") ? gespeichert : null;
+  }
+
+  if (methode === "DELETE") {
+    for (const [k, z] of [...karte.entries()]) if (passt(z, p)) karte.delete(k);
+    return null;
   }
 
   if (methode === "PATCH") {
