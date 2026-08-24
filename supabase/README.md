@@ -89,6 +89,13 @@ wurde übernommen.
 synchronisiert noch darüber, ein Wegnehmen würde sie sofort zerreißen. Sie
 verschwindet mit B3, sobald beide Geräte auf das Zeilenmodell umgestiegen sind.
 
+**Stand: diese Bedingung ist erfüllt.** Beide Geräte des Bestandshaushalts laufen
+seit dem 24.08.2026, 10:38 Uhr im Zeilenmodus; die Blob-Zeile wurde zuletzt eine
+Minute davor geschrieben und liegt seither unverändert. Sie ist damit kein
+gemeinsamer Stand mehr, sondern ein eingefrorener Abzug — und weiterhin die
+Rückfallebene, falls ein Gerät auf den alten Weg zurückgestellt wird. Vor dem
+Löschen also erst sicherstellen, dass niemand mehr zurückschalten will.
+
 Ihre offene Policy ist dagegen **geschlossen** (Migration `20260823221459`): nur
 noch Mitglieder des Bestandshaushalts kommen an die Zeile. Ein zweites Konto liest
 damit nichts mehr mit — der Weg für Stufe A ist frei.
