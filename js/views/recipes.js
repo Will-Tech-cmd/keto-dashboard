@@ -12,6 +12,7 @@ import {
 import {
   suggestMeal, mealShort, MEAL_LABELS, getActiveDateKey, dateLabel,
   amountFieldsHtml, wireAmountFields, budgetLineText,
+  logButtonRowHtml, askShareTargets, copyConsumptionTo, meldeEingetragen, teilenAktion,
 } from "../consumption.js";
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml, nutriTilesHtml, selectOnFocus } from "../ui.js";
@@ -160,20 +161,17 @@ function openServingsModal(recipe) {
         `).join("")}
       </div>
 
-      <div class="btn-row" style="margin-top:18px">
-        <button type="button" class="btn secondary" id="servingsCancel">Abbrechen</button>
-        <button type="button" class="btn" id="servingsConfirm">Eintragen · ${esc(mealShort(selectedMeal))}</button>
-      </div>
+      ${logButtonRowHtml("Eintragen",
+        { cancelId: "servingsCancel", confirmId: "servingsConfirm", shareId: "servingsShare" })}
     </div>
   `;
   document.body.appendChild(overlay);
 
-  const confirmBtn = overlay.querySelector("#servingsConfirm");
+  // Die Mahlzeit steht direkt darüber — siehe consumption.js, openQuantityModal.
   overlay.querySelectorAll(".klar-meal-segment").forEach(btn => {
     btn.addEventListener("click", () => {
       selectedMeal = btn.dataset.meal;
       overlay.querySelectorAll(".klar-meal-segment").forEach(b => b.classList.toggle("active", b === btn));
-      confirmBtn.textContent = `Eintragen · ${mealShort(selectedMeal)}`;
     });
   });
 
@@ -206,14 +204,28 @@ function openServingsModal(recipe) {
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#servingsCancel").addEventListener("click", close);
-  overlay.querySelector("#servingsConfirm").addEventListener("click", () => {
+  const eintragen = async (auchAndere) => {
     const grams = getGrams();
     const servings = gramsPer ? grams / gramsPer : grams;
     if (!servings || servings <= 0) { showToast("Bitte eine gültige Anzahl angeben"); return; }
-    logRecipeConsumption(recipe, servings, selectedMeal);
-    showToast(`${round1(servings)} Portion(en) „${recipe.name}" eingetragen`);
+    const ziele = auchAndere ? await askShareTargets() : [];
+    if (auchAndere && ziele.length === 0) return; // Auswahl abgebrochen
+    const entry = logRecipeConsumption(recipe, servings, selectedMeal);
+    if (!entry) return;
+    const kopien = copyConsumptionTo(entry, ziele);
     close();
-  });
+    const wer = kopien.length
+      ? ` · auch für ${kopien.map(k => Store.get().profiles.find(p => p.id === k.profileId)?.name || "?").join(", ")}`
+      : "";
+    meldeEingetragen({
+      titel: `${recipe.name} eingetragen`,
+      untertitel: `${round1(servings)} Portion(en) · ${mealShort(selectedMeal)}${wer}`,
+      eintraege: [entry, ...kopien],
+      aktion: kopien.length === 0 ? teilenAktion(entry) : null,
+    });
+  };
+  overlay.querySelector("#servingsConfirm").addEventListener("click", () => eintragen(false));
+  overlay.querySelector("#servingsShare")?.addEventListener("click", () => eintragen(true));
 }
 
 function round1(v) {

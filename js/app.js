@@ -8,7 +8,7 @@ import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
 import {
   logConsumption, rankFrequentItems, MEAL_LABELS, mealShort, suggestMeal,
-  getActiveDateKey, getConsumptionForDate, sumConsumption,
+  getActiveDateKey, getConsumptionForDate, sumConsumption, teilenAktion,
 } from "./consumption.js";
 import { logRecipeConsumption, calcPerServing } from "./recipes.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
@@ -250,12 +250,17 @@ async function logQuickEntry(item, meal) {
   }
   if (!entry) return;
   if (activeTab === "start") RENDERERS.start();
+  const neuZeichnen = () => { if (activeTab === "start") RENDERERS.start(); };
   showSnackbar({
     title: `${item.name} eingetragen`,
     subtitle: `${item.isRecipe ? `${item.amount} Portion(en)` : `${item.amount} g`} · ${mealShort(meal)}`,
+    // Die Schnellauswahl trägt ohne Dialog ein — hier ist die Snackbar die einzige Stelle,
+    // an der "auch für sie" mit einem Tipp erreichbar ist. Verpasst man sie, geht es über
+    // den Eintrag auf der Startseite genauso.
+    action: teilenAktion(entry, neuZeichnen),
     onUndo: () => {
       Store.removeConsumption(entry.id);
-      if (activeTab === "start") RENDERERS.start();
+      neuZeichnen();
     },
   });
 }
