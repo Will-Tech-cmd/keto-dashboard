@@ -135,5 +135,31 @@ const cacheGroesse = Object.keys(Store.get().cache).length;
 ok("Cache <= 400", cacheGroesse <= 400, String(cacheGroesse));
 ok("das zuletzt Geholte ist noch da", !!Store.getCachedProduct("bc449"));
 
+console.log("\n10) Ein geloeschtes Profil bleibt geloescht");
+// Bis hierher nahm applyMerge() jedes eingehende Profil auf, dessen id es nicht kannte —
+// ein aufgeraeumtes ueberzaehliges Profil kam vom anderen Geraet postwendend zurueck.
+const eigenes = Store.getActiveProfile().id;
+const ueberzaehlig = Store.get().profiles.find(p => p.id !== eigenes)?.id;
+ok("es gibt ein zweites Profil", !!ueberzaehlig);
+const mitBeiden = JSON.parse(Store.exportJSON());   // Stand des anderen Geraets: kennt beide
+ok("geloescht", Store.deleteProfile(ueberzaehlig) === true);
+ok("nur noch eines im Speicher", Store.get().profiles.length === 1,
+   String(Store.get().profiles.length));
+Store.mergeJSONQuiet(JSON.stringify(mitBeiden));
+await flush();
+ok("der Abgleich holt es NICHT zurueck", Store.get().profiles.length === 1,
+   JSON.stringify(Store.get().profiles.map(p => p.name)));
+ok("das eigene Profil ist noch da", Store.getActiveProfile()?.id === eigenes);
+
+console.log("\n11) Wer das Profil nach der Loeschung bearbeitet hat, holt es bewusst zurueck");
+const spaeter = JSON.parse(JSON.stringify(mitBeiden));
+const wieder = spaeter.profiles.find(p => p.id === ueberzaehlig);
+wieder.updatedAt = Date.now() + 60000;   // dort nach der Loeschung angefasst
+wieder.name = "Wiederbelebt";
+Store.mergeJSONQuiet(JSON.stringify(spaeter));
+await flush();
+ok("neuere Bearbeitung schlaegt den Grabstein", Store.get().profiles.length === 2,
+   JSON.stringify(Store.get().profiles.map(p => p.name)));
+
 console.log(fails === 0 ? "\nAlle Pruefungen bestanden." : "\n" + fails + " Pruefung(en) fehlgeschlagen.");
 process.exit(fails === 0 ? 0 : 1);

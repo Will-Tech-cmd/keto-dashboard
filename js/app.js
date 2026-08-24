@@ -339,11 +339,42 @@ onStoreChange((origin) => {
   if (origin === "remote" && istZeilenModus()) refreshCurrentTabIfSafe();
 });
 
+/**
+ * Den Browser bitten, die Daten dieser App nicht wegzuräumen.
+ *
+ * Ohne das darf er sie bei Speicherdruck löschen — localStorage UND IndexedDB. Am Handy
+ * als installierte App ist das praktisch nie ein Thema, im normalen Browser-Tab am Rechner
+ * schon eher. Chrome entscheidet selbst und ohne Nachfrage (installierte App: ja), Firefox
+ * fragt einmal nach.
+ *
+ * Nur einmal fragen und das Ergebnis merken: ein "nein" bei jedem Start erneut zu erbitten
+ * wäre nur lästig. Und erst nach der Ersteinrichtung — wer die App gerade zum ersten Mal
+ * öffnet, soll nicht als Erstes eine Speicher-Nachfrage sehen.
+ */
+async function bitteUmDauerhaftenSpeicher() {
+  const SCHLUESSEL = "keto-dashboard-speicher-gefragt";
+  if (!navigator.storage?.persist) return;
+  if (!Store.isOnboarded()) return;
+  try {
+    if (await navigator.storage.persisted()) return;
+    if (localStorage.getItem(SCHLUESSEL)) return;
+    localStorage.setItem(SCHLUESSEL, String(Date.now()));
+    const gewaehrt = await navigator.storage.persist();
+    if (!gewaehrt) {
+      console.info("Speicher ist nicht als dauerhaft markiert — der Browser darf ihn bei " +
+        "Platzmangel räumen. Als App installieren hilft.");
+    }
+  } catch { /* der Browser kann das nicht — dann eben nicht */ }
+}
+
 // Den Speicher hochfahren, bevor irgendetwas gelesen wird. Im bisherigen Klumpenmodus ist
 // das sofort durch; im Zeilenmodus wird hier aus IndexedDB geladen (und beim allerersten Mal
 // umgezogen). Das ist die EINZIGE asynchrone Stelle des Starts — danach liest die App den
 // Zustand wieder synchron, genau wie vorher.
 await bereit();
+
+// Absichtlich nicht abgewartet: die App soll nicht auf eine Speicher-Nachfrage warten.
+bitteUmDauerhaftenSpeicher();
 
 // Vom Kochbuch (kochbuch/) auf die Einkaufsliste übernommene Zutaten abholen — bewusst vor dem
 // ersten Rendern, damit die Einkaufsliste beim allerersten Blick schon vollständig ist.

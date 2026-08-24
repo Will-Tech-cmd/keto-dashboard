@@ -73,6 +73,7 @@ function defaultState() {
     // Einzel-Einträge, weil clearHistory() ohnehin alles auf einmal leert.
     tombstones: {
       consumption: {}, water: {}, shoppingList: {}, recipes: {}, favorites: {}, noGo: {},
+      profiles: {},
       historyClearedAt: 0,
     },
   };
@@ -121,6 +122,11 @@ const TOMBSTONED = [
   { name: "recipes", keyOf: e => e.id, timeOf: e => e.updatedAt || e.createdAt || 0 },
   { name: "favorites", keyOf: e => e.barcode, timeOf: e => e.updatedAt || e.addedAt || 0 },
   { name: "noGo", keyOf: e => e.barcode, timeOf: e => e.updatedAt || e.addedAt || 0 },
+  // Profile stehen hier, damit ein Aufräumen hält. Ohne Grabstein nahm applyMerge() jedes
+  // eingehende Profil auf, dessen id es nicht kennt — das gerade entfernte kam beim nächsten
+  // Abgleich vom noch ahnungslosen anderen Gerät zurück, und die überzähligen Reiter, die
+  // beim ersten Sync zweier eingerichteter Geräte entstehen, ließen sich gar nicht loswerden.
+  { name: "profiles", keyOf: p => p.id, timeOf: p => p.updatedAt || 0 },
 ];
 const TOMBSTONED_BY_NAME = Object.fromEntries(TOMBSTONED.map(t => [t.name, t]));
 
@@ -492,6 +498,7 @@ function applyMerge(incoming, profileChoice) {
   tomb.recipes = mergeTombstoneMap(tomb.recipes, incomingTomb.recipes);
   tomb.favorites = mergeTombstoneMap(tomb.favorites, incomingTomb.favorites);
   tomb.noGo = mergeTombstoneMap(tomb.noGo, incomingTomb.noGo);
+  tomb.profiles = mergeTombstoneMap(tomb.profiles, incomingTomb.profiles);
   tomb.historyClearedAt = Math.max(tomb.historyClearedAt || 0, incomingTomb.historyClearedAt || 0);
 
   /**
@@ -565,6 +572,10 @@ function applyMerge(incoming, profileChoice) {
 
   // Profile: je Profil entscheidet updatedAt, sonst die Wahl aus dem Dialog.
   for (const incomingProfile of incoming.profiles || []) {
+    // Hier gelöscht, dort noch vorhanden: nicht wieder aufnehmen. Der Grabstein zählt nur,
+    // wenn er neuer ist als die eingehende Fassung — wer das Profil nach der Löschung noch
+    // bearbeitet hat, holt es damit bewusst zurück (siehe isDeleted()).
+    if (isDeleted(tomb.profiles, incomingProfile.id, incomingProfile.updatedAt || 0)) continue;
     const i = state.profiles.findIndex(p => p.id === incomingProfile.id);
     if (i < 0) { state.profiles.push(incomingProfile); continue; }
     const mine = state.profiles[i];
@@ -666,7 +677,8 @@ export const Store = {
     const before = state.profiles.length;
     state.profiles = state.profiles.filter(p => p.id !== id);
     if (state.profiles.length === before) return false;
-    persist();
+    state.tombstones.profiles[id] = Date.now();
+    persist("tombstones");
     return true;
   },
 
