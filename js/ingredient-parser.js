@@ -23,7 +23,14 @@ const TRAILING_DESCRIPTORS = /[,\s]+\b(fein gehackt|gehackt|gewürfelt|gepresst|
 
 // Aufzählungszeichen am Zeilenanfang: nummerierte Listen ("1.", "2)") UND/GEFOLGT VON
 // Bindestrichen ("4. -Eier", "5. - Eier") — beide Präfixe können kombiniert auftreten.
-const BULLET_PREFIX = /^\s*(?:\d+[.)]\s*)?(?:[-–—•*·]+\s*)?/;
+//
+// Ein einzeln stehendes "o" zählt mit: die Texterkennung liest ein Aufzählungs-• in
+// vielen Schriften als kleines o. Ohne diese Ausnahme fällt die ganze Zeile durch beide
+// Muster unten durch und landet als Name MITSAMT Menge in der Liste ("o 150g Speisequark"
+// mit leerer Mengenangabe). Nur mit folgendem Leerraum, damit "Olivenöl" unberührt bleibt.
+// Ein Zeichen je Durchlauf statt "+", sonst kann eine lange Strichfolge den Regex-Motor
+// in exponentielles Zurücksetzen treiben.
+const BULLET_PREFIX = /^\s*(?:\d+[.)]\s*)?(?:(?:[-–—•*·]|[oO](?=\s))\s*)*/;
 // Abschnittsüberschriften ohne Menge überspringen: "Zutaten:", "Boden:", "Füllung:" …
 const SECTION_HEADER = /^[^\d]*:\s*$/;
 // Klammerzusätze wie "(geschmolzen)" oder "(ggf mehr oder weniger …)" sind keine Zutat.

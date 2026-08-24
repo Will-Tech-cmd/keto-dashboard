@@ -91,6 +91,11 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
     Rezepte") — das ist der Weg fürs zweite Handy.
   - In beiden Fällen gilt: ein erneuter Import aktualisiert nur Zutaten und Nährwerte;
     Zubereitung, Fotos und Notizen bleiben erhalten.
+  - **Die Übernahme läuft nur in eine Richtung.** Änderst du im Kochbuch eine Zutat,
+    erfährt die Keto-App davon nichts — und der nächste Abgleich von dort ersetzt die
+    Zutatenliste wieder durch ihre eigene. Zutaten gehören deshalb in die Keto-App;
+    Zubereitung, Fotos, Bewertung und Kommentare ins Kochbuch. (Fällt weg, sobald beide
+    Apps auf dieselbe Rezept-Tabelle zugreifen — siehe `supabase/README.md`.)
 - **Zurück zur Einkaufsliste:** „Zutaten → Einkaufsliste" im Kochbuch legt die Namen in einer
   kleinen Übergabe-Inbox ab, die das Keto-Dashboard beim nächsten eigenen Start abholt.
 - **Offline:** Lesen funktioniert mit dem zuletzt bekannten Stand (eigener Service Worker,

@@ -8,6 +8,7 @@ import {
 } from "../api.js";
 import { getWhoAmI } from "../identity.js";
 import { esc, showToast, downscaleImage } from "../ui.js";
+import { calcPerServingFromZutaten } from "../keto-bridge.js";
 import { parseIngredientText } from "../../../js/ingredient-parser.js";
 
 export async function renderEditor(container, id, { onBack, onSaved, preloaded }) {
@@ -257,10 +258,21 @@ export async function renderEditor(container, id, { onBack, onSaved, preloaded }
     btn.disabled = true;
     btn.textContent = "Speichert …";
     const titel = container.querySelector("#f_titel").value.trim() || "Neues Rezept";
+    const portionen = Number(container.querySelector("#f_portionen").value) || 1;
+
+    // Erst die endgültige Zutatenliste, dann daraus die Nährwerte, dann speichern.
+    // Ohne diesen Schritt blieb in naehrwerte der Stand des letzten Imports aus der
+    // Keto-App stehen: die Liste zeigte vier Zutaten, die Kacheln darüber rechneten
+    // weiter mit fünf.
+    const zutatenFuerDb = draft.zutaten.filter(z => z.name.trim()).map(z => ({
+      name: z.name.trim(), gramm: z.gramm ?? null, mengentext: z.mengentext || null,
+      abschnitt: z.abschnitt || null, per100: z.per100 || null, likely_us_label: !!z.likely_us_label,
+    }));
+
     const patch = {
       titel,
       untertitel: container.querySelector("#f_untertitel").value.trim() || null,
-      portionen: Number(container.querySelector("#f_portionen").value) || 1,
+      portionen,
       vorbereitung_min: numOrNull(container.querySelector("#f_vorb").value),
       koch_min: numOrNull(container.querySelector("#f_koch").value),
       schwierigkeit: numOrNull(container.querySelector("#f_schwierigkeit").value),
@@ -269,6 +281,11 @@ export async function renderEditor(container, id, { onBack, onSaved, preloaded }
       notizen: container.querySelector("#f_notizen").value.trim() || null,
       geaendert_von: getWhoAmI(),
     };
+    // naehrwerte_manuell setzt derzeit niemand — die Abfrage steht hier, damit von Hand
+    // eingetragene Werte nicht überschrieben werden, sobald es die Möglichkeit gibt.
+    if (!rezept.naehrwerte_manuell) {
+      patch.naehrwerte = calcPerServingFromZutaten(zutatenFuerDb, portionen);
+    }
 
     try {
       let saved = await updateRezeptHead(id, patch, draft.updated_at);
@@ -282,10 +299,7 @@ export async function renderEditor(container, id, { onBack, onSaved, preloaded }
         saved = await forceUpdateRezeptHead(id, patch);
       }
       draft.updated_at = saved.updated_at;
-      await replaceZutaten(id, draft.zutaten.filter(z => z.name.trim()).map(z => ({
-        name: z.name.trim(), gramm: z.gramm ?? null, mengentext: z.mengentext || null,
-        abschnitt: z.abschnitt || null, per100: z.per100 || null, likely_us_label: !!z.likely_us_label,
-      })));
+      await replaceZutaten(id, zutatenFuerDb);
       await replaceSchritte(id, draft.schritte.filter(s => s.text.trim()).map(s => ({
         text: s.text.trim(), minuten: s.minuten ?? null,
       })));

@@ -3,7 +3,7 @@
 // Spezifikation gewinnt bei überlappenden Scopes ohnehin der genauere, das sw.js der Keto-App
 // steigt für /kochbuch/-Pfade zusätzlich früh aus (siehe dort).
 
-const CACHE_NAME = "kochbuch-v5";
+const CACHE_NAME = "kochbuch-v6";
 const SCOPE = self.registration.scope;
 const SUPABASE_HOST = "viedjnpmvnkufoysuxvl.supabase.co";
 
