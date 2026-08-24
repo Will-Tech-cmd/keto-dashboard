@@ -33,6 +33,7 @@
 // Stelle sähe aus wie eine echte Messung.
 
 const zahl = (v) => (v == null || v === "" ? null : Number(v));
+const q = (v) => encodeURIComponent(String(v));
 const millis = (v) => (v == null ? null : new Date(v).getTime());
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 
@@ -46,6 +47,7 @@ function stempel(...kandidaten) {
 const profil = {
   tabelle: "profil",
   konflikt: "id",
+  filter: (k) => `id=eq.${q(k)}`,
   schluessel: (p) => p.id,
   zeit: (p) => stempel(p.updatedAt),
   zuZeile: (p, ctx) => ({
@@ -99,6 +101,7 @@ const profil = {
 const mahlzeit = {
   tabelle: "mahlzeit",
   konflikt: "id",
+  filter: (k) => `id=eq.${q(k)}`,
   schluessel: (e) => e.id,
   zeit: (e) => stempel(e.updatedAt, e.at),
   zuZeile: (e, ctx) => ({
@@ -149,6 +152,7 @@ const mahlzeit = {
 const wasser = {
   tabelle: "wasser",
   konflikt: "id",
+  filter: (k) => `id=eq.${q(k)}`,
   schluessel: (e) => e.id,
   zeit: (e) => stempel(e.at),
   zuZeile: (e, ctx) => ({
@@ -176,6 +180,10 @@ const wasser = {
 const tagesziel = {
   tabelle: "tagesziel",
   konflikt: "profil_id,datum",
+  filter: (k) => {
+    const [profilId, datum] = String(k).split("|");
+    return `profil_id=eq.${q(profilId)}&datum=eq.${q(datum)}`;
+  },
   schluessel: (t) => `${t.profileId}|${t.dateKey}`,
   zeit: (t) => stempel(t.frozenAt),
   zuZeile: (t, ctx) => ({
@@ -207,6 +215,7 @@ const tagesziel = {
 const listen_eintrag = {
   tabelle: "listen_eintrag",
   konflikt: "haushalt_id,barcode",
+  filter: (k, ctx) => `haushalt_id=eq.${q(ctx.haushaltId)}&barcode=eq.${q(k)}`,
   schluessel: (e) => e.barcode,
   zeit: (e) => stempel(e.updatedAt, e.addedAt),
   zuZeile: (e, ctx) => ({
@@ -238,6 +247,7 @@ const listen_eintrag = {
 const einkauf = {
   tabelle: "einkauf",
   konflikt: "id",
+  filter: (k) => `id=eq.${q(k)}`,
   schluessel: (i) => i.id,
   zeit: (i) => stempel(i.updatedAt),
   zuZeile: (i, ctx) => ({
@@ -265,6 +275,7 @@ const einkauf = {
 const produkt_korrektur = {
   tabelle: "produkt_korrektur",
   konflikt: "haushalt_id,barcode",
+  filter: (k, ctx) => `haushalt_id=eq.${q(ctx.haushaltId)}&barcode=eq.${q(k)}`,
   schluessel: (k) => k.barcode,
   zeit: (k) => stempel(k.updatedAt),
   zuZeile: (k, ctx) => ({
@@ -294,6 +305,7 @@ const produkt_korrektur = {
 const rezept = {
   tabelle: "kochbuch_rezepte",
   konflikt: "keto_id",
+  filter: (k) => `keto_id=eq.${q(k)}`,
   schluessel: (r) => r.id,
   zeit: (r) => stempel(r.updatedAt, r.createdAt),
   zuZeile: (r, ctx) => ({
@@ -327,6 +339,15 @@ export const REIHENFOLGE = [
   "profil", "rezept", "tagesziel", "mahlzeit", "wasser",
   "listen_eintrag", "einkauf", "produkt_korrektur",
 ];
+
+/**
+ * Wie eine EINZELNE Zeile auf dem Server angesprochen wird — für das Löschen (das ein
+ * `geloescht_am`-Setzen ist) und für gezieltes Nachladen. Muss zu `konflikt` passen:
+ * beide beantworten dieselbe Frage, einmal für den Upsert, einmal für die Adresse.
+ */
+export function filterFuer(entitaet, schluessel, ctx) {
+  return ENTITAETEN[entitaet].filter(schluessel, ctx);
+}
 
 /** Spalten, die jede abgleichbare Zeile mitbringt — der Rest ist Fachlichkeit. */
 export const STANDARDSPALTEN = ["haushalt_id", "geaendert_am", "updated_at", "geloescht_am"];
