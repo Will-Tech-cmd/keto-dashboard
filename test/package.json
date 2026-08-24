@@ -1,0 +1,7 @@
+{
+  "name": "keto-dashboard-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node lauf.mjs" },
+  "devDependencies": { "fake-indexeddb": "^6.2.2" }
+}

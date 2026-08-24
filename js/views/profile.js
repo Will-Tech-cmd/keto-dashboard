@@ -1,5 +1,5 @@
 // views/profile.js — Profil-Tab: Körperdaten, Zielwert-Konfiguration, Export/Import.
-import { Store } from "../store.js";
+import { Store, istZeilenModus, wechsleModus } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
@@ -14,9 +14,6 @@ const RING_STYLES = [
 
 export function renderProfile(container, onProfileChanged) {
   const state = Store.get();
-  const syncOn = isSyncEnabled();
-  const syncReauth = needsReauth();
-  const syncLastAt = getLastSyncAt();
 
   container.innerHTML = `
     <h1 class="section-title">Profil</h1>
@@ -67,42 +64,8 @@ export function renderProfile(container, onProfileChanged) {
       ` : ""}
     </div>
 
-    <div class="card">
-      <h2>Online-Synchronisierung (optional)</h2>
-      <p class="hint" style="margin-top:0">Mit dem Kochbuch-Zugangswort gleicht die App alle Daten automatisch zwischen euren Geräten ab — wie das manuelle Einspielen oben, nur automatisch über das Netz statt per Datei. Ohne Aktivierung bleibt hier alles ausschließlich auf diesem Gerät, wie bisher.</p>
-      ${syncOn && !syncReauth ? `
-        <p class="hint">Status: ✅ aktiv · zuletzt synchronisiert: ${esc(syncLastAt ? new Date(syncLastAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie")}</p>
-        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
-        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
-          <button class="btn secondary" id="syncNowBtn">Jetzt synchronisieren</button>
-          <button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>
-        </div>
-      ` : `
-        ${syncReauth ? `<p class="hint" style="color:var(--red-fg)">Anmeldung abgelaufen — bitte Zugangswort erneut eingeben.</p>` : ""}
-        <label for="syncPwInput">Zugangswort</label>
-        <input type="password" id="syncPwInput" autocomplete="current-password" placeholder="Gemeinsames Zugangswort">
-        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
-        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
-          <button class="btn secondary" id="syncOnBtn">${syncReauth ? "Erneut anmelden" : "Aktivieren"}</button>
-          ${syncReauth ? `<button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>` : ""}
-        </div>
-      `}
-    </div>
-
-    <div class="card">
-      <h2>KI-Erkennung (optional)</h2>
-      <p class="hint" style="margin-top:0">Mit einem eigenen, kostenlosen Gemini-API-Schlüssel kann der Rezept-Import schwierige Fälle (unbekannte Zutaten, schlecht lesbare Fotos) zusätzlich an eine KI schicken. Ohne Schlüssel funktioniert alles wie bisher — die KI-Knöpfe erscheinen dann einfach nicht.</p>
-      <p class="hint">Schlüssel erstellen (kostenlos, keine Kreditkarte nötig): <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/app/apikey</a></p>
-      <label for="aiKeyInput">Gemini-API-Schlüssel</label>
-      <input type="password" id="aiKeyInput" placeholder="AIza…" value="${esc(getApiKey())}" autocomplete="off">
-      <p class="hint" id="aiKeyStatus" style="margin-top:6px"></p>
-      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
-        <button class="btn secondary" id="aiKeySaveBtn">Speichern</button>
-        <button class="btn ghost" id="aiKeyTestBtn">Verbindung testen</button>
-        <button class="btn ghost" id="aiKeyClearBtn" style="color:var(--red-fg)">Löschen</button>
-      </div>
-      <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
-    </div>
+    <div class="klar-eyebrow" style="margin:16px 2px 8px">Gerät &amp; Zusatzfunktionen</div>
+    <div class="klar-list-card" id="extraGroups"></div>
 
     <div class="card">
       <h2>Erscheinungsbild</h2>
@@ -159,8 +122,7 @@ export function renderProfile(container, onProfileChanged) {
 
   renderProfileForm(container, onProfileChanged);
   wireExportImport(container);
-  wireSyncCard(container, onProfileChanged);
-  wireAiKey(container);
+  renderExtraGroups(container, onProfileChanged);
   renderAppearanceCard(container, onProfileChanged);
   renderRingStyleCard(container, onProfileChanged);
   showAppVersion(container);
@@ -218,11 +180,154 @@ function renderRingStyleCard(container, onProfileChanged) {
   });
 }
 
-function wireSyncCard(container, onProfileChanged) {
-  const status = container.querySelector("#syncStatus");
-  const pwInput = container.querySelector("#syncPwInput");
+/**
+ * Die drei Zusatzfunktionen als Zeilen mit ihrem aktuellen Stand. Ausgeklappt waren das drei
+ * Karten voll Erklärtext, die man jeden Tag sah und einmal im Jahr brauchte — hier steht der
+ * Stand in einer Zeile, der Rest liegt im Sheet dahinter.
+ */
+function renderExtraGroups(container, onProfileChanged) {
+  const liste = container.querySelector("#extraGroups");
+  if (!liste) return;
 
-  container.querySelector("#syncOnBtn")?.addEventListener("click", async (e) => {
+  const zeitpunkt = (ms) => (ms
+    ? new Date(ms).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })
+    : "noch nie");
+
+  const zeilen = () => {
+    const reauth = needsReauth();
+    return [
+      {
+        key: "sync",
+        title: "Online-Synchronisierung",
+        sub: reauth ? "Anmeldung abgelaufen — Zugangswort erneut eingeben"
+          : isSyncEnabled() ? `aktiv · zuletzt ${zeitpunkt(getLastSyncAt())}`
+          : "aus · alles bleibt auf diesem Gerät",
+        warnen: reauth,
+      },
+      {
+        key: "speicher",
+        title: "Neuer Speicher",
+        sub: istZeilenModus() ? "aktiv · zeilenweise Ablage und Abgleich"
+          : "aus · bisheriger Speicher (ein Block)",
+      },
+      {
+        key: "ki",
+        title: "KI-Erkennung",
+        sub: getApiKey() ? "Schlüssel hinterlegt · KI-Knöpfe beim Rezept-Import"
+          : "aus · kein Gemini-Schlüssel",
+      },
+    ];
+  };
+
+  const neuZeichnen = () => renderProfile(container, onProfileChanged);
+
+  const zeichnen = () => {
+    liste.innerHTML = zeilen().map(z => `
+      <div class="list-item" data-extra="${z.key}" style="cursor:pointer">
+        <div class="info">
+          <div class="name">${esc(z.title)}</div>
+          <div class="meta"${z.warnen ? ' style="color:var(--red-fg)"' : ""}>${esc(z.sub)}</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+    `).join("");
+    liste.querySelectorAll(".list-item").forEach(row => {
+      row.addEventListener("click", () => openExtraSheet(row.dataset.extra, neuZeichnen));
+    });
+  };
+  zeichnen();
+}
+
+/** Das Sheet hinter einer der drei Zeilen. Der Inhalt ist wortgleich der der früheren
+ * Karten — nur liegt er jetzt hinter einem Tipp statt dauerhaft im Weg. */
+function openExtraSheet(key, neuZeichnen) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  const syncOn = isSyncEnabled();
+  const syncReauth = needsReauth();
+  const syncLastAt = getLastSyncAt();
+  const zeilenAn = istZeilenModus();
+
+  const inhalt = {
+    sync: `
+      <p class="hint" style="margin-top:0">Mit dem Kochbuch-Zugangswort gleicht die App alle Daten automatisch zwischen euren Geräten ab — wie das manuelle Einspielen, nur automatisch über das Netz statt per Datei. Ohne Aktivierung bleibt hier alles ausschließlich auf diesem Gerät.</p>
+      ${syncOn && !syncReauth ? `
+        <p class="hint">Status: ✅ aktiv · zuletzt synchronisiert: ${esc(syncLastAt ? new Date(syncLastAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie")}</p>
+        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
+        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+          <button class="btn secondary" id="syncNowBtn">Jetzt synchronisieren</button>
+          <button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>
+        </div>
+      ` : `
+        ${syncReauth ? `<p class="hint" style="color:var(--red-fg)">Anmeldung abgelaufen — bitte Zugangswort erneut eingeben.</p>` : ""}
+        <label for="syncPwInput">Zugangswort</label>
+        <input type="password" id="syncPwInput" autocomplete="current-password" placeholder="Gemeinsames Zugangswort">
+        <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
+        <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+          <button class="btn secondary" id="syncOnBtn">${syncReauth ? "Erneut anmelden" : "Aktivieren"}</button>
+          ${syncReauth ? `<button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>` : ""}
+        </div>
+      `}
+    `,
+    speicher: `
+      <p class="hint" style="margin-top:0">Der neue Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln ab statt alles zusammen in einem Block, und gleicht auch einzeln ab. Damit kann eine Änderung auf einem Gerät keine auf dem anderen mehr überschreiben — genau das war die Ursache der bisherigen Datenverluste.</p>
+      <p class="hint">Rezepte wandern samt Zutatenliste — auch Veränderungen aus dem Kochbuch kommen damit hier an, was auf dem bisherigen Weg nie der Fall war.</p>
+      <p class="hint">Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; auf dem Gerät selbst geht dabei nichts verloren. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
+      <p class="hint">Status: ${zeilenAn ? "✅ neuer Speicher aktiv" : "bisheriger Speicher"}</p>
+      <p class="hint" id="zeilenStatus" style="margin-top:0;min-height:1.2em"></p>
+      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+        <button class="btn secondary" id="zeilenBtn">${zeilenAn ? "Zurück auf den bisherigen Speicher" : "Neuen Speicher einschalten"}</button>
+      </div>
+    `,
+    ki: `
+      <p class="hint" style="margin-top:0">Mit einem eigenen, kostenlosen Gemini-API-Schlüssel kann der Rezept-Import schwierige Fälle (unbekannte Zutaten, schlecht lesbare Fotos) zusätzlich an eine KI schicken. Ohne Schlüssel funktioniert alles wie bisher — die KI-Knöpfe erscheinen dann einfach nicht.</p>
+      <p class="hint">Schlüssel erstellen (kostenlos, keine Kreditkarte nötig): <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/app/apikey</a></p>
+      <label for="aiKeyInput">Gemini-API-Schlüssel</label>
+      <input type="password" id="aiKeyInput" placeholder="AIza…" value="${esc(getApiKey())}" autocomplete="off">
+      <p class="hint" id="aiKeyStatus" style="margin-top:6px"></p>
+      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+        <button class="btn secondary" id="aiKeySaveBtn">Speichern</button>
+        <button class="btn ghost" id="aiKeyTestBtn">Verbindung testen</button>
+        <button class="btn ghost" id="aiKeyClearBtn" style="color:var(--red-fg)">Löschen</button>
+      </div>
+      <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
+    `,
+  }[key];
+
+  const titel = {
+    sync: "Online-Synchronisierung",
+    speicher: "Neuer Speicher (Test)",
+    ki: "KI-Erkennung",
+  }[key];
+
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:10px">${esc(titel)}</h2>
+      ${inhalt}
+      <button type="button" class="btn" id="extraDone" style="margin-top:16px">Fertig</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#extraDone").addEventListener("click", close);
+
+  // Eine Aktion im Sheet ändert den Stand, den die Zeile dahinter anzeigt — also erst
+  // schließen, dann neu zeichnen. Andernfalls hinge das Sheet über einer Ansicht, die es
+  // gar nicht mehr gibt.
+  const fertigUndNeu = () => { close(); neuZeichnen(); };
+  if (key === "sync" || key === "speicher") wireSyncCard(overlay, fertigUndNeu);
+  if (key === "ki") wireAiKey(overlay);
+
+  keepActionsInView(overlay);
+}
+
+function wireSyncCard(wurzel, neuZeichnen) {
+  const status = wurzel.querySelector("#syncStatus");
+  const pwInput = wurzel.querySelector("#syncPwInput");
+
+  wurzel.querySelector("#syncOnBtn")?.addEventListener("click", async (e) => {
     const password = pwInput.value;
     if (!password) { showToast("Bitte das Zugangswort eingeben"); return; }
     e.target.disabled = true;
@@ -230,23 +335,23 @@ function wireSyncCard(container, onProfileChanged) {
     try {
       await enableSync(password);
       showToast("Synchronisierung aktiviert");
-      renderProfile(container, onProfileChanged);
+      neuZeichnen();
     } catch (err) {
       status.textContent = err.message || "Verbindung fehlgeschlagen";
       e.target.disabled = false;
     }
   });
 
-  container.querySelector("#syncNowBtn")?.addEventListener("click", async (e) => {
+  wurzel.querySelector("#syncNowBtn")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     status.textContent = "Synchronisiert …";
     try {
       await syncNow();
       showToast("Synchronisiert");
-      renderProfile(container, onProfileChanged);
+      neuZeichnen();
     } catch (err) {
       if (err instanceof SyncAuthError) {
-        renderProfile(container, onProfileChanged);
+        neuZeichnen();
       } else {
         status.textContent = err.message || "Synchronisierung fehlgeschlagen — offline?";
         e.target.disabled = false;
@@ -254,19 +359,40 @@ function wireSyncCard(container, onProfileChanged) {
     }
   });
 
-  container.querySelector("#syncOffBtn")?.addEventListener("click", () => {
+  wurzel.querySelector("#syncOffBtn")?.addEventListener("click", () => {
     if (!confirm("Synchronisierung deaktivieren? Die Daten bleiben auf diesem Gerät erhalten.")) return;
     disableSync();
     showToast("Synchronisierung deaktiviert");
-    renderProfile(container, onProfileChanged);
+    neuZeichnen();
+  });
+
+  // Speicherweg umschalten. Danach wird neu geladen: der laufende Zustand hängt an
+  // Modulvariablen in store.js, die sich nicht mittendrin umstellen lassen.
+  wurzel.querySelector("#zeilenBtn")?.addEventListener("click", async (e) => {
+    const an = !istZeilenModus();
+    const frage = an
+      ? "Auf den neuen Speicher umstellen? Der aktuelle Stand wird übernommen, die App lädt danach neu."
+      : "Zurück auf den bisherigen Speicher? Der aktuelle Stand wird übernommen, die App lädt danach neu.";
+    if (!confirm(frage)) return;
+    const knopf = e.currentTarget;
+    const zeilenStatus = wurzel.querySelector("#zeilenStatus");
+    knopf.disabled = true;
+    zeilenStatus.textContent = "Wird umgestellt …";
+    try {
+      await wechsleModus(an);
+      location.reload();
+    } catch (err) {
+      knopf.disabled = false;
+      zeilenStatus.textContent = err?.message || "Umstellen fehlgeschlagen.";
+    }
   });
 }
 
-function wireAiKey(container) {
-  const input = container.querySelector("#aiKeyInput");
-  const status = container.querySelector("#aiKeyStatus");
+function wireAiKey(wurzel) {
+  const input = wurzel.querySelector("#aiKeyInput");
+  const status = wurzel.querySelector("#aiKeyStatus");
 
-  container.querySelector("#aiKeySaveBtn").addEventListener("click", () => {
+  wurzel.querySelector("#aiKeySaveBtn").addEventListener("click", () => {
     const key = input.value.trim();
     if (!key) { showToast("Bitte einen Schlüssel eingeben"); return; }
     setApiKey(key);
@@ -274,7 +400,7 @@ function wireAiKey(container) {
     showToast("Gespeichert — KI-Knöpfe erscheinen jetzt beim Rezept-Import");
   });
 
-  container.querySelector("#aiKeyTestBtn").addEventListener("click", async () => {
+  wurzel.querySelector("#aiKeyTestBtn").addEventListener("click", async () => {
     const key = input.value.trim();
     if (!key) { showToast("Bitte einen Schlüssel eingeben"); return; }
     status.textContent = "Prüfe Verbindung …";
@@ -284,7 +410,7 @@ function wireAiKey(container) {
       : `❌ ${result.message}`;
   });
 
-  container.querySelector("#aiKeyClearBtn").addEventListener("click", () => {
+  wurzel.querySelector("#aiKeyClearBtn").addEventListener("click", () => {
     if (!getApiKey()) { showToast("Kein Schlüssel hinterlegt"); return; }
     if (!confirm("Gemini-API-Schlüssel von diesem Gerät löschen?")) return;
     clearApiKey();

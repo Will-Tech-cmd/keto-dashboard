@@ -1,0 +1,6 @@
+node_modules/
+.claude/
+
+# Nebenprodukte der Tests — koennen echte Daten enthalten
+test/zeilen*.json
+test/*.out.json

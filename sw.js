@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v49";
+const CACHE_NAME = "keto-dashboard-v55";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -23,6 +23,16 @@ const APP_SHELL = [
   "./js/recipes.js",
   "./js/ingredient-parser.js",
   "./js/sync.js",
+  // Zeilenweiser Speicher und Abgleich (modus.js schaltet um; Standard ist noch der alte Weg).
+  // Muessen mit in den Vorrat: store.js importiert sie beim Start, auch wenn der Schalter aus ist.
+  "./js/modus.js",
+  "./js/ablage.js",
+  "./js/db.js",
+  "./js/rows.js",
+  "./js/entities.js",
+  "./js/umzug.js",
+  "./js/supabase.js",
+  "./js/sync2.js",
   "./js/scanner.js",
   "./js/lists.js",
   "./js/analysis.js",
@@ -116,10 +126,15 @@ function networkFirst(request) {
         if (res && res.ok) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          done(res);
+          // Falls der Timeout schon mit der Cache-Fassung geantwortet hat: nichts weiter zu tun,
+          // der Cache ist jetzt aktuell und der nächste Aufruf bekommt den neuen Stand.
+          return;
         }
-        done(res);
-        // Falls der Timeout schon mit der Cache-Fassung geantwortet hat: nichts weiter zu tun,
-        // der Cache ist jetzt aktuell und der nächste Aufruf bekommt den neuen Stand.
+        // Antwort MIT Fehlerstatus (z.B. 503 während eines Deploys). fetch() lehnt dabei nicht
+        // ab, der .catch() unten greift also nicht — ohne diesen Zweig bekäme die Seite die 503
+        // ausgeliefert und stünde weiß da, obwohl eine funktionierende Fassung im Cache liegt.
+        cached.then(c => done(c || res));
       })
       .catch(() => {
         clearTimeout(timer);

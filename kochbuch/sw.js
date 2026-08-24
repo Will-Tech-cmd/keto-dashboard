@@ -3,7 +3,7 @@
 // Spezifikation gewinnt bei überlappenden Scopes ohnehin der genauere, das sw.js der Keto-App
 // steigt für /kochbuch/-Pfade zusätzlich früh aus (siehe dort).
 
-const CACHE_NAME = "kochbuch-v4";
+const CACHE_NAME = "kochbuch-v7";
 const SCOPE = self.registration.scope;
 const SUPABASE_HOST = "viedjnpmvnkufoysuxvl.supabase.co";
 
@@ -26,6 +26,7 @@ const APP_SHELL = [
   "./js/views/editor.js",
   "./js/views/import.js",
   "../js/ingredient-parser.js",
+  "../js/rows.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
@@ -90,8 +91,15 @@ function networkFirst(request) {
     fetch(request, { cache: "no-cache" })
       .then((res) => {
         clearTimeout(timer);
-        if (res && res.ok) { const clone = res.clone(); caches.open(CACHE_NAME).then(c => c.put(request, clone)); }
-        done(res);
+        if (res && res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(request, clone));
+          done(res);
+          return;
+        }
+        // Fehlerstatus: fetch() lehnt nicht ab, der .catch() unten greift also nicht. Lieber die
+        // letzte funktionierende Fassung aus dem Cache als eine kaputte Seite.
+        cached.then(c => done(c || res));
       })
       .catch(() => {
         clearTimeout(timer);

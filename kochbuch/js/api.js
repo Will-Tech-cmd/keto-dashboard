@@ -43,10 +43,17 @@ export async function login(password) {
 
 /** Ändert das gemeinsame Zugangswort (im Profil-Bereich der App aufrufbar). */
 export async function changePassword(newPassword) {
-  return authedFetch(`${AUTH}/user`, {
+  const res = await authedFetch(`${AUTH}/user`, {
     method: "PUT",
     body: JSON.stringify({ password: newPassword }),
   });
+  if (!res.ok) {
+    // Ohne diese Prüfung meldete die App "Zugangswort geändert" auch dann, wenn Supabase
+    // abgelehnt hat (zu kurz, identisch zum alten) — man hätte das neue Wort weitergegeben,
+    // es hätte nirgends funktioniert, und im Zweifel sperren sich beide Geräte aus.
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.msg || body.error_description || `Ändern fehlgeschlagen (Status ${res.status}).`);
+  }
 }
 
 async function refreshSession() {
@@ -127,7 +134,9 @@ const sortByPos = (a, b) => (a.pos ?? 0) - (b.pos ?? 0);
 // kochbuch_rezepte hat zwei Fremdschlüssel zu kochbuch_bilder (die Bilder-Liste über
 // kochbuch_bilder.rezept_id und das einzelne titelbild_id) — PostgREST kann die Beziehung
 // deshalb nicht mehr von selbst erraten (Fehler PGRST201) und braucht den Constraint-Namen.
-const LIST_SELECT = "id,titel,untertitel,portionen,vorbereitung_min,koch_min,schwierigkeit,tags,bewertung,zuletzt_gekocht,naehrwerte,updated_at,titelbild_id,kochbuch_bilder!kochbuch_bilder_rezept_id_fkey(id,pfad)";
+// kochbuch_zutaten nur mit dem Namen: die Übersicht sucht darin mit (das Suchfeld verspricht
+// "Rezept oder Zutat"), die Mengen und Nährwerte braucht sie dafür nicht.
+const LIST_SELECT = "id,titel,untertitel,portionen,vorbereitung_min,koch_min,schwierigkeit,tags,bewertung,zuletzt_gekocht,naehrwerte,updated_at,titelbild_id,kochbuch_bilder!kochbuch_bilder_rezept_id_fkey(id,pfad),kochbuch_zutaten(name)";
 const DETAIL_SELECT = "*,kochbuch_zutaten(*),kochbuch_schritte(*),kochbuch_bilder!kochbuch_bilder_rezept_id_fkey(*),kochbuch_kommentare(*)";
 
 export async function listRezepte() {
@@ -146,6 +155,18 @@ export async function getRezept(id) {
   r.kochbuch_schritte.sort(sortByPos);
   r.kochbuch_kommentare.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   return r;
+}
+
+/**
+ * Alle schon aus der Keto-App übernommenen Rezepte als Karte keto_id -> Kopfdaten. Eine einzige
+ * Abfrage statt einer pro Rezept: der automatische Abgleich lief bei jedem Start der App sonst
+ * mit einer Anfrage je Rezept nacheinander durch (bei 60 Rezepten mehrere Sekunden Mobilfunk).
+ */
+export async function listKetoIdMap() {
+  const rows = await restFetch(
+    "kochbuch_rezepte?select=id,keto_id,keto_updated_at&keto_id=not.is.null&geloescht_am=is.null"
+  );
+  return new Map((rows || []).map(r => [r.keto_id, r]));
 }
 
 export async function findByKetoId(ketoId) {
@@ -205,23 +226,36 @@ export async function softDeleteRezept(id) {
   });
 }
 
-/** Ersetzt alle Zutaten eines Rezepts durch die übergebene Liste (einfacher als granulares Diffen für v1). */
-export async function replaceZutaten(rezeptId, zutaten) {
-  await restFetch(`kochbuch_zutaten?rezept_id=eq.${rezeptId}`, { method: "DELETE" });
-  if (zutaten.length === 0) return;
-  await restFetch("kochbuch_zutaten", {
-    method: "POST",
-    body: JSON.stringify(zutaten.map((z, i) => ({ ...z, rezept_id: rezeptId, pos: i }))),
-  });
+/**
+ * Ersetzt alle Zeilen einer Unterliste (Zutaten, Schritte) durch die übergebenen — einfacher
+ * als granulares Diffen für v1.
+ *
+ * Erst schreiben, dann die alten Zeilen entfernen. PostgREST kennt keine Transaktion über zwei
+ * Anfragen hinweg: bei "erst löschen, dann schreiben" steht das Rezept nach einem
+ * Verbindungsabbruch dazwischen ohne jede Zutat da — und beim automatischen Abgleich fiele das
+ * nicht einmal auf. Andersherum bleiben im schlimmsten Fall doppelte Zeilen stehen: sichtbar,
+ * ärgerlich, aber nichts ist verloren, und das nächste Speichern räumt auf.
+ */
+async function replaceRows(tabelle, rezeptId, zeilen) {
+  const alte = await restFetch(`${tabelle}?rezept_id=eq.${rezeptId}&select=id`);
+  if (zeilen.length > 0) {
+    await restFetch(tabelle, {
+      method: "POST",
+      body: JSON.stringify(zeilen.map((z, i) => ({ ...z, rezept_id: rezeptId, pos: i }))),
+    });
+  }
+  const alteIds = (alte || []).map(r => r.id);
+  if (alteIds.length > 0) {
+    await restFetch(`${tabelle}?id=in.(${alteIds.join(",")})`, { method: "DELETE" });
+  }
 }
 
-export async function replaceSchritte(rezeptId, schritte) {
-  await restFetch(`kochbuch_schritte?rezept_id=eq.${rezeptId}`, { method: "DELETE" });
-  if (schritte.length === 0) return;
-  await restFetch("kochbuch_schritte", {
-    method: "POST",
-    body: JSON.stringify(schritte.map((s, i) => ({ ...s, rezept_id: rezeptId, pos: i }))),
-  });
+export function replaceZutaten(rezeptId, zutaten) {
+  return replaceRows("kochbuch_zutaten", rezeptId, zutaten);
+}
+
+export function replaceSchritte(rezeptId, schritte) {
+  return replaceRows("kochbuch_schritte", rezeptId, schritte);
 }
 
 export async function addKommentar(rezeptId, autor, text) {

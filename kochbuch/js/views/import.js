@@ -1,8 +1,8 @@
 // views/import.js — Rezepte aus der Keto-App übernehmen: direkt aus deren localStorage (nur
 // auf demselben Gerät/Browser verfügbar) oder aus einer geteilten Rezept-Datei (funktioniert
 // auf jedem Gerät — der Weg für das zweite Handy).
-import { readKetoRecipes, buildImportPayload, parseKetoRecipesFile } from "../keto-bridge.js";
-import { findByKetoId, createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "../api.js";
+import { readKetoRecipes, parseKetoRecipesFile, writeKetoRecipe } from "../keto-bridge.js";
+import { findByKetoId } from "../api.js";
 import { getWhoAmI } from "../identity.js";
 import { esc, showToast } from "../ui.js";
 
@@ -88,17 +88,7 @@ export async function renderImport(container, { onBack, onImported, preselectKet
     btn.textContent = "…";
     try {
       const existing = await findByKetoId(recipe.id);
-      const { kopf, zutaten } = buildImportPayload(recipe);
-      const wer = getWhoAmI();
-      let rezeptId;
-      if (existing) {
-        await forceUpdateRezeptHead(existing.id, { ...kopf, geaendert_von: wer });
-        rezeptId = existing.id;
-      } else {
-        const created = await createRezeptHead({ ...kopf, erstellt_von: wer, geaendert_von: wer });
-        rezeptId = created.id;
-      }
-      await replaceZutaten(rezeptId, zutaten);
+      const rezeptId = await writeKetoRecipe(recipe, existing, getWhoAmI());
       showToast(existing ? "Aktualisiert — Zubereitung & Fotos blieben erhalten" : "Übernommen");
       btn.textContent = "✓ Im Kochbuch";
       onImported(rezeptId);

@@ -74,12 +74,26 @@ function renderCards(container, rezepte, onOpen) {
   let filtered = rezepte.filter(r => {
     if (filterTag && !(r.tags || []).includes(filterTag)) return false;
     if (!q) return true;
-    return r.titel.toLowerCase().includes(q) || (r.untertitel || "").toLowerCase().includes(q);
+    // Auch in den Zutaten suchen — das Feld verspricht "Rezept oder Zutat", und die Keto-App
+    // macht es in ihrer eigenen Rezeptliste genauso ("Hack" findet den Auflauf).
+    return r.titel.toLowerCase().includes(q)
+      || (r.untertitel || "").toLowerCase().includes(q)
+      || (r.kochbuch_zutaten || []).some(z => (z.name || "").toLowerCase().includes(q));
   });
 
   filtered = [...filtered].sort((a, b) => {
     if (sortBy === "rating") return (b.bewertung || 0) - (a.bewertung || 0);
-    if (sortBy === "stale") return (a.zuletzt_gekocht || "") < (b.zuletzt_gekocht || "") ? -1 : 1;
+    if (sortBy === "stale") {
+      // Nie Gekochtes zuerst, danach das am längsten Zurückliegende. Der Vergleich MUSS bei
+      // Gleichstand 0 (bzw. ein stabiles Kriterium) liefern: gab er wie zuvor immer -1/1
+      // zurück, war die Sortierung nicht schlüssig und die Karten sprangen bei jedem
+      // Neuzeichnen in einer anderen Reihenfolge herum — die meisten Rezepte haben gar kein
+      // zuletzt_gekocht und landeten damit alle im Gleichstand.
+      const av = a.zuletzt_gekocht || "";
+      const bv = b.zuletzt_gekocht || "";
+      if (av !== bv) return av < bv ? -1 : 1;
+      return (a.titel || "").localeCompare(b.titel || "", "de");
+    }
     return new Date(b.updated_at) - new Date(a.updated_at);
   });
 

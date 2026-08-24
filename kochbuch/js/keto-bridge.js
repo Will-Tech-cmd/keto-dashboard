@@ -5,6 +5,13 @@
 // stattdessen gezielt nur gelesen bzw. ein separater Inbox-Schlüssel beschrieben, den die
 // Keto-App selbst beim nächsten Start abholt (js/store.js, `drainKochbuchInbox`).
 
+import { createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "./api.js";
+// Die Übersetzung Keto-Zutat <-> kochbuch_zutaten steht in der Keto-App, weil sie dort
+// auch der zeilenweise Abgleich braucht. Eine zweite Fassung hier daneben wäre zwei
+// Wahrheiten über dieselben Spalten — und sie würden auseinanderlaufen.
+// rows.js ist reine Umrechnung ohne Nebenwirkungen beim Laden (anders als store.js, siehe oben).
+import { zutatenZuZeilen } from "../../js/rows.js";
+
 const KETO_STATE_KEY = "keto-dashboard-v1";
 const INBOX_KEY = "keto-dashboard-inbox";
 
@@ -16,23 +23,42 @@ function calcNetCarbs100(per100, subtractFiber) {
   return per100.carbs;
 }
 
-/** Nährwerte pro Portion — dieselbe Rechnung wie js/recipes.js:calcPerServing() der Keto-App. */
-export function calcPerServingNutrition(recipe) {
-  const totals = (recipe.ingredients || []).reduce((acc, ing) => {
-    const scale = (ing.grams || 0) / 100;
-    const netCarbs100 = calcNetCarbs100(ing.per100, ing.likelyUsLabel);
+/**
+ * Nährwerte pro Portion aus Kochbuch-Zutatenzeilen (gramm / per100 / likely_us_label) —
+ * dieselbe Rechnung wie js/recipes.js:calcPerServing() der Keto-App.
+ *
+ * Die EINE Stelle, an der diese Zahl entsteht. Vorher rechnete nur der Import aus der
+ * Keto-App; wer im Kochbuch eine Zutat änderte, bekam die alte Zahl weiter angezeigt,
+ * weil sie als Schnappschuss in kochbuch_rezepte.naehrwerte steht und niemand sie
+ * nachzog. Ein gelöschter Speck war dann aus der Liste weg und stand trotzdem noch
+ * in den Kacheln darüber.
+ */
+export function calcPerServingFromZutaten(zutaten, portionen) {
+  const totals = (zutaten || []).reduce((acc, z) => {
+    const scale = (Number(z.gramm) || 0) / 100;
+    const netCarbs100 = calcNetCarbs100(z.per100, z.likely_us_label);
     return {
-      kcal: acc.kcal + (ing.per100?.kcal != null ? ing.per100.kcal * scale : 0),
+      kcal: acc.kcal + (z.per100?.kcal != null ? z.per100.kcal * scale : 0),
       netCarbs: acc.netCarbs + (netCarbs100 != null ? netCarbs100 * scale : 0),
-      fat: acc.fat + (ing.per100?.fat != null ? ing.per100.fat * scale : 0),
-      protein: acc.protein + (ing.per100?.protein != null ? ing.per100.protein * scale : 0),
+      fat: acc.fat + (z.per100?.fat != null ? z.per100.fat * scale : 0),
+      protein: acc.protein + (z.per100?.protein != null ? z.per100.protein * scale : 0),
     };
   }, { kcal: 0, netCarbs: 0, fat: 0, protein: 0 });
-  const s = recipe.servings || 1;
+  const s = Number(portionen) || 1;
   return {
     kcal: round1(totals.kcal / s), netCarbs: round1(totals.netCarbs / s),
     fat: round1(totals.fat / s), protein: round1(totals.protein / s),
   };
+}
+
+/** Dasselbe für ein Rezept in der Schreibweise der Keto-App (grams / likelyUsLabel). */
+export function calcPerServingNutrition(recipe) {
+  return calcPerServingFromZutaten(
+    (recipe.ingredients || []).map(i => ({
+      gramm: i.grams, per100: i.per100, likely_us_label: i.likelyUsLabel,
+    })),
+    recipe.servings
+  );
 }
 
 /** Alle Rezepte aus der Keto-App auf diesem Gerät — leer, wenn sie hier nie geöffnet wurde. */
@@ -70,16 +96,42 @@ export function buildImportPayload(ketoRecipe) {
       quelle: "keto-app",
       keto_updated_at: ketoRecipe.updatedAt ? new Date(ketoRecipe.updatedAt).toISOString() : null,
     },
-    zutaten: (ketoRecipe.ingredients || []).map((ing, i) => ({
-      pos: i,
-      abschnitt: null,
-      name: ing.name,
-      gramm: ing.grams ?? null,
-      mengentext: null,
-      per100: ing.per100 || null,
-      likely_us_label: !!ing.likelyUsLabel,
-    })),
+    // rezept_id setzt replaceZutaten() selbst — hier ist sie noch nicht bekannt.
+    //
+    // Und die id der Keto-Zutat bleibt draußen: replaceZutaten() legt hier immer neue
+    // Zeilen an (und räumt die alten danach weg). Käme eine id mit, die der zeilenweise
+    // Abgleich schon einmal geschrieben hat, liefe das Anlegen in einen Schlüsselkonflikt.
+    // Wer welche Zeilen schreibt, entscheidet der Zeilenmodus — siehe keto-sync-import.js.
+    zutaten: zutatenZuZeilen(ketoRecipe, null).map(({ id, ...rest }) => rest),
   };
+}
+
+/**
+ * Schreibt ein Keto-Rezept ins Kochbuch — anlegen oder aktualisieren. Gibt dessen Kochbuch-id
+ * zurück. Geteilt vom automatischen Abgleich (keto-sync-import.js) und vom Knopf "Übernehmen"
+ * (views/import.js), damit beide Wege dieselbe Reihenfolge einhalten:
+ *
+ * erst die Kopfdaten OHNE keto_updated_at, dann die Zutaten, und GANZ ZULETZT der Zeitstempel.
+ * Der ist die Marke "dieses Rezept ist auf dem Stand der Keto-App". Stünde er schon vor den
+ * Zutaten da, hinterließe ein Verbindungsabbruch dazwischen ein Rezept mit leerer oder
+ * veralteter Zutatenliste, das jeder weitere Durchlauf als "schon erledigt" überspringt — es
+ * würde nie wieder repariert.
+ */
+export async function writeKetoRecipe(ketoRecipe, existing, wer) {
+  const { kopf, zutaten } = buildImportPayload(ketoRecipe);
+  const { keto_updated_at, ...kopfOhneStempel } = kopf;
+
+  let rezeptId;
+  if (existing) {
+    await forceUpdateRezeptHead(existing.id, { ...kopfOhneStempel, geaendert_von: wer });
+    rezeptId = existing.id;
+  } else {
+    const created = await createRezeptHead({ ...kopfOhneStempel, erstellt_von: wer, geaendert_von: wer });
+    rezeptId = created.id;
+  }
+  await replaceZutaten(rezeptId, zutaten);
+  await forceUpdateRezeptHead(rezeptId, { keto_updated_at });
+  return rezeptId;
 }
 
 /**

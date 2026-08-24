@@ -1,6 +1,6 @@
 // lists.js — Rendering & Interaktion für den "Listen"-Tab (Einkauf / Favoriten / No-Go /
 // Verlauf) sowie die Auswertungsseite.
-import { Store, dateKeyOf } from "./store.js";
+import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { getTargetsForDate } from "./profiles.js";
 import { parseServingGrams } from "./keto.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
@@ -239,7 +239,11 @@ function nutriOf(item, listName) {
     // stünde sonst weiter auf grau, obwohl die Kacheln daneben echte Werte zeigen.
     const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds);
     item.grade = grade;
-    Store.updateListEntry(listName, item.barcode, { nutri100: snapshot, grade });
+    // backfillListEntry statt updateListEntry: hier wird nur nachgetragen, was ohnehin auf
+    // diesem Gerät liegt — das ist keine Änderung des Menschen. Mit einem frischen updatedAt
+    // würde schon das bloße Öffnen der Liste diese Fassung zur "neueren" machen und beim
+    // nächsten Abgleich eine echte Korrektur vom anderen Handy überschreiben.
+    Store.backfillListEntry(listName, item.barcode, { nutri100: snapshot, grade });
   }
   return snapshot;
 }
@@ -539,8 +543,9 @@ function renderEvaluation(body, goToTab) {
   const profile = Store.getActiveProfile();
 
   const days = [];
+  const heute = dateKeyOf(Date.now());
   for (let i = 29; i >= 0; i--) {
-    const key = dateKeyOf(Date.now() - i * 86400000);
+    const key = shiftDateKey(heute, -i);
     const entries = getConsumptionForDate(profile.id, key);
     // Jeder Tag wird gegen die Zielwerte bewertet, die an diesem Tag galten.
     days.push({
