@@ -3,6 +3,8 @@ import { Store, istZeilenModus, wechsleModus } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
+import { hatZugang as hatOffZugang, benutzername as offBenutzer, setzeZugang as setzeOffZugang,
+         loescheZugang as loescheOffZugang, REGISTRIER_URL } from "../off-beitrag.js";
 import { showToast, esc, applyDesignTheme, bindBackClose, keepActionsInView, getAppVersion } from "../ui.js";
 import { isSyncEnabled, needsReauth, enableSync, disableSync, syncNow, getLastSyncAt, SyncAuthError } from "../sync.js";
 
@@ -216,6 +218,12 @@ function renderExtraGroups(container, onProfileChanged) {
         sub: getApiKey() ? "Schlüssel hinterlegt · KI-Knöpfe beim Rezept-Import"
           : "aus · kein Gemini-Schlüssel",
       },
+      {
+        key: "off",
+        title: "Open Food Facts",
+        sub: hatOffZugang() ? `angemeldet als ${offBenutzer()} · eigene Produkte teilbar`
+          : "aus · eigene Produkte bleiben auf diesem Gerät",
+      },
     ];
   };
 
@@ -292,12 +300,34 @@ function openExtraSheet(key, neuZeichnen) {
       </div>
       <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
     `,
+    off: `
+      <p class="hint" style="margin-top:0">Wenn du ein Produkt selbst erfasst, weil die Datenbank es nicht kannte, kannst du es zurückgeben. Bei den geprüften Produkten dieses Haushalts kannte Open Food Facts fünf von zwölf gar nicht, und bei fünf weiteren fehlten genau die Nährwerte, die hier abgetippt wurden.</p>
+      <p class="hint"><strong>Ein Beitrag ist öffentlich und dauerhaft</strong> und trägt deinen Kontonamen. Er passiert nie von selbst: Es gibt einen Knopf am einzelnen Produkt, und der zeigt vorher, was gesendet wird.</p>
+      <p class="hint">Konto anlegen (kostenlos): <a href="${REGISTRIER_URL}" target="_blank" rel="noopener noreferrer">de.openfoodfacts.org</a></p>
+      ${hatOffZugang() ? `
+        <p class="hint">Angemeldet als <strong>${esc(offBenutzer())}</strong>.</p>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="btn ghost" id="offAbmelden" style="color:var(--red-fg)">Zugang entfernen</button>
+        </div>
+      ` : `
+        <label for="offUser">Benutzername</label>
+        <input type="text" id="offUser" autocomplete="username" placeholder="dein Open-Food-Facts-Name">
+        <label for="offPass">Passwort</label>
+        <input type="password" id="offPass" autocomplete="current-password">
+        <p class="hint" id="offStatus" style="margin-top:0;min-height:1.2em"></p>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="btn secondary" id="offSpeichern">Speichern</button>
+        </div>
+      `}
+      <p class="hint" style="margin-top:10px">Benutzername und Passwort bleiben ausschließlich auf diesem Gerät — nicht im Backup, nicht im Abgleich.</p>
+    `,
   }[key];
 
   const titel = {
     sync: "Online-Synchronisierung",
     speicher: "Neuer Speicher (Test)",
     ki: "KI-Erkennung",
+    off: "Open Food Facts",
   }[key];
 
   overlay.innerHTML = `
@@ -319,6 +349,7 @@ function openExtraSheet(key, neuZeichnen) {
   const fertigUndNeu = () => { close(); neuZeichnen(); };
   if (key === "sync" || key === "speicher") wireSyncCard(overlay, fertigUndNeu);
   if (key === "ki") wireAiKey(overlay);
+  if (key === "off") wireOffZugang(overlay, fertigUndNeu);
 
   keepActionsInView(overlay);
 }
@@ -385,6 +416,32 @@ function wireSyncCard(wurzel, neuZeichnen) {
       knopf.disabled = false;
       zeilenStatus.textContent = err?.message || "Umstellen fehlgeschlagen.";
     }
+  });
+}
+
+/**
+ * Zugangsdaten für Open Food Facts. Bewusst ohne Prüfung beim Speichern: die Schnittstelle
+ * kennt keinen reinen Anmeldeaufruf, man merkt es erst beim ersten Beitrag. Lieber ehrlich
+ * beim Senden scheitern als hier ein „geprüft" behaupten, das keines ist.
+ */
+function wireOffZugang(wurzel, neuZeichnen) {
+  wurzel.querySelector("#offSpeichern")?.addEventListener("click", () => {
+    const benutzer = wurzel.querySelector("#offUser").value.trim();
+    const passwort = wurzel.querySelector("#offPass").value;
+    const status = wurzel.querySelector("#offStatus");
+    if (!benutzer || !passwort) {
+      status.textContent = "Bitte beides eingeben.";
+      return;
+    }
+    setzeOffZugang(benutzer, passwort);
+    showToast("Zugang gespeichert");
+    neuZeichnen();
+  });
+
+  wurzel.querySelector("#offAbmelden")?.addEventListener("click", () => {
+    loescheOffZugang();
+    showToast("Zugang entfernt");
+    neuZeichnen();
   });
 }
 

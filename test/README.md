@@ -40,6 +40,7 @@ App unter Profil → „Datei sichern".
 | `zeilenmodus.test.mjs` | die Verdrahtung: store.js auf der Zeilen-Ablage, in 15 Abschnitten |
 | `zutaten.test.mjs` | Rezeptzutaten wandern mit dem Rezept — in beide Richtungen |
 | `teilen.test.mjs` | eine Mahlzeit ans andere Profil weiterreichen — Kopie, kein Neurechnen |
+| `off-beitrag.test.mjs` | Beitrag an Open Food Facts: was nie gesendet werden darf, und wie die Antwort gedeutet wird |
 
 `supabase-fake.mjs` ist kein Test, sondern der Nachbau: Upsert mit `on_conflict`, PATCH mit
 Filtern, Zeiger über `updated_at` — und der Wächter-Trigger, der eine veraltete Fassung

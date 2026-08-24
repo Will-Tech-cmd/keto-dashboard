@@ -663,7 +663,7 @@ function wireIngredientSearch(container, recipeId) {
     const offline = [...own, ...local];
     renderIngSearchResults(offline, false);
 
-    const online = await searchProductsByName(term);
+    const { produkte: online } = await searchProductsByName(term);
     if (seq !== requestSeq) return;
     const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
     const combined = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
@@ -1068,7 +1068,7 @@ function renderReview(container, recipeId) {
           const own = searchOwnProducts(term);
           const local = searchLocalFoods(term).filter(p => !own.some(o => o.name.toLowerCase() === p.name.toLowerCase()));
           const offline = [...own, ...local];
-          const online = await searchProductsByName(term);
+          const { produkte: online } = await searchProductsByName(term);
           const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
           const items = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
           rResults.innerHTML = items.map((p, i) => `

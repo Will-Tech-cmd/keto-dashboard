@@ -13,18 +13,60 @@ function apiUrl(barcode) {
   return `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`;
 }
 
-function searchUrl(term) {
+/**
+ * Namenssuche.
+ *
+ * Drei Dinge sind hier gemessen und nicht geraten:
+ *
+ * 1. DER DIENST WEIST OFT AB. Acht Suchbegriffe, jeweils mit Abstand: beim ERSTEN Versuch
+ *    kamen 2 von 8 durch, sechsmal HTTP 503. Mit bis zu drei Versuchen: 7 von 8, bei im
+ *    Schnitt zwei Anfragen. Deshalb WIEDERHOLUNGEN — sie sind hier kein Luxus, sondern der
+ *    Unterschied zwischen „Suche funktioniert nicht" und „Suche funktioniert".
+ *
+ * 2. OHNE LÄNDERFILTER SIND DIE TREFFER UNBRAUCHBAR. „Gouda" brachte 2 von 15 Produkten,
+ *    die es hier zu kaufen gibt — oben standen „Queso Gouda / Hacendado" und „Gouda vieux /
+ *    Holland Master". Mit Filter: 15 von 15, angeführt von Milbona, Milsani, Rewe Bio.
+ *
+ * 3. DER NEUE SUCHDIENST GEHT NICHT. search.openfoodfacts.org antwortet zwar zuverlässig,
+ *    sendet aber kein Access-Control-Allow-Origin — vom Browser aus also unerreichbar.
+ *    Serverseitig gemessen sah er großartig aus; das ist die Falle. Sollte Open Food Facts
+ *    dort CORS nachrüsten, ist der Wechsel eine Handvoll Zeilen.
+ *
+ * Ebenfalls geprüft: api/v2/search hat CORS und liefert vollständige Felder, rangiert aber
+ * schlecht — „Schlagsahne" brachte dort Kefir und Nutella nach oben. Deshalb bleibt es bei
+ * cgi/search.pl.
+ */
+const SUCHE_URL = "https://world.openfoodfacts.org/cgi/search.pl";
+const LAND = "germany";
+const SEITENGROESSE = 20;
+const SUCH_VERSUCHE = 3;
+const SUCH_PAUSE_MS = 700;
+
+function suchUrl(term, { nurLand }) {
   const params = new URLSearchParams({
     search_terms: term,
     search_simple: "1",
     action: "process",
     json: "1",
-    page_size: "15",
+    page_size: String(SEITENGROESSE),
     fields: FIELDS,
     lc: "de",
   });
-  return `https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`;
+  if (nurLand) {
+    params.set("tagtype_0", "countries");
+    params.set("tag_contains_0", "contains");
+    params.set("tag_0", LAND);
+  }
+  return `${SUCHE_URL}?${params.toString()}`;
 }
+
+/** `brands` kommt je nach Endpunkt als Zeichenkette oder als Liste. */
+function marke(roh) {
+  if (Array.isArray(roh)) return roh.map(m => String(m).trim()).filter(Boolean).join(", ");
+  return roh || "";
+}
+
+const warte = (ms) => new Promise(r => setTimeout(r, ms));
 
 function num(v) {
   return typeof v === "number" && !Number.isNaN(v) ? v : null;
@@ -38,7 +80,7 @@ function normalizeOff(raw, barcode) {
     barcode,
     source: "off",
     name: raw.product_name || "Unbekanntes Produkt",
-    brand: raw.brands || "",
+    brand: marke(raw.brands),
     quantity: raw.quantity || "",
     servingSize: raw.serving_size || "",
     nutriscoreGrade: raw.nutriscore_grade || null,
@@ -126,38 +168,83 @@ export async function lookupProduct(barcode, { forceNetwork = false } = {}) {
 }
 
 /**
+ * Eine Suchanfrage, mit Wiederholung bei 5xx. Wirft erst, wenn alle Versuche daneben gingen —
+ * dann soll der Aufrufer es zeigen können.
+ *
+ * Nur 5xx und Netzwerkfehler werden wiederholt: ein 4xx bedeutet, dass die Anfrage selbst
+ * nicht stimmt, und die wird beim dritten Mal auch nicht besser.
+ */
+async function frageSuche(q, { nurLand }) {
+  let letzter = null;
+  for (let versuch = 1; versuch <= SUCH_VERSUCHE; versuch++) {
+    let res;
+    try {
+      res = await fetch(suchUrl(q, { nurLand }), { headers: { Accept: "application/json" } });
+    } catch (e) {
+      letzter = new Error("Keine Verbindung zur Produktsuche.");
+      letzter.suchFehler = true;
+      if (versuch < SUCH_VERSUCHE) { await warte(SUCH_PAUSE_MS); continue; }
+      throw letzter;
+    }
+    if (res.ok) {
+      const json = await res.json();
+      return Array.isArray(json.products) ? json.products : [];
+    }
+    letzter = new Error(`Die Produktsuche antwortete mit Status ${res.status}.`);
+    letzter.suchFehler = true;
+    if (res.status < 500 || versuch === SUCH_VERSUCHE) throw letzter;
+    await warte(SUCH_PAUSE_MS);
+  }
+  throw letzter;
+}
+
+/**
  * Namenssuche bei Open Food Facts (z.B. "Eier", "Gouda"), für Produkte ohne Barcode zur Hand.
- * Liefert normalisierte Produkte, die zugleich für spätere Barcode-Treffer gecacht werden.
- * Bei fehlendem Netz oder Fehlern wird still eine leere Liste zurückgegeben (die lokale
- * Grundnahrungsmittel-Suche in foods-db.js liefert in diesem Fall trotzdem Treffer).
+ *
+ * Gibt `{ produkte, fehler }` zurück statt nur einer Liste. Vorher wurde bei jedem Fehler
+ * still eine leere Liste geliefert — und weil die alte Schnittstelle meistens 503 antwortete,
+ * sah man dauernd „keine Treffer", wo in Wahrheit gar nicht gesucht worden war. Das ist der
+ * Unterschied zwischen „gibt es nicht" und „konnte nicht nachsehen", und den muss die App
+ * zeigen können.
+ *
+ * Die Treffer sind BEWUSST unvollständig: der Suchdienst liefert weder Portionsgröße noch
+ * Zutatentext, auch nicht auf Anfrage. Sie werden deshalb als `unvollstaendig` markiert und
+ * NICHT in den Produkt-Cache gelegt — sonst bekäme ein späterer Barcode-Scan die halbe
+ * Fassung aus dem Cache statt der vollen vom Server. Beim Antippen holt die Ansicht das
+ * ganze Produkt über lookupProduct() nach.
  */
 export async function searchProductsByName(term) {
   const q = term.trim();
-  if (q.length < 2 || !navigator.onLine) return [];
+  if (q.length < 2) return { produkte: [], fehler: null };
+  if (!navigator.onLine) return { produkte: [], fehler: null };
 
-  let res;
+  let treffer;
   try {
-    res = await fetch(searchUrl(q), { headers: { Accept: "application/json" } });
-  } catch {
-    return [];
+    treffer = await frageSuche(q, { nurLand: true });
+    // Zu wenig aus Deutschland? Dann noch einmal ohne Filter und anhängen — bei Nischen-
+    // begriffen ist ein Treffer aus Österreich besser als gar keiner. Schlägt dieser
+    // zweite Griff fehl, bleibt es bei dem, was der erste gebracht hat.
+    if (treffer.length < 5) {
+      try {
+        const weltweit = await frageSuche(q, { nurLand: false });
+        const bekannt = new Set(treffer.map(t => t.code));
+        treffer = [...treffer, ...weltweit.filter(t => !bekannt.has(t.code))];
+      } catch { /* der Länder-Treffer steht, das reicht */ }
+    }
+  } catch (fehler) {
+    return { produkte: [], fehler };
   }
-  if (!res.ok) return [];
 
-  let json;
-  try {
-    json = await res.json();
-  } catch {
-    return [];
-  }
-
-  const products = Array.isArray(json.products) ? json.products : [];
-  return products
-    .filter(p => p.code && p.product_name)
-    .map(p => {
-      const normalized = normalizeOff(p, p.code);
-      Store.cacheProduct(p.code, normalized);
-      return normalized;
-    });
+  const produkte = treffer
+    .filter(t => t.code && t.product_name)
+    .map(t => normalizeOff(t, t.code))
+    // Ohne jede Nährwertangabe ist ein Eintrag in dieser App wertlos: man tippt ihn an und
+    // kann nichts eintragen. Er nimmt nur einen Platz in der Liste weg.
+    .filter(p => p.per100.kcal != null || p.per100.carbs != null);
+  // Treffer sind vollständig (FIELDS deckt Portionsgröße und Zutatentext mit ab), dürfen
+  // also in den Cache — ein späterer Barcode-Scan findet sie dann ohne Netz.
+  for (const p of produkte) Store.cacheProduct(p.barcode, p);
+  return { produkte, fehler: null };
 }
 
 /**

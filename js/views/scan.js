@@ -2,6 +2,7 @@
 import { Store } from "../store.js";
 import { getTargetsForDate } from "../profiles.js";
 import { lookupProduct, searchProductsByName, searchOwnProducts, newOwnBarcode, nutriSnapshot } from "../off.js";
+import { hatZugang, pruefeBeitrag, vorschau, sendeBeitrag, produktUrl, REGISTRIER_URL } from "../off-beitrag.js";
 import { ownProductFormHtml, wireOwnProductForm } from "../product-editor.js";
 import { searchLocalFoods } from "../foods-db.js";
 import { evaluateProduct, GRADE_LABEL } from "../keto.js";
@@ -10,7 +11,7 @@ import {
   openQuantityModal, suggestMeal, mealShort,
   getActiveDateKey, getConsumptionForDate, sumConsumption,
 } from "../consumption.js";
-import { showToast, esc, nutriTilesHtml, gradeDotHtml } from "../ui.js";
+import { showToast, esc, nutriTilesHtml, gradeDotHtml, bindBackClose } from "../ui.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -179,11 +180,20 @@ function wireSearchForm(container) {
     const offline = [...own, ...local];
     renderSearchResults(container, resultsEl, offline, false, term);
 
-    const online = await searchProductsByName(term);
+    const { produkte: online, fehler } = await searchProductsByName(term);
     if (seq !== requestSeq) return; // Nutzer hat weitergetippt, veraltete Antwort verwerfen
-    const seenNames = new Set(offline.map(p => p.name.toLowerCase()));
-    const combined = [...offline, ...online.filter(p => !seenNames.has(p.name.toLowerCase()))];
-    renderSearchResults(container, resultsEl, combined, true, term);
+    // Nicht nur nach Namen entdoppeln: zwei verschiedene Produkte heißen oft gleich
+    // („Schlagsahne"), und dann verschwand der zweite. Der Barcode entscheidet, der Name
+    // nur gegen die eigenen und die eingebauten Einträge.
+    const bekannteNamen = new Set(offline.map(p => p.name.toLowerCase()));
+    const bekannteCodes = new Set(offline.map(p => p.barcode));
+    const gesehen = new Set();
+    const neue = online.filter(p => {
+      if (bekannteCodes.has(p.barcode) || gesehen.has(p.barcode)) return false;
+      gesehen.add(p.barcode);
+      return !bekannteNamen.has(p.name.toLowerCase());
+    });
+    renderSearchResults(container, resultsEl, [...offline, ...neue], true, term, fehler);
   };
 
   input.addEventListener("input", () => {
@@ -195,10 +205,17 @@ function wireSearchForm(container) {
 const SOURCE_ICON = { local: "🥑", own: "📝" };
 const SOURCE_LABEL = { local: "Grundnahrungsmittel", own: "Eigenes Produkt" };
 
-function renderSearchResults(container, resultsEl, items, isFinal, term) {
+function renderSearchResults(container, resultsEl, items, isFinal, term, fehler = null) {
+  // „Konnte nicht nachsehen" ist etwas anderes als „gibt es nicht" — und weil die alte
+  // Schnittstelle meistens abwies, stand hier dauernd fälschlich „keine Treffer".
+  const fehlerZeile = fehler
+    ? `<p class="hint" style="color:var(--red-fg)">Open Food Facts antwortet gerade nicht — angezeigt wird, was auf diesem Gerät liegt.</p>`
+    : "";
+
   if (items.length === 0) {
     resultsEl.innerHTML = isFinal
       ? `
+        ${fehlerZeile}
         <p class="hint">Keine Treffer für „${esc(term)}".</p>
         <button class="btn secondary" id="addOwnFromSearchBtn" style="margin-top:6px">➕ „${esc(term)}" als eigenes Produkt anlegen</button>
       `
@@ -208,12 +225,16 @@ function renderSearchResults(container, resultsEl, items, isFinal, term) {
     });
     return;
   }
-  resultsEl.innerHTML = items.map((p, i) => `
+
+  // Name oben, Marke darunter. Bewusst keine Nährwerte in der Zeile: die Liste ist zum
+  // Wiedererkennen da, und „Schlagsahne 292 kcal" neben „Schlagsahne 293 kcal" hilft beim
+  // Wiedererkennen nicht — der Name und die Marke tun es.
+  resultsEl.innerHTML = fehlerZeile + items.map((p, i) => `
     <div class="list-item" data-idx="${i}" style="cursor:pointer">
       <span style="flex-shrink:0">${SOURCE_ICON[p.source] || "🏷️"}</span>
       <div class="info">
         <div class="name">${esc(p.name)}</div>
-        <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
+        <div class="meta">${p.brand ? esc(p.brand) : SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
       </div>
     </div>
   `).join("") + (!isFinal ? `<p class="hint">Suche weitere Online-Treffer …</p>` : "");
@@ -241,6 +262,7 @@ function startOwnProductFromSearch(container, term) {
 function handleSearchSelect(container, product) {
   const searchWrap = container.querySelector("#searchFormWrap");
   if (searchWrap) searchWrap.style.display = "none";
+
   Store.pushRecent(product.barcode);
   logHistory(product);
   renderResult(container, product);
@@ -416,6 +438,7 @@ function renderResult(container, product) {
       ${hintsHtml}
       ${fiberToggleHtml}
       <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
+      ${beitragsKnopfHtml(product)}
       <div class="klar-action-row">
         <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">⭐ Favorit</button>
         <button class="klar-action-btn" id="cartBtn">🛒 Einkauf</button>
@@ -440,6 +463,10 @@ function wireResultActions(container, resultWrap, product, evalResult) {
     Store.setFiberOverride(product.barcode, e.target.checked);
     renderResult(container, product);
   });
+  resultWrap.querySelector("#beitragBtn")?.addEventListener("click", () => {
+    openBeitragSheet(product, () => renderResult(container, product));
+  });
+
   resultWrap.querySelector("#correctBtn").addEventListener("click", () => {
     resultWrap.innerHTML = ownProductFormHtml(product.barcode, product);
     wireOwnProductForm(resultWrap, product.barcode, {
@@ -501,4 +528,87 @@ function afterOwnProductSaved(container, product) {
 
 function fmt(v) {
   return v == null ? "–" : Math.round(v * 10) / 10;
+}
+
+
+// ---------------------------------------------------------------------------
+// Zurückgeben an Open Food Facts
+//
+// Nur für selbst erfasste Produkte mit echtem Barcode: genau die sind der Fall, in dem man
+// die Zahlen vom Etikett abgetippt hat, weil die Datenbank sie nicht hatte. Alles andere
+// stammt ohnehin von dort.
+// ---------------------------------------------------------------------------
+
+/** Der Knopf erscheint nur, wo ein Beitrag überhaupt Sinn ergibt. */
+function beitragsKnopfHtml(product) {
+  if (product.source !== "own") return "";
+  if (!pruefeBeitrag(product).moeglich) return "";
+  return `
+    <button type="button" class="klar-action-btn" id="beitragBtn" style="width:100%;margin-top:8px">
+      🌍 Zu Open Food Facts beitragen
+    </button>
+  `;
+}
+
+/**
+ * Zeigt vor dem Senden, was genau gesendet wird. Ein Beitrag ist öffentlich, dauerhaft und
+ * trägt den Namen des Kontos — das gehört gesehen, nicht erahnt.
+ */
+function openBeitragSheet(product, onDone) {
+  const overlay = document.createElement("div");
+  overlay.className = "klar-sheet-overlay";
+  const zeilen = vorschau(product);
+  const angemeldet = hatZugang();
+
+  overlay.innerHTML = `
+    <div class="klar-sheet">
+      <div class="klar-sheet-handle"></div>
+      <div class="klar-sheet-title">Zu Open Food Facts beitragen</div>
+      <div class="klar-sheet-sub">Das wird gesendet — öffentlich und dauerhaft, unter deinem Kontonamen.</div>
+
+      <div class="klar-list-card" style="margin-top:12px">
+        ${zeilen.map(z => `
+          <div class="list-item">
+            <div class="info">
+              <div class="meta">${esc(z.was)}</div>
+              <div class="name" style="font-size:.95rem">${esc(String(z.wert))}</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      ${angemeldet ? "" : `
+        <p class="hint" style="margin-top:14px">Dafür brauchst du ein Konto bei Open Food Facts — kostenlos, und du kannst es im Profil hinterlegen.
+        <a href="${REGISTRIER_URL}" target="_blank" rel="noopener noreferrer">Konto anlegen</a></p>
+      `}
+
+      <p class="hint" id="beitragStatus" style="margin-top:10px;min-height:1.2em"></p>
+
+      <div class="btn-row" style="margin-top:10px">
+        <button type="button" class="btn secondary" id="beitragAbbrechen">Abbrechen</button>
+        <button type="button" class="btn" id="beitragSenden" ${angemeldet ? "" : "disabled"}>Senden</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#beitragAbbrechen").addEventListener("click", close);
+
+  const status = overlay.querySelector("#beitragStatus");
+  overlay.querySelector("#beitragSenden").addEventListener("click", async (e) => {
+    e.currentTarget.disabled = true;
+    status.textContent = "Wird gesendet …";
+    try {
+      const { barcode } = await sendeBeitrag(product);
+      close();
+      showToast("Danke — der Beitrag ist bei Open Food Facts");
+      window.open(produktUrl(barcode), "_blank", "noopener");
+      onDone?.();
+    } catch (err) {
+      e.currentTarget.disabled = false;
+      status.textContent = err.message || "Der Beitrag konnte nicht gesendet werden.";
+    }
+  });
 }
