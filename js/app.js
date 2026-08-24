@@ -1,5 +1,5 @@
 // app.js — Tab-Router, Profil-Umschalter, Init, Design/Theme, Klar-Eintragen-Sheet.
-import { Store, onPersistError } from "./store.js";
+import { Store, onPersistError, bereit, onStoreChange, istZeilenModus } from "./store.js";
 import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan, openScanSearch } from "./views/scan.js";
 import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
@@ -329,6 +329,21 @@ function initialTabFromUrl() {
   if (location.search) history.replaceState(null, "", location.pathname);
   return tab && RENDERERS[tab] ? tab : "start";
 }
+
+// Kommt über den Abgleich etwas Neues herein, den sichtbaren Reiter auffrischen — sonst
+// sieht man die Eingabe des anderen Geräts erst nach einem Neustart. Nur im Zeilenmodus:
+// dort wird der Zustand ausschließlich dann neu geladen, wenn wirklich etwas ankam. Der
+// alte Weg meldet auch bei einem unveränderten Serverstand "remote" und zeichnete die
+// Liste dann alle 60 Sekunden ohne Anlass neu.
+onStoreChange((origin) => {
+  if (origin === "remote" && istZeilenModus()) refreshCurrentTabIfSafe();
+});
+
+// Den Speicher hochfahren, bevor irgendetwas gelesen wird. Im bisherigen Klumpenmodus ist
+// das sofort durch; im Zeilenmodus wird hier aus IndexedDB geladen (und beim allerersten Mal
+// umgezogen). Das ist die EINZIGE asynchrone Stelle des Starts — danach liest die App den
+// Zustand wieder synchron, genau wie vorher.
+await bereit();
 
 // Vom Kochbuch (kochbuch/) auf die Einkaufsliste übernommene Zutaten abholen — bewusst vor dem
 // ersten Rendern, damit die Einkaufsliste beim allerersten Blick schon vollständig ist.

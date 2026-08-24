@@ -108,7 +108,7 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
 ## Daten, Abgleich und Datenschutz
 
 **Das Keto-Dashboard selbst:** standardmäßig kein Server, kein Konto — alles liegt im
-`localStorage` des Browsers. Die Online-Synchronisierung (siehe unten) ist eine bewusste,
+Browser (im `localStorage`, mit dem neuen Speicher in IndexedDB). Die Online-Synchronisierung (siehe unten) ist eine bewusste,
 abschaltbare Ausnahme davon, genau wie das Kochbuch.
 
 - **Export/Import/Teilen** im Profil-Tab schreibt bzw. liest eine JSON-Datei. Der
@@ -140,6 +140,24 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   Abgleich sie nicht automatisch als "dasselbe" Profil — nach dem ersten Sync stehen deshalb
   gegebenenfalls vier Profil-Reiter da. Ab dem dritten Profil erscheint neben jedem
   nicht-aktiven Profil ein ✕ zum Aufräumen.
+- **Neuer Speicher (Profil-Tab, standardmäßig aus).** Der bisherige Weg legt den kompletten
+  Zustand als *ein* JSON ab und gleicht ihn auch als Ganzes ab — die Zusammenführung muss
+  deshalb im Client nachgebaut werden, und genau dort steckten die Datenverluste. Der neue
+  Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln in IndexedDB ab und
+  gleicht sie einzeln ab; die Zusammenführung macht die Datenbank. Was auf dem Server
+  gelöscht wurde, kommt als Zeile mit gesetztem `geloescht_am` — die `tombstones` im Client
+  entfallen damit ersatzlos. Ein Trigger verwirft Schreibvorgänge, die älter sind als der
+  gespeicherte Stand: ein Gerät, das eine Woche offline war, kann keine neuere Änderung mehr
+  überbügeln.
+
+  Der Schalter wirkt in beide Richtungen und nimmt den aktuellen Stand jeweils mit. **Er
+  gehört auf alle Geräte eines Haushalts:** solange eines noch den alten Weg benutzt, sehen
+  die beiden voneinander nichts Neues mehr — verloren geht dabei nichts, jedes Gerät behält
+  seinen vollständigen Stand, und sobald beide umgestellt sind, treffen sie sich wieder.
+
+  Nicht abgeglichen werden Verlauf, Produkt-Cache, „zuletzt gescannt" und das aktive Profil.
+  Die bleiben absichtlich auf dem Gerät.
+
 - Ein **Gemini-API-Schlüssel** (falls hinterlegt) liegt unter einem eigenen Speicherschlüssel
   und wird weder exportiert noch geteilt noch synchronisiert.
 - Nach außen gehen nur: Anfragen an Open Food Facts beim Suchen/Scannen, nur wenn ein
@@ -177,7 +195,7 @@ css/app.css             sämtliche Styles, Farb-Tokens für hell/dunkel
 
 js/
   app.js                Einstieg, Tab-Navigation, Eintragen-Sheet, SW-Registrierung
-  store.js              localStorage-Schicht, Export/Import, Zusammenführen
+  store.js              Zustand im Speicher, Speicherweg, Export/Import, Zusammenführen
   profiles.js           Zielwertberechnung (Mifflin-St Jeor / Katch-McArdle)
   keto.js               Netto-KH, Ampel, Zutatenwarnungen, Plausibilität
   off.js                Open Food Facts, Normalisierung, Cache, eigene Produkte
@@ -189,6 +207,14 @@ js/
   analysis.js           Textbericht für die KI-Analyse
   ai.js                 optionale Gemini-Anbindung
   sync.js               optionale Online-Synchronisierung über Supabase (Profil-Tab)
+  modus.js              Schalter zwischen altem und neuem Speicherweg (Standard: alt)
+  ablage.js             der neue Speicherweg aus Sicht von store.js (Vergleich → Zeilen)
+  db.js                 IndexedDB: eine Zeile je Mahlzeit/Rezept/Eintrag, Outbox, Zeiger
+  entities.js           Zustand ⇄ flache Listen je Datenart
+  rows.js               Übersetzung App-Schreibweise ⇄ Server-Spalten
+  umzug.js              einmaliger Umzug vom JSON-Klumpen in die Zeilen
+  supabase.js           Sitzung, Anmeldung, Anfragen (von sync.js und sync2.js geteilt)
+  sync2.js              zeilenweiser Abgleich: Upsert je Zeile, Pull je Datenart
   scanner.js            Kamera und Barcode-Erkennung
   product-editor.js     gemeinsames Formular „Produkt anlegen / Werte korrigieren"
   ui.js                 geteilte Helfer: Dialoge, Snackbar, Tastaturabstand, Theme

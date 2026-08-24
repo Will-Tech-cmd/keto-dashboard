@@ -208,7 +208,7 @@ export async function outboxEntfernen(nummern) {
 export function fasseZusammen(eintraege) {
   const letzte = new Map();
   for (const e of [...eintraege].sort((a, b) => a.nr - b.nr)) {
-    letzte.set(`${e.entitaet} ${e.schluessel}`, e);
+    letzte.set(`${e.entitaet}\u0000${e.schluessel}`, e);
   }
   const behalten = new Set([...letzte.values()].map(e => e.nr));
   return {

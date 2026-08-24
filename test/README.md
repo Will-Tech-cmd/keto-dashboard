@@ -37,6 +37,7 @@ App unter Profil → „Datei sichern".
 | `rows.test.mjs` | Zustand → Zeilen → Server-Schreibweise → zurück, verlustfrei |
 | `sync2.test.mjs` | Abgleich in zwölf Szenarien gegen einen PostgREST-Nachbau |
 | `umzug.test.mjs` | der ganze Weg: alter Klumpen → IndexedDB → Server → zweites Gerät |
+| `zeilenmodus.test.mjs` | die Verdrahtung: store.js auf der Zeilen-Ablage, in 15 Abschnitten |
 
 `supabase-fake.mjs` ist kein Test, sondern der Nachbau: Upsert mit `on_conflict`, PATCH mit
 Filtern, Zeiger über `updated_at` — und der Wächter-Trigger, der eine veraltete Fassung

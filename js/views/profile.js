@@ -1,5 +1,5 @@
 // views/profile.js — Profil-Tab: Körperdaten, Zielwert-Konfiguration, Export/Import.
-import { Store } from "../store.js";
+import { Store, istZeilenModus, wechsleModus } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
@@ -17,6 +17,7 @@ export function renderProfile(container, onProfileChanged) {
   const syncOn = isSyncEnabled();
   const syncReauth = needsReauth();
   const syncLastAt = getLastSyncAt();
+  const zeilen = istZeilenModus();
 
   container.innerHTML = `
     <h1 class="section-title">Profil</h1>
@@ -87,6 +88,17 @@ export function renderProfile(container, onProfileChanged) {
           ${syncReauth ? `<button class="btn ghost" id="syncOffBtn" style="color:var(--red-fg)">Deaktivieren</button>` : ""}
         </div>
       `}
+    </div>
+
+    <div class="card">
+      <h2>Neuer Speicher (Test)</h2>
+      <p class="hint" style="margin-top:0">Der neue Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln ab statt alles zusammen in einem Block, und gleicht auch einzeln ab. Damit kann eine Änderung auf einem Gerät keine auf dem anderen mehr überschreiben — genau das war die Ursache der bisherigen Datenverluste.</p>
+      <p class="hint">Zum Ausprobieren gedacht. Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; verloren geht dabei nichts. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
+      <p class="hint">Status: ${zeilen ? "✅ neuer Speicher aktiv" : "bisheriger Speicher"}</p>
+      <p class="hint" id="zeilenStatus" style="margin-top:0;min-height:1.2em"></p>
+      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+        <button class="btn secondary" id="zeilenBtn">${zeilen ? "Zurück auf den bisherigen Speicher" : "Neuen Speicher einschalten"}</button>
+      </div>
     </div>
 
     <div class="card">
@@ -259,6 +271,27 @@ function wireSyncCard(container, onProfileChanged) {
     disableSync();
     showToast("Synchronisierung deaktiviert");
     renderProfile(container, onProfileChanged);
+  });
+
+  // Speicherweg umschalten. Danach wird neu geladen: der laufende Zustand hängt an
+  // Modulvariablen in store.js, die sich nicht mittendrin umstellen lassen.
+  container.querySelector("#zeilenBtn")?.addEventListener("click", async (e) => {
+    const an = !istZeilenModus();
+    const frage = an
+      ? "Auf den neuen Speicher umstellen? Der aktuelle Stand wird übernommen, die App lädt danach neu."
+      : "Zurück auf den bisherigen Speicher? Der aktuelle Stand wird übernommen, die App lädt danach neu.";
+    if (!confirm(frage)) return;
+    const knopf = e.currentTarget;
+    const zeilenStatus = container.querySelector("#zeilenStatus");
+    knopf.disabled = true;
+    zeilenStatus.textContent = "Wird umgestellt …";
+    try {
+      await wechsleModus(an);
+      location.reload();
+    } catch (err) {
+      knopf.disabled = false;
+      zeilenStatus.textContent = err?.message || "Umstellen fehlgeschlagen.";
+    }
   });
 }
 

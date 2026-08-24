@@ -8,7 +8,15 @@
 // über das Netz statt per Datei-Versand. Der Server hält dafür nur einen einzigen JSON-Blob
 // (Tabelle keto_sync_state, eine Zeile "haushalt") — kein eigenes Datenmodell auf der Server-
 // seite, das mit dem lokalen Schema synchron gehalten werden müsste.
-import { Store, onStoreChange } from "./store.js";
+//
+// Steht der Zeilenmodus an (modus.js), macht diese Datei nichts von alledem mehr: syncNow()
+// reicht dann an sync2.js weiter, das Zeile für Zeile abgleicht und die Zusammenführung dem
+// Server überlässt. Nach außen bleibt alles gleich — app.js und die Profil-Ansicht rufen
+// weiter isSyncEnabled(), syncNow(), enableSync() und getLastSyncAt() und merken nichts davon.
+// Anmeldung, Sitzung und Zugangswort teilen sich beide Wege (derselbe localStorage-Schlüssel).
+import { Store, onStoreChange, istZeilenModus, neuLadenAusAblage } from "./store.js";
+import { abgleichen } from "./sync2.js";
+import { AnmeldeFehler } from "./supabase.js";
 
 const SUPABASE_URL = "https://viedjnpmvnkufoysuxvl.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -56,7 +64,9 @@ export function getLastSyncAt() {
 export async function enableSync(password) {
   await login(password);
   localStorage.setItem(ENABLED_KEY, "true");
-  markDirty(); // der bisherige Stand dieses Geräts muss einmal komplett hoch
+  // Der bisherige Stand dieses Geräts muss einmal komplett hoch. Im Zeilenmodus steht er
+  // dafür schon in der Outbox (der Umzug hat ihn dort hineingelegt).
+  if (!istZeilenModus()) markDirty();
   startAutoPull();
   await syncNow();
 }
@@ -210,6 +220,36 @@ async function syncOnce() {
 }
 
 /**
+ * Ein Durchlauf im Zeilenmodus. sync2.js schreibt direkt in die lokale Ablage und kennt
+ * store.js nicht — deshalb wird der Zustand danach neu eingelesen, damit die offene App den
+ * frischen Stand zeigt statt den von vor dem Abgleich.
+ *
+ * Nur wenn wirklich etwas passiert ist: der Blick alle 60 Sekunden ist der Normalfall und
+ * soll nichts kosten außer der einen Leseanfrage.
+ */
+async function zeilenAbgleich() {
+  let ergebnis;
+  try {
+    ergebnis = await abgleichen();
+  } catch (e) {
+    // Die Profil-Ansicht unterscheidet "Anmeldung abgelaufen" von "Netz weg" über diesen Typ.
+    // sync2.js kommt über supabase.js und wirft dessen eigenen — hier übersetzt, damit die
+    // Ansicht nur eine Sorte kennen muss.
+    if (e instanceof AnmeldeFehler) throw new SyncAuthError(e.message);
+    throw e;
+  }
+  if (!ergebnis) return null; // ein Durchlauf lief schon; der übernimmt
+  localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
+  // Bewusst NICHT auf `gesendet` geprüft: was hochging, kommt im selben Durchlauf beim
+  // Herunterladen wieder mit (sein updated_at liegt jetzt hinter dem Zeiger) und zählt
+  // damit schon in `neu`. `verworfen` dagegen muss extra rein — eine vom Server
+  // abgewiesene Fassung rührt updated_at nicht an und kommt beim Pull nie vorbei.
+  const empfangen = ergebnis.neu || ergebnis.entfernt || ergebnis.verworfen;
+  if (empfangen) await neuLadenAusAblage();
+  return ergebnis;
+}
+
+/**
  * Holt den Server-Stand, mischt ihn lokal ein (wie ein manueller Datei-Import) und schreibt
  * den vereinten Stand zurück, FALLS dieses Gerät etwas beizusteuern hat. Wirft bei
  * fehlender/ungültiger Anmeldung eine SyncAuthError — Aufrufer, die das dem Menschen zeigen
@@ -217,6 +257,7 @@ async function syncOnce() {
  */
 export async function syncNow() {
   if (!isSyncEnabled()) return;
+  if (istZeilenModus()) return zeilenAbgleich();
   if (syncing) { queued = true; return; }
   syncing = true;
   try {
@@ -250,7 +291,9 @@ export function scheduleSync() {
 // alle vier Sekunden endlos im Kreis, ohne dass jemand etwas eingetragen hatte.
 onStoreChange((origin) => {
   if (origin !== "local") return;
-  markDirty();
+  // Im Zeilenmodus ist die Outbox in IndexedDB die Wahrheit darüber, was noch hoch muss —
+  // eine zweite Marke daneben wäre nur eine zweite Gelegenheit, sich zu widersprechen.
+  if (!istZeilenModus()) markDirty();
   scheduleSync();
 });
 

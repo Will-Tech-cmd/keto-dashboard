@@ -1,4 +1,21 @@
-// store.js — zentrale Datenhaltung in localStorage, versioniert.
+// store.js — zentrale Datenhaltung: der Zustand im Arbeitsspeicher, plus der Weg auf die Platte.
+//
+// Zwei Wege, umschaltbar (modus.js), Standard ist der erste:
+//
+//   Klumpen  alles als EIN JSON unter einem localStorage-Schlüssel. Der gewachsene Weg.
+//   Zeilen   jede Datenart einzeln in IndexedDB (ablage.js), Änderungen über eine Outbox
+//            an den zeilenweisen Abgleich (sync2.js).
+//
+// Was sich NICHT ändert: der Zustand liegt in beiden Fällen komplett im Arbeitsspeicher und
+// wird synchron gelesen. Store.get() und alles darunter bleibt Wort für Wort gleich, keine
+// einzige View muss etwas davon wissen. Nur der Start ist im Zeilenmodus asynchron (siehe
+// bereit()) — genau eine Stelle, in app.js.
+
+import { zeilenModus, setzeZeilenModus } from "./modus.js";
+import * as ablage from "./ablage.js";
+import * as db from "./db.js";
+import * as umzug from "./umzug.js";
+import { nurLokales } from "./entities.js";
 
 const KEY = "keto-dashboard-v1";
 const SCHEMA_VERSION = 1;
@@ -195,11 +212,43 @@ let persistTimer = null;
 // sich Empfangen und Senden endlos gegenseitig hoch (siehe sync.js).
 let pendingIsLocal = false;
 
+// Gilt der zeilenweise Speicher? Wird in bereit() festgelegt und danach nicht mehr geändert.
+let zeilen = false;
+
+// Nur für den Zeilenmodus: welche der nicht abgeglichenen Teile (Verlauf, Produkt-Cache,
+// zuletzt gescannt …) seit dem letzten Schreiben angefasst wurden. Die werden auf Zuruf
+// geschrieben statt verglichen — der Produkt-Cache allein ist größer als alles andere
+// zusammen (siehe ablage.js).
+const angefassteLokale = new Set();
+
+// Schreibvorgänge laufen nacheinander. Ohne diese Kette könnten sich zwei Durchläufe
+// überholen und der ältere Stand am Ende gewinnen.
+let schreibLauf = Promise.resolve();
+
 function writeNow() {
   clearTimeout(persistTimer);
   persistTimer = null;
   const origin = pendingIsLocal ? "local" : "remote";
   pendingIsLocal = false;
+  const felder = [...angefassteLokale];
+  angefassteLokale.clear();
+
+  if (zeilen) {
+    schreibLauf = schreibLauf
+      .then(() => ablage.schreibe(state, { lokaleFelder: felder, eigeneAenderung: origin === "local" }))
+      .then(
+        () => { changeListeners.forEach(fn => fn(origin)); },
+        (e) => {
+          // Die Felder zurück in die Merkliste: der nächste Durchlauf soll sie noch einmal
+          // versuchen, statt sie stillschweigend fallen zu lassen.
+          for (const f of felder) angefassteLokale.add(f);
+          console.warn("Store: persistieren fehlgeschlagen", e);
+          persistErrorListeners.forEach(fn => fn(e));
+        }
+      );
+    return;
+  }
+
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch (e) {
@@ -218,8 +267,14 @@ function writeNow() {
   changeListeners.forEach(fn => fn(origin));
 }
 
-function persist() {
+/**
+ * Speichern anmelden. Die genannten Felder sind die NICHT abgeglichenen Teile des Zustands,
+ * die diese Änderung angefasst hat (siehe NUR_LOKAL in entities.js) — im Klumpenmodus ohne
+ * Bedeutung, im Zeilenmodus die Ansage, was außer den Zeilen noch geschrieben werden muss.
+ */
+function persist(...lokaleFelder) {
   pendingIsLocal = true;
+  for (const f of lokaleFelder) angefassteLokale.add(f);
   clearTimeout(persistTimer);
   persistTimer = setTimeout(writeNow, 250);
 }
@@ -228,9 +283,133 @@ function persist() {
  * über den Abgleich hereinkam und deshalb nicht sofort wieder hochgeladen werden muss. Eine
  * daneben noch offene eigene Änderung bleibt dabei als solche stehen und wird weiterhin
  * gepusht: pendingIsLocal wird hier bewusst nur nicht gesetzt, nicht zurückgenommen. */
-function persistFromRemote() {
+function persistFromRemote(...lokaleFelder) {
+  for (const f of lokaleFelder) angefassteLokale.add(f);
   clearTimeout(persistTimer);
   persistTimer = setTimeout(writeNow, 250);
+}
+
+// ---------------------------------------------------------------------------
+// Start im Zeilenmodus
+// ---------------------------------------------------------------------------
+
+let bereitschaft = null;
+
+/**
+ * Bringt den Zustand in den Speicher und legt den Speicherweg fest. Muss einmal vor der
+ * ersten Benutzung abgewartet werden (app.js) — danach ist wieder alles synchron.
+ *
+ * Im Klumpenmodus ist nichts zu tun: der Zustand steht seit dem Laden dieses Moduls.
+ * Im Zeilenmodus wird beim ersten Mal umgezogen und danach aus IndexedDB gelesen.
+ *
+ * Geht dabei etwas schief, bleibt es beim Klumpen. Ein Fehler in der neuen Ablage darf
+ * niemanden vor eine leere App setzen.
+ */
+export function bereit() {
+  if (!bereitschaft) bereitschaft = starte();
+  return bereitschaft;
+}
+
+async function starte() {
+  if (!zeilenModus()) return { modus: "klumpen" };
+  if (!db.istVerfuegbar()) {
+    console.warn("Store: IndexedDB steht nicht zur Verfügung — bleibe beim bisherigen Speicher.");
+    return { modus: "klumpen", grund: "IndexedDB fehlt" };
+  }
+  try {
+    let bilanz = null;
+    if (!(await umzug.istUmgezogen())) {
+      if (await ablage.istBefuellt()) {
+        // Es stehen schon Zeilen da, aber der Umzugsvermerk fehlt — dann hat sie ein
+        // Abgleich hineingeschrieben, nicht dieses Gerät. NICHT umziehen: der Umzug
+        // ersetzt jede Datenart komplett und räumte das gerade Geholte wieder weg.
+        await umzug.markeSetzen();
+      } else {
+        // Bewusst der bereits geladene und ergänzte Zustand, nicht der rohe localStorage-Text:
+        // so wandern auch die Felder mit, die migrate() gerade erst nachgetragen hat.
+        //
+        // alsEigeneAenderung nur bei einem eingerichteten Gerät: die beiden Vorgabeprofile
+        // eines frisch installierten haben auf dem Server nichts verloren. Sie liegen lokal
+        // und gehen erst hoch, wenn jemand sie zu echten Profilen macht.
+        bilanz = await umzug.umziehen(state, { alsEigeneAenderung: !!state.onboarded });
+      }
+    }
+    // migrate() auch hier: es füllt jedes Feld, das die Ablage (noch) nicht kennt, mit
+    // seinem Standardwert. Ohne das käme ein Zustand mit fehlenden Teilen durch — und die
+    // fällt erst dort auf, wo jemand sie benutzt.
+    const geladen = migrate(await ablage.laden(nurLokales(state)));
+    // Ein frisches Gerät hat noch nichts in der Ablage. Dann bleiben die Vorgabeprofile aus
+    // defaultState() stehen, bis die Ersteinrichtung echte daraus macht — der erste
+    // Vergleich schreibt sie dann.
+    state = geladen.profiles.length > 0
+      ? geladen
+      : { ...geladen, profiles: state.profiles, activeProfileId: state.activeProfileId };
+    ablage.merkeStand(state);
+    zeilen = true;
+    return { modus: "zeilen", bilanz };
+  } catch (e) {
+    console.warn("Store: Zeilenmodus nicht startbar — bleibe beim bisherigen Speicher.", e);
+    return { modus: "klumpen", grund: String((e && e.message) || e) };
+  }
+}
+
+/**
+ * Liest den Zustand neu aus der Ablage — nach einem Abgleich, der dort direkt geschrieben hat
+ * (sync2.js kennt store.js nicht und soll es auch nicht kennen).
+ *
+ * Vorher wird ein noch offenes eigenes Speichern zu Ende gebracht: sonst überschriebe der
+ * frisch geladene Stand eine Eingabe, die noch in der 250ms-Verzögerung hängt.
+ *
+ * Gibt zurück, ob wirklich neu geladen wurde.
+ */
+export async function neuLadenAusAblage() {
+  if (!zeilen) return false;
+  if (persistTimer) writeNow();
+  await schreibLauf;
+  const geladen = migrate(await ablage.laden(nurLokales(state)));
+  // Leere Ablage bei vollem Speicher heißt nicht "alles gelöscht", sondern "da ist etwas
+  // schiefgegangen". Dann lieber nichts tun.
+  if (geladen.profiles.length === 0 && state.profiles.length > 0) return false;
+  state = geladen;
+  ablage.merkeStand(state);
+  changeListeners.forEach(fn => fn("remote"));
+  return true;
+}
+
+/** Welcher Speicherweg gilt gerade wirklich? (Nicht dasselbe wie der Schalter: fällt der
+ * Zeilenmodus beim Start aus, steht der Schalter auf "an" und hier trotzdem false.) */
+export function istZeilenModus() {
+  return zeilen;
+}
+
+/**
+ * Schaltet den Speicherweg um und schreibt den aktuellen Stand in die jeweils andere Ablage.
+ * Danach muss die Seite neu geladen werden — der laufende Zustand hängt an Modulvariablen,
+ * die sich nicht sinnvoll mittendrin umstellen lassen.
+ *
+ * In beide Richtungen, und in beiden Fällen mit dem, was gerade im Speicher steht. Der
+ * Schalter ist damit gefahrlos hin und her bedienbar; ohne dieses Umschreiben wäre die
+ * jeweils andere Ablage veraltet und Eingaben verschwänden beim Zurückschalten.
+ */
+export async function wechsleModus(an) {
+  if (!!an === zeilenModus()) return false;
+  if (persistTimer) writeNow();
+  await schreibLauf;
+  if (an) {
+    if (!db.istVerfuegbar()) throw new Error("IndexedDB steht auf diesem Gerät nicht zur Verfügung.");
+    await umzug.markeLoeschen();
+    await umzug.umziehen(state, { alsEigeneAenderung: true });
+    ablage.merkeStand(state);
+    setzeZeilenModus(true);
+  } else {
+    localStorage.setItem(KEY, JSON.stringify(state));
+    setzeZeilenModus(false);
+  }
+  // Auch hier umstellen, nicht nur den Schalter: normalerweise lädt die Seite gleich neu,
+  // aber solange sie das nicht getan hat, muss ein weiteres persist() schon in die neue
+  // Ablage gehen — sonst landet die nächste Eingabe in der gerade verlassenen.
+  zeilen = !!an;
+  return true;
 }
 
 if (typeof document !== "undefined") {
@@ -439,7 +618,7 @@ function replaceStateWith(next) {
   }
   next.cache = prunedCache({ ...state.cache, ...next.cache });
   state = next;
-  persist();
+  persist("history", "cache", "recent", "activeProfileId", "onboarded", "schemaVersion", "tombstones");
 }
 
 export const Store = {
@@ -452,7 +631,7 @@ export const Store = {
   },
   setOnboarded() {
     state.onboarded = true;
-    persist();
+    persist("onboarded");
   },
 
   getActiveProfile() {
@@ -461,7 +640,7 @@ export const Store = {
 
   setActiveProfile(id) {
     state.activeProfileId = id;
-    persist();
+    persist("activeProfileId");
   },
 
   updateProfile(id, patch) {
@@ -495,7 +674,7 @@ export const Store = {
   cacheProduct(barcode, product) {
     state.cache[barcode] = { product, fetchedAt: Date.now() };
     state.cache = prunedCache(state.cache);
-    persist();
+    persist("cache");
   },
   getCachedProduct(barcode) {
     return state.cache[barcode]?.product || null;
@@ -552,7 +731,7 @@ export const Store = {
   // --- zuletzt gescannt ---
   pushRecent(barcode) {
     state.recent = [barcode, ...state.recent.filter(b => b !== barcode)].slice(0, 10);
-    persist();
+    persist("recent");
   },
   getRecent() {
     return state.recent;
@@ -561,7 +740,7 @@ export const Store = {
   // --- Such-/Scan-Verlauf (nur Protokoll, keine Mengen/Kalorien-Tracking) ---
   addHistoryEntry(entry) {
     state.history = [entry, ...state.history].slice(0, HISTORY_LIMIT);
-    persist();
+    persist("history");
   },
   getHistory() {
     return state.history;
@@ -569,7 +748,7 @@ export const Store = {
   clearHistory() {
     state.history = [];
     state.tombstones.historyClearedAt = Date.now();
-    persist();
+    persist("history", "tombstones");
   },
 
   // --- Verbrauch (Mengen, die als "gegessen" eingetragen wurden) ---
@@ -794,7 +973,7 @@ export const Store = {
     const incoming = parseBackup(json);
     savePreMergeBackup();
     applyMerge(incoming, profileChoice);
-    persist();
+    persist("history", "cache", "recent", "activeProfileId", "onboarded", "schemaVersion", "tombstones");
   },
 
   /**
@@ -807,7 +986,7 @@ export const Store = {
   mergeJSONQuiet(json, { profileChoice = {} } = {}) {
     const incoming = parseBackup(json);
     applyMerge(incoming, profileChoice);
-    persistFromRemote();
+    persistFromRemote("history", "cache", "recent", "activeProfileId", "onboarded", "schemaVersion", "tombstones");
   },
 
   // --- Sicherung vor dem letzten Zusammenführen ---

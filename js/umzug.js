@@ -91,6 +91,12 @@ export async function umzugFallsNoetig({ serverHatSchonDaten = false } = {}) {
   return { bilanz: await umziehen(state, { alsEigeneAenderung: !serverHatSchonDaten }) };
 }
 
+/** Setzt die Fertig-Marke, ohne umzuziehen — für ein Gerät, dessen Ablage schon auf einem
+ * anderen Weg gefüllt wurde (z.B. durch einen Abgleich vor dem ersten Start). */
+export async function markeSetzen(bilanz = {}) {
+  await db.meta.setze(MARKE, { at: Date.now(), bilanz });
+}
+
 /** Nur für Tests und den Notfall. */
 export async function markeLoeschen() {
   await db.meta.setze(MARKE, null);

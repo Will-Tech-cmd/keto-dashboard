@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v52";
+const CACHE_NAME = "keto-dashboard-v53";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -23,6 +23,16 @@ const APP_SHELL = [
   "./js/recipes.js",
   "./js/ingredient-parser.js",
   "./js/sync.js",
+  // Zeilenweiser Speicher und Abgleich (modus.js schaltet um; Standard ist noch der alte Weg).
+  // Muessen mit in den Vorrat: store.js importiert sie beim Start, auch wenn der Schalter aus ist.
+  "./js/modus.js",
+  "./js/ablage.js",
+  "./js/db.js",
+  "./js/rows.js",
+  "./js/entities.js",
+  "./js/umzug.js",
+  "./js/supabase.js",
+  "./js/sync2.js",
   "./js/scanner.js",
   "./js/lists.js",
   "./js/analysis.js",
