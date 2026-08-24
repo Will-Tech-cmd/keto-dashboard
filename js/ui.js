@@ -42,10 +42,20 @@ function renderSnackbarStack() {
         <div class="klar-snackbar-title">${esc(top.title)}</div>
         ${top.subtitle ? `<div class="klar-snackbar-sub">${esc(top.subtitle)}</div>` : ""}
       </div>
+      ${top.action ? `<button type="button" class="klar-snackbar-action">${esc(top.action.label)}</button>` : ""}
       ${top.onUndo ? `<button type="button" class="klar-snackbar-undo">Rückgängig</button>` : ""}
     </div>
   `;
   requestAnimationFrame(() => wrap.querySelector(".klar-snackbar")?.classList.add("show"));
+  // Die freie Aktion schließt die Snackbar nicht selbst — sie darf sie durch eine neue
+  // ersetzen (siehe "auch für ..."), und die soll dann auch ein Rückgängig anbieten.
+  wrap.querySelector(".klar-snackbar-action")?.addEventListener("click", () => {
+    const i = snackbarStack.indexOf(top);
+    if (i >= 0) snackbarStack.splice(i, 1);
+    clearTimeout(top.timer);
+    renderSnackbarStack();
+    top.action.onClick();
+  });
   wrap.querySelector(".klar-snackbar-undo")?.addEventListener("click", () => {
     const i = snackbarStack.indexOf(top);
     if (i >= 0) snackbarStack.splice(i, 1);
@@ -55,10 +65,17 @@ function renderSnackbarStack() {
   });
 }
 
-/** Zeigt eine rückgängig-machbare Aktion als Snackbar. `onUndo` bleibt weg, wenn nichts
- * rückgängig zu machen ist (z.B. reine Statusmeldungen im Klar-Design). */
-export function showSnackbar({ title, subtitle, onUndo }) {
-  const entry = { title, subtitle, onUndo };
+/**
+ * Zeigt eine rückgängig-machbare Aktion als Snackbar. `onUndo` bleibt weg, wenn nichts
+ * rückgängig zu machen ist (z.B. reine Statusmeldungen im Klar-Design).
+ *
+ * `action` ist eine zweite, freie Aktion links davon — gedacht für den einen Schritt, den man
+ * unmittelbar nach dem Eintragen vielleicht noch machen will ("auch für Sandra"). Sie steht
+ * nur so lange zur Verfügung wie die Snackbar selbst; wer sie verpasst, kommt über den
+ * Eintrag auf der Startseite an dieselbe Funktion.
+ */
+export function showSnackbar({ title, subtitle, onUndo, action }) {
+  const entry = { title, subtitle, onUndo, action };
   entry.timer = setTimeout(() => {
     const i = snackbarStack.indexOf(entry);
     if (i >= 0) snackbarStack.splice(i, 1);

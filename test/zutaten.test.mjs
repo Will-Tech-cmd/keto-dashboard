@@ -21,6 +21,7 @@ const db = await import("../js/db.js");
 const fake = await import("./supabase-fake.mjs");
 const sync2 = await import("../js/sync2.js");
 const { zutatenAusZeilen } = await import("../js/rows.js");
+const { calcPerServing } = await import("../js/keto.js");
 sync2.setzeAnbindung({ rest: fake.rest, istAngemeldet: () => true });
 
 const H = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -59,6 +60,14 @@ ok("Reihenfolge als pos festgehalten",
    zutaten().sort((a, b) => a.pos - b.pos).map(z => z.name).join("|") === "Speisequark|Schlagsahne|Speck",
    zutaten().sort((a, b) => a.pos - b.pos).map(z => z.name).join("|"));
 ok("Naehrwerte mitgewandert", zutaten().find(z => z.id === "z-sahne")?.per100?.kcal === 292);
+// Aus dieser Spalte zeichnet das Kochbuch seine Kacheln. Fehlte sie, staende dort nichts.
+const erwartet = calcPerServing(REZEPT);
+ok("Rezeptzeile traegt die Naehrwerte je Portion",
+   rezeptZeile()?.naehrwerte?.kcal === erwartet.kcal,
+   JSON.stringify([rezeptZeile()?.naehrwerte, erwartet]));
+ok("und zwar alle vier Werte",
+   JSON.stringify(rezeptZeile()?.naehrwerte) === JSON.stringify(erwartet),
+   JSON.stringify(rezeptZeile()?.naehrwerte));
 
 console.log("\n2) Erneutes Hochladen legt nichts doppelt an");
 await db.outboxAnhaengen("rezept", "r1", "upsert");

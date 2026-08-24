@@ -1,6 +1,6 @@
 // recipes.js — Rezept-Verwaltung, Nährwert-Summierung, Zutaten-Text-Parser, OCR-Import.
 import { Store } from "./store.js";
-import { calcNetCarbs } from "./keto.js";
+import { calcNetCarbs, calcPerServing } from "./keto.js";
 import { getActiveDateKey } from "./consumption.js";
 import { downscaleImageIfNeeded } from "./ui.js";
 import { parseIngredientText } from "./ingredient-parser.js";
@@ -73,30 +73,11 @@ export function updateIngredient(recipeId, ingredientId, patch) {
   return recipe;
 }
 
-/** Summierte Nährwerte über alle Zutaten (gesamtes Rezept, nicht pro Portion). */
-export function calcRecipeTotals(recipe) {
-  return recipe.ingredients.reduce((acc, ing) => {
-    const scale = (ing.grams || 0) / 100;
-    const netCarbs100 = calcNetCarbs(ing.per100, { subtractFiber: ing.likelyUsLabel });
-    return {
-      kcal: acc.kcal + (ing.per100.kcal != null ? ing.per100.kcal * scale : 0),
-      netCarbs: acc.netCarbs + (netCarbs100 != null ? netCarbs100 * scale : 0),
-      fat: acc.fat + (ing.per100.fat != null ? ing.per100.fat * scale : 0),
-      protein: acc.protein + (ing.per100.protein != null ? ing.per100.protein * scale : 0),
-    };
-  }, { kcal: 0, netCarbs: 0, fat: 0, protein: 0 });
-}
-
-export function calcPerServing(recipe) {
-  const totals = calcRecipeTotals(recipe);
-  const s = recipe.servings || 1;
-  return {
-    kcal: round1(totals.kcal / s),
-    netCarbs: round1(totals.netCarbs / s),
-    fat: round1(totals.fat / s),
-    protein: round1(totals.protein / s),
-  };
-}
+// Die Nährwert-Rechnung selbst steht in keto.js — sie kommt ohne Store und ohne Ansicht
+// aus, und rows.js braucht sie ebenfalls (für die Spalte, aus der das Kochbuch seine
+// Kacheln zeichnet). Läge sie hier, müsste rows.js dieses Modul importieren und damit
+// store.js — das aber importiert rows.js. Ein Ring, den man nicht braucht.
+export { calcRecipeTotals, calcPerServing } from "./keto.js";
 
 /** Trägt N Portionen eines Rezepts als "gegessen" für das aktive Profil am aktiven Planungstag ein. */
 export function logRecipeConsumption(recipe, servings, meal = null) {

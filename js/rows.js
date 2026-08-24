@@ -32,6 +32,8 @@
 // Werte bleiben null statt auf einen Standardwert zu fallen — eine 0 an der falschen
 // Stelle sähe aus wie eine echte Messung.
 
+import { calcPerServing } from "./keto.js";
+
 const zahl = (v) => (v == null || v === "" ? null : Number(v));
 const q = (v) => encodeURIComponent(String(v));
 const millis = (v) => (v == null ? null : new Date(v).getTime());
@@ -327,6 +329,10 @@ const rezept = {
     keto_id: r.id,
     titel: r.name,
     portionen: Math.max(1, Math.round(Number(r.servings) || 1)),
+    // Aus dieser Spalte zeichnet das Kochbuch seine Nährwert-Kacheln — es rechnet beim
+    // Anzeigen nicht selbst. Ohne sie stand dort schlicht nichts.
+    naehrwerte: calcPerServing(r),
+    naehrwerte_manuell: false,
     quelle: "keto-app",
     keto_updated_at: iso(stempel(r.updatedAt, r.createdAt)),
     geaendert_am: iso(stempel(r.updatedAt, r.createdAt)),

@@ -4,7 +4,7 @@
 import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
-import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
+import { esc, showToast, showSnackbar, bindBackClose, selectOnFocus } from "./ui.js";
 
 export const MEAL_LABELS = {
   breakfast: "🌅 Frühstück",
@@ -211,6 +211,127 @@ export function sumConsumption(entries) {
   }), { kcal: 0, netCarbs: 0, fat: 0, protein: 0 });
 }
 
+// ---------------------------------------------------------------------------
+// Dasselbe noch einmal für das andere Profil
+//
+// Zwei Menschen essen dasselbe — dann soll es nicht zweimal eingetippt werden müssen. Ein
+// Eintrag ist ein fertiger Schnappschuss (siehe logConsumption/logRecipeConsumption), also
+// ist "auch für sie" schlicht eine Kopie: neue id, anderes Profil, sonst Wort für Wort
+// dasselbe. Es wird bewusst NICHTS neu gerechnet — sonst stünde bei ihr eine andere Zahl
+// als bei ihm, sobald sich am Produkt oder am Rezept später etwas ändert.
+// ---------------------------------------------------------------------------
+
+/** Die Profile außer dem gerade aktiven. Leer, solange es nur eines gibt. */
+export function otherProfiles() {
+  const aktiv = Store.getActiveProfile()?.id;
+  return Store.get().profiles.filter(p => p.id !== aktiv);
+}
+
+/**
+ * Legt denselben Eintrag noch einmal für andere Profile an. Gibt die Kopien zurück, damit
+ * der Aufrufer sie zusammen mit dem Original wieder zurücknehmen kann.
+ *
+ * `updatedAt` wandert nicht mit: die Kopie ist neu, nicht nachträglich geändert.
+ */
+export function copyConsumptionTo(entry, profileIds) {
+  const kopien = [];
+  for (const profileId of profileIds || []) {
+    if (!profileId || profileId === entry.profileId) continue;
+    const { updatedAt, ...rest } = entry;
+    const kopie = { ...rest, id: crypto.randomUUID(), profileId };
+    Store.addConsumption(kopie);
+    kopien.push(kopie);
+  }
+  return kopien;
+}
+
+/**
+ * Knopfzeile eines Eintragen-Dialogs.
+ *
+ * Gibt es ein zweites Profil, ist der Eintragen-Knopf geteilt: links "+ <Name>" trägt bei
+ * beiden ein, rechts wie gewohnt nur beim aktiven Profil. Optisch eine Pille mit Trennstrich,
+ * damit es als ein Knopf mit einer Zusatzoption gelesen wird und nicht als drei gleichrangige
+ * neben "Abbrechen". Ab drei Profilen öffnet der linke Teil eine Auswahl statt direkt zu
+ * schreiben — dann steht dort "+ Weitere".
+ */
+export function logButtonRowHtml(label, { cancelId, confirmId, shareId }) {
+  const andere = otherProfiles();
+  const teilenText = andere.length === 1 ? `+ ${andere[0].name}` : "+ Weitere";
+  return `
+    <div class="btn-row" style="margin-top:18px">
+      <button type="button" class="btn secondary" id="${cancelId}">Abbrechen</button>
+      ${andere.length === 0 ? `
+        <button type="button" class="btn" id="${confirmId}">${esc(label)}</button>
+      ` : `
+        <div class="klar-split-btn">
+          <button type="button" class="klar-split-share" id="${shareId}"
+                  title="Auch für ${esc(andere.map(p => p.name).join(", "))} eintragen">${esc(teilenText)}</button>
+          <button type="button" class="klar-split-main" id="${confirmId}">${esc(label)}</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+/**
+ * Welche Profile sollen es außer dem aktiven bekommen? Bei genau einem anderen ist die
+ * Frage schon beantwortet — dann wird nicht gefragt.
+ */
+export function askShareTargets() {
+  const andere = otherProfiles();
+  if (andere.length === 0) return Promise.resolve([]);
+  if (andere.length === 1) return Promise.resolve([andere[0].id]);
+  return new Promise((fertig) => {
+    const overlay = document.createElement("div");
+    overlay.className = "klar-sheet-overlay";
+    overlay.innerHTML = `
+      <div class="klar-sheet">
+        <div class="klar-sheet-handle"></div>
+        <div class="klar-sheet-title">Auch eintragen für</div>
+        <div class="klar-list-card" style="margin-top:12px">
+          ${andere.map(p => `
+            <div class="list-item" data-profile="${p.id}" style="cursor:pointer">
+              <div class="info"><div class="name">${esc(p.name)}</div></div>
+              <span class="chevron">›</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="btn-row" style="margin-top:18px">
+          <button type="button" class="btn secondary" id="shareCancel">Abbrechen</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = bindBackClose(() => { overlay.remove(); fertig([]); });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector("#shareCancel").addEventListener("click", close);
+    overlay.querySelectorAll("[data-profile]").forEach(row => {
+      row.addEventListener("click", () => {
+        const id = row.dataset.profile;
+        overlay.remove();
+        fertig([id]);
+      });
+    });
+  });
+}
+
+/**
+ * Meldung nach dem Eintragen — mit Rückgängig, das ALLE gerade entstandenen Einträge
+ * zurücknimmt. Ein "auch für sie" darf nicht dazu führen, dass bei ihr etwas stehen bleibt,
+ * das man bei sich selbst gerade widerrufen hat.
+ */
+export function meldeEingetragen({ titel, untertitel, eintraege, onChange, aktion }) {
+  showSnackbar({
+    title: titel,
+    subtitle: untertitel,
+    action: aktion,
+    onUndo: () => {
+      for (const e of eintraege) Store.removeConsumption(e.id);
+      onChange?.();
+    },
+  });
+}
+
 /**
  * Passt einen bestehenden Verbrauchs-Eintrag auf eine neue Menge an (Gramm bei Produkten,
  * Portionen bei Rezepten). Skaliert alle Nährwerte proportional, ohne die ursprüngliche
@@ -271,17 +392,24 @@ export function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
  * Portionsgröße ("1× (60 g)" usw.), in einer Zeile ohne Umbruch — bei vielen/langen Werten
  * scrollt die Zeile statt in eine zweite umzubrechen.
  */
-export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4] } = {}) {
+export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], nebenLabel = "" } = {}) {
   const portions = servingG ? round1(grams / servingG) : null;
+  // `nebenLabel` sitzt rechts auf der ERSTEN Beschriftungszeile — dort ist ohnehin Platz,
+  // und die Eingabefelder darunter behalten ihre volle Breite. Auf einem schmalen Gerät ist
+  // das Zahlenfeld das Wichtigste; ihm für einen Zusatzknopf Platz wegzunehmen wäre der
+  // falsche Tausch.
+  const beschriftung = (fuer, text, mitNeben) => (mitNeben && nebenLabel
+    ? `<div class="klar-label-row"><label for="${fuer}">${text}</label>${nebenLabel}</div>`
+    : `<label for="${fuer}">${text}</label>`);
   return `
     ${servingG ? `
       <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
         ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
       </div>
-      <label for="qtyPortionsInput">Portionen</label>
+      ${beschriftung("qtyPortionsInput", "Portionen", true)}
       <input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">
     ` : ""}
-    <label for="qtyGramsInput">Menge in Gramm</label>
+    ${beschriftung("qtyGramsInput", "Menge in Gramm", !servingG)}
     <input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">
   `;
 }
@@ -372,10 +500,8 @@ export function openQuantityModal(product, onLogged) {
         `).join("")}
       </div>
 
-      <div class="btn-row" style="margin-top:18px">
-        <button type="button" class="btn secondary" id="qtyCancel">Abbrechen</button>
-        <button type="button" class="btn" id="qtyConfirm">Eintragen · ${esc(mealShort(selectedMeal))}</button>
-      </div>
+      ${logButtonRowHtml(`Eintragen · ${mealShort(selectedMeal)}`,
+        { cancelId: "qtyCancel", confirmId: "qtyConfirm", shareId: "qtyShare" })}
     </div>
   `;
   document.body.appendChild(overlay);
@@ -408,16 +534,72 @@ export function openQuantityModal(product, onLogged) {
   const close = bindBackClose(() => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   overlay.querySelector("#qtyCancel").addEventListener("click", close);
-  confirmBtn.addEventListener("click", () => {
+
+  const eintragen = async (auchAndere) => {
     if (!currentGrams || currentGrams <= 0) {
       showToast("Bitte eine gültige Menge angeben");
       return;
     }
-    logConsumption(product, currentGrams, selectedMeal);
-    showToast(`${currentGrams} g eingetragen`);
+    const ziele = auchAndere ? await askShareTargets() : [];
+    if (auchAndere && ziele.length === 0) return; // Auswahl abgebrochen
+    const entry = logConsumption(product, currentGrams, selectedMeal);
+    if (!entry) return;
+    const kopien = copyConsumptionTo(entry, ziele);
     close();
     onLogged?.();
-  });
+    meldeEingetragen({
+      titel: `${product.name} eingetragen`,
+      untertitel: eintragTextFuer(currentGrams, selectedMeal, kopien),
+      eintraege: [entry, ...kopien],
+      onChange: onLogged,
+      aktion: kopien.length === 0 ? teilenAktion(entry, onLogged) : null,
+    });
+  };
+  confirmBtn.addEventListener("click", () => eintragen(false));
+  overlay.querySelector("#qtyShare")?.addEventListener("click", () => eintragen(true));
+}
+
+/** "120 g · Abend" bzw. "120 g · Abend · auch für Sandra". */
+function eintragTextFuer(grams, meal, kopien) {
+  const wer = kopien.length ? ` · auch für ${kopien.map(k => profilName(k.profileId)).join(", ")}` : "";
+  return `${grams} g · ${mealShort(meal)}${wer}`;
+}
+
+function profilName(id) {
+  return Store.get().profiles.find(p => p.id === id)?.name || "?";
+}
+
+/**
+ * Die Nachreich-Aktion in der Snackbar: derselbe Eintrag noch einmal fürs andere Profil.
+ * Für den Weg ohne Dialog (Schnellauswahl) ist das die einzige Stelle, an der es geht —
+ * dort gibt es keinen Knopf, den man teilen könnte.
+ */
+export function teilenAktion(entry, onChange) {
+  const andere = otherProfiles();
+  if (andere.length === 0) return null;
+  return {
+    label: andere.length === 1 ? `+ ${andere[0].name}` : "+ Weitere",
+    onClick: async () => {
+      const ziele = await askShareTargets();
+      if (ziele.length === 0) return;
+      const kopien = copyConsumptionTo(entry, ziele);
+      onChange?.();
+      meldeEingetragen({
+        titel: `Auch für ${kopien.map(k => profilName(k.profileId)).join(", ")} eingetragen`,
+        untertitel: entry.name,
+        eintraege: kopien,
+        onChange,
+      });
+    },
+  };
+}
+
+/** Der kleine "+ Name"-Knopf für die Beschriftungszeile im Bearbeiten-Sheet. */
+function teilenKnopfHtml() {
+  const andere = otherProfiles();
+  if (andere.length === 0) return "";
+  const text = andere.length === 1 ? `+ ${andere[0].name}` : "+ Weitere";
+  return `<button type="button" class="klar-inline-chip" id="editShare">${esc(text)}</button>`;
 }
 
 /** Öffnet einen Dialog zum Bearbeiten (Menge/Mahlzeit anpassen, live Vorschau) oder Löschen. */
@@ -446,8 +628,8 @@ export function openEditConsumptionModal(entry, onDone) {
       <div class="klar-sheet-title">${esc(entry.name)}</div>
       <div class="klar-sheet-sub">Menge anpassen — Nährwerte werden automatisch neu berechnet.</div>
 
-      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams) : `
-        <label for="qtyGramsInput">Portionen</label>
+      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams, { nebenLabel: teilenKnopfHtml() }) : `
+        <div class="klar-label-row"><label for="qtyGramsInput">Portionen</label>${teilenKnopfHtml()}</div>
         <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
       `}
 
@@ -513,6 +695,21 @@ export function openEditConsumptionModal(entry, onDone) {
     close();
     onDone?.();
   });
+  // Nachträglich weiterreichen. Vorher wird gespeichert, was hier gerade steht — Menge UND
+  // Mahlzeit. Sonst bekäme sie 30 g zum Abendessen und er behielte 20 g beim Frühstück,
+  // obwohl beides in einem Zug bedient wurde. Der Knopf ist also "Speichern und weitergeben".
+  overlay.querySelector("#editShare")?.addEventListener("click", async () => {
+    const ziele = await askShareTargets();
+    if (ziele.length === 0) return;
+    const val = toVal(getGrams());
+    let aktuell = (val && val > 0) ? (rescaleConsumption(entry.id, val) || entry) : entry;
+    aktuell = setConsumptionMeal(entry.id, selectedMeal) || aktuell;
+    const kopien = copyConsumptionTo(aktuell, ziele);
+    showToast(`Auch für ${kopien.map(k => Store.get().profiles.find(p => p.id === k.profileId)?.name || "?").join(", ")} eingetragen`);
+    close();
+    onDone?.();
+  });
+
   overlay.querySelector("#editSave").addEventListener("click", () => {
     const val = toVal(getGrams());
     if (!val || val <= 0) {

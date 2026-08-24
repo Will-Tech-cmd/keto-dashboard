@@ -143,3 +143,42 @@ export function parseServingGrams(servingSize) {
   if (!m) return null;
   return parseFloat(m[1].replace(",", "."));
 }
+
+// ---------------------------------------------------------------------------
+// Nährwerte eines Rezepts
+//
+// Hier und nicht in recipes.js: die Rechnung braucht nichts außer calcNetCarbs, und sie
+// wird an drei Stellen gebraucht — in der App, beim Eintragen, und beim Abgleich für die
+// Spalte, aus der das Kochbuch seine Kacheln zeichnet. recipes.js hängt am Store und am
+// Bild-Import; von dort aus wäre sie für rows.js nicht erreichbar, ohne einen Ring zu
+// schließen. recipes.js reicht beide unverändert weiter.
+// ---------------------------------------------------------------------------
+
+const rundeAufEineStelle = (v) => (v == null ? null : Math.round(v * 10) / 10);
+
+/** Summierte Nährwerte über alle Zutaten (gesamtes Rezept, nicht pro Portion). */
+export function calcRecipeTotals(recipe) {
+  return (recipe?.ingredients || []).reduce((acc, ing) => {
+    const scale = (ing.grams || 0) / 100;
+    const per100 = ing.per100 || {};
+    const netCarbs100 = calcNetCarbs(per100, { subtractFiber: ing.likelyUsLabel });
+    return {
+      kcal: acc.kcal + (per100.kcal != null ? per100.kcal * scale : 0),
+      netCarbs: acc.netCarbs + (netCarbs100 != null ? netCarbs100 * scale : 0),
+      fat: acc.fat + (per100.fat != null ? per100.fat * scale : 0),
+      protein: acc.protein + (per100.protein != null ? per100.protein * scale : 0),
+    };
+  }, { kcal: 0, netCarbs: 0, fat: 0, protein: 0 });
+}
+
+/** Nährwerte je Portion. */
+export function calcPerServing(recipe) {
+  const totals = calcRecipeTotals(recipe);
+  const s = recipe?.servings || 1;
+  return {
+    kcal: rundeAufEineStelle(totals.kcal / s),
+    netCarbs: rundeAufEineStelle(totals.netCarbs / s),
+    fat: rundeAufEineStelle(totals.fat / s),
+    protein: rundeAufEineStelle(totals.protein / s),
+  };
+}
