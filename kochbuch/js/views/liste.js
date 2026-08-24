@@ -2,6 +2,7 @@
 import { listRezepte, publicFotoUrl } from "../api.js";
 import { saveListeCache, loadListeCache } from "../cache.js";
 import { esc, showToast, starsHtml, formatMinutes } from "../ui.js";
+import { titelbildAttribute } from "../titelbild.js";
 
 let filterText = "";
 let filterTag = null;
@@ -110,10 +111,11 @@ function renderCards(container, rezepte, onOpen) {
   cardsEl.innerHTML = filtered.map(r => {
     const totalMin = (r.vorbereitung_min || 0) + (r.koch_min || 0) || null;
     const bild = r.titelbild ? publicFotoUrl(r.titelbild.pfad) : null;
+    const kachel = titelbildAttribute(r.titel, bild && esc(bild));
     const n = r.naehrwerte;
     return `
       <button type="button" class="kb-card" data-id="${r.id}">
-        <div class="kb-card-img" ${bild ? `style="background-image:url('${esc(bild)}')"` : ""}>${bild ? "" : "🍽️"}</div>
+        <div class="kb-card-img ${kachel.klasse}" style="${kachel.stil}">${kachel.symbol}</div>
         <div class="kb-card-body">
           <div class="kb-card-title">${esc(r.titel)}</div>
           <div class="kb-card-meta">
