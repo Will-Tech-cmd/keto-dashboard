@@ -425,32 +425,30 @@ export function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
  */
 export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], chipNeben = "", grammNeben = "" } = {}) {
   const portions = servingG ? round1(grams / servingG) : null;
-  // Zusatzknöpfe sitzen NEBEN den Beschriftungen, nie über oder unter ihnen: die Eingabefelder
-  // behalten dadurch ihre volle Breite, und auf einem schmalen Gerät ist das Zahlenfeld das
-  // Wichtigste.
+  // Zusatzknöpfe stehen NEBEN dem Eingabefeld, in derselben Zeile und auf derselben Höhe.
+  // Das Feld wird dafür schmaler — eine Menge ist drei- bis vierstellig, mehr Platz braucht
+  // sie nicht, und der Knopf ist damit dort, wo die Zahl steht, auf die er sich bezieht.
   //
-  // `chipNeben` steht rechts in der Reihe der Portions-Chips, auf derselben Höhe und in
-  // derselben Größe wie "1× (415 g)". Die Chips selbst scrollen darunter weg, wenn sie zu
-  // breit werden — der Zusatzknopf bleibt stehen, sonst müsste man zu ihm hinscrollen.
-  // `grammNeben` steht rechts neben "Menge in Gramm".
+  // Die Reihe der Vielfachen darüber ("1× (415 g)" …) bleibt unangetastet und über die volle
+  // Breite. Sie ist eine Auswahl von Werten; ein Knopf, der etwas auslöst, hat darin nichts
+  // zu suchen und hätte ihr außerdem Platz genommen.
   //
-  // Ohne Portionsgröße gibt es keine Chip-Reihe; dann rücken beide auf die Gramm-Zeile.
-  const grammZeile = (servingG ? grammNeben : chipNeben + grammNeben);
+  // Ohne Portionsgröße gibt es kein Portionen-Feld; dann rücken beide Knöpfe an die Gramm-Zeile.
+  const zeile = (feld, knoepfe) => (knoepfe
+    ? `<div class="klar-feld-zeile">${feld}${knoepfe}</div>`
+    : feld);
+  const portionsFeld = `<input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">`;
+  const grammFeld = `<input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">`;
   return `
     ${servingG ? `
-      <div class="klar-chip-line">
-        <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
-          ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
-        </div>
-        ${chipNeben}
+      <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
+        ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
       </div>
       <label for="qtyPortionsInput">Portionen</label>
-      <input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">
+      ${zeile(portionsFeld, chipNeben)}
     ` : ""}
-    ${grammZeile
-      ? `<div class="klar-label-row"><label for="qtyGramsInput">Menge in Gramm</label>${grammZeile}</div>`
-      : `<label for="qtyGramsInput">Menge in Gramm</label>`}
-    <input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">
+    <label for="qtyGramsInput">Menge in Gramm</label>
+    ${zeile(grammFeld, servingG ? grammNeben : chipNeben + grammNeben)}
   `;
 }
 
@@ -635,7 +633,7 @@ export function teilenAktion(entry, onChange) {
   };
 }
 
-/** Der "+ Name"-Knopf — als Chip, damit er neben den Portions-Chips dieselbe Größe hat. */
+/** Der "+ Name"-Knopf — als Chip neben dem Portionen-Feld. */
 function teilenKnopfHtml() {
   const andere = otherProfiles();
   if (andere.length === 0) return "";
@@ -643,7 +641,7 @@ function teilenKnopfHtml() {
   return `<button type="button" class="klar-chip klar-chip-aktion" id="editShare">${esc(text)}</button>`;
 }
 
-/** Und der Einkaufskorb daneben — dasselbe Format, damit die Zeile ruhig bleibt. */
+/** Und der Einkaufskorb eine Zeile tiefer, neben der Menge in Gramm. */
 function einkaufKnopfHtml() {
   return `<button type="button" class="klar-chip klar-chip-aktion" id="editEinkauf" title="Auf die Einkaufsliste">🛒 Einkauf</button>`;
 }
@@ -705,8 +703,11 @@ export function openEditConsumptionModal(entry, onDone) {
       ${gramsBase != null
         ? amountFieldsHtml(servingG, currentGrams, { chipNeben: teilenKnopfHtml(), grammNeben: einkaufKnopfHtml() })
         : `
-        <div class="klar-label-row"><label for="qtyGramsInput">Portionen</label>${teilenKnopfHtml()}${einkaufKnopfHtml()}</div>
-        <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
+        <label for="qtyGramsInput">Portionen</label>
+        <div class="klar-feld-zeile">
+          <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
+          ${teilenKnopfHtml()}${einkaufKnopfHtml()}
+        </div>
       `}
 
       <div class="klar-portion-panel gray" id="editPreview" style="margin-top:16px"></div>

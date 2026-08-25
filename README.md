@@ -22,9 +22,10 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   trägt bei beiden ein, rechts wie gewohnt nur bei dir. „Rückgängig" nimmt beide zurück. Ein
   Eintrag ist dabei eine Kopie, keine neue Rechnung: ändert sich das Produkt später, bleiben
   beide auf ihrem Stand
-- Im Bearbeiten-Dialog stehen rechts neben den Mengen zwei Chips: „+ Name" reicht die
-  angepasste Portion nachträglich weiter, **🛒 Einkauf** setzt sie auf die Einkaufsliste —
-  bei einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen
+- Im Bearbeiten-Dialog steht neben dem Portionen-Feld „+ Name" (reicht die angepasste Portion
+  nachträglich weiter) und eine Zeile tiefer neben der Menge in Gramm **🛒 Einkauf** — bei
+  einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen. Die Reihe
+  der Vielfachen darüber bleibt davon unberührt
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 #### Essen für die nächsten Tage planen
