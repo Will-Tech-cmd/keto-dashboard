@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v57";
+const CACHE_NAME = "keto-dashboard-v59";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -38,6 +38,7 @@ const APP_SHELL = [
   "./js/lists.js",
   "./js/analysis.js",
   "./js/ai.js",
+  "./js/planer.js",
   "./js/ui.js",
   "./js/product-editor.js",
   "./js/views/start.js",
@@ -45,6 +46,7 @@ const APP_SHELL = [
   "./js/views/profile.js",
   "./js/views/recipes.js",
   "./js/views/onboarding.js",
+  "./js/views/planer.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",

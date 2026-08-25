@@ -1248,3 +1248,75 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Essensplanung
+   ---------------------------------------------------------------------------
+   Eine vorgemerkte Mahlzeit steht in derselben Zeile wie eine gegessene und zählt in
+   denselben Ringen mit — das ist beim Planen der Sinn der Sache. Sie muss dabei aber auf
+   den ersten Blick als Plan erkennbar bleiben, sonst wird aus "das nehme ich mir vor" beim
+   Zurückblicken unbemerkt "das habe ich gegessen".
+
+   Deshalb drei Signale statt eines: getönter Grund, farbige Kante links und ein Haken
+   anstelle des Pfeils. Die Farbe allein trägt die Aussage nicht — der Haken und die Zeile
+   unter den Ringen sagen dasselbe noch einmal in Worten.
+   --------------------------------------------------------------------------- */
+
+.klar-meal-row.ist-geplant {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent-soft-border);
+}
+.klar-meal-row.ist-geplant .name { font-weight: 700; }
+.klar-bestaetigen {
+  /* Schmaler als ein normales icon-btn: die Zeile teilt sich den Platz mit einem Namen, der
+     schon vorher knapp war. Die Trefferfläche bleibt über die Höhe ausreichend. */
+  flex: none; min-width: 28px; min-height: 30px;
+  color: var(--accent); font-size: 1rem; font-weight: 800;
+  border: 1px solid var(--accent-soft-border); border-radius: 999px;
+  background: var(--bg-elevated); cursor: pointer;
+}
+.klar-bestaetigen:active { filter: brightness(.92); }
+.klar-plan-hint { color: var(--accent); font-weight: 700; }
+
+/* Die Gruppenüberschrift trägt jetzt gegebenenfalls eine Aktion rechts ("gegessen"). Ohne
+   sie verhält sich die Zeile wie bisher — ein einzelner Text in einem Flex-Kasten sitzt
+   genau dort, wo er vorher saß. */
+.klar-meal-group-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.klar-meal-group-title .klar-inline-chip {
+  margin: 0; padding: 3px 10px; font-size: .72rem;
+  text-transform: none; letter-spacing: 0;
+}
+
+/* Die Planseite: Zeilen wie im Tagesprotokoll, nur mit Tauschen statt Pfeil. Der Knopf ist
+   die einzige Schaltfläche in der Zeile — die Zeile selbst tut nichts, es gibt hier noch
+   nichts zu bearbeiten.
+
+   Name und Menge stehen UNTEREINANDER, anders als im Tagesprotokoll. Dort ist die Menge kurz
+   ("120 g · 300 kcal"), hier trägt sie zusätzlich die Portionen ("1,3 P. (356 g) · 389 kcal ·
+   4,9 g KH") — nebeneinander blieb auf 375 px vom Namen "Z…" übrig. Der Name ist das, was man
+   auf einer Planseite liest. */
+.klar-plan-row { display: flex; align-items: center; gap: 10px; padding: 11px 18px; }
+.klar-plan-row + .klar-plan-row { border-top: 1px solid var(--divider); }
+.klar-plan-row .text { flex: 1; min-width: 0; }
+.klar-plan-row .name {
+  font-size: 14.5px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.klar-plan-row .meta { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+.klar-plan-row .icon-btn { flex: none; min-width: 34px; min-height: 34px; font-size: .95rem; }
+
+/* Ein Schalter, der aussieht wie eine Pille — an ist gefüllt, aus ist umrandet. */
+.klar-pill-btn.is-an { background: var(--accent-soft); border-color: var(--accent-soft-border); }
+
+/* Chip-Reihe mit festem Zusatzknopf rechts ("+ Sandra", "🛒 Einkauf").
+   Die Chips selbst scrollen waagerecht, wenn sie zu breit werden; der Zusatzknopf steht
+   außerhalb dieses Bereichs und bleibt deshalb sichtbar. Läge er in der Reihe, müsste man
+   zu ihm hinscrollen — bei vier Vielfachen auf 375 px immer. */
+.klar-chip-line { display: flex; align-items: center; gap: 8px; }
+.klar-chip-line > .klar-chip-row { flex: 1; min-width: 0; margin-bottom: 0; }
+.klar-chip-line > .klar-chip-aktion { flex: none; }
+
+/* Aktion im Format eines Chips: gleiche Höhe und Schrift wie "1× (415 g)" daneben, aber in
+   der Akzentfarbe — es ist ein Knopf, der etwas auslöst, und kein Wert zur Auswahl. */
+.klar-chip.klar-chip-aktion { color: var(--accent); font-weight: 800; white-space: nowrap; }
+.klar-label-row .klar-chip-aktion { margin-bottom: 4px; }

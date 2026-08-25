@@ -9,6 +9,17 @@ function round1(v) {
   return Math.round(v * 10) / 10;
 }
 
+/**
+ * Vorgemerkte Mahlzeiten (siehe planer.js) zählen in den Summen mit — genau dafür sind sie
+ * da. In einem Bericht, den ein Mensch oder ein Modell als Rückblick liest, müssen sie aber
+ * benannt sein: "1 850 kcal" heißt sonst je nach Tag "gegessen" oder "vorgehabt", und keine
+ * Auswertung könnte den Unterschied noch sehen.
+ */
+function geplantHinweis(entries) {
+  const n = entries.filter(e => e.planned).length;
+  return n > 0 ? ` — davon ${n} geplant, nicht bestätigt` : "";
+}
+
 /** Sammelt die Tagesdaten eines Profils für die letzten `days` Tage (ältester zuerst). */
 function collectDays(profile, days) {
   const out = [];
@@ -59,7 +70,8 @@ export function buildAnalysisReport(profile, days) {
     lines.push(
       `- ${d.key}: ${Math.round(s.kcal)}/${d.targets.kcal} kcal · ` +
       `KH ${round1(s.netCarbs)}/${d.targets.netCarbG} g (${inTarget}) · ` +
-      `Fett ${round1(s.fat)}/${d.targets.fatG} g · Eiweiß ${round1(s.protein)}/${d.targets.proteinG} g`
+      `Fett ${round1(s.fat)}/${d.targets.fatG} g · Eiweiß ${round1(s.protein)}/${d.targets.proteinG} g` +
+      geplantHinweis(d.entries)
     );
   }
   lines.push("");
@@ -196,7 +208,7 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
       lines.push(`**${MEAL_LABELS[key].replace(/^\S+\s/, "")}**`);
       for (const e of items) {
         const amount = e.servings != null ? `${round1(e.servings)} Portion(en)` : `${e.grams} g`;
-        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH · ${round1(e.fat || 0)} g Fett · ${round1(e.protein || 0)} g Eiweiß`);
+        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH · ${round1(e.fat || 0)} g Fett · ${round1(e.protein || 0)} g Eiweiß${e.planned ? " _(geplant)_" : ""}`);
       }
     }
     const noMeal = entries.filter(e => !MEAL_LABELS[e.meal]);
@@ -204,12 +216,17 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
       lines.push("**Ohne Zuordnung**");
       for (const e of noMeal) {
         const amount = e.servings != null ? `${round1(e.servings)} Portion(en)` : `${e.grams} g`;
-        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH`);
+        lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH${e.planned ? " _(geplant)_" : ""}`);
       }
     }
   }
   lines.push("");
   lines.push(`**Summe ${tag}:** ${Math.round(s.kcal)} kcal · ${round1(s.netCarbs)} g Netto-KH · ${round1(s.fat)} g Fett · ${round1(s.protein)} g Eiweiß`);
+  const geplant = entries.filter(e => e.planned).length;
+  if (geplant > 0) {
+    lines.push("");
+    lines.push(`_Davon sind ${geplant} Einträge geplant und noch nicht als gegessen bestätigt._`);
+  }
   lines.push("");
 
   lines.push(`## Was ${tag} noch frei ist`);

@@ -5,6 +5,7 @@ import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
 import { esc, showToast, showSnackbar, bindBackClose, selectOnFocus } from "./ui.js";
+import { zutatenFuerRezept, aufEinkaufsliste } from "./planer.js";
 
 export const MEAL_LABELS = {
   breakfast: "🌅 Frühstück",
@@ -159,7 +160,11 @@ export function undoLastWater(profileId, dateKey) {
  */
 export function rankFrequentItems(profileId, meal, { maxFrequent = 6, maxRecent = 4 } = {}) {
   const cutoff = Date.now() - 30 * 86400000;
-  const entries = Store.getConsumption().filter(e => e.profileId === profileId && e.at >= cutoff);
+  // Geplantes bleibt draußen: es ist noch nicht gegessen. Ohne diesen Filter füttert sich
+  // der Planer selbst — was er für Donnerstag vorschlägt, stünde ab sofort als "isst du
+  // oft" in der Schnellauswahl und käme deshalb beim nächsten Plan noch häufiger.
+  const entries = Store.getConsumption()
+    .filter(e => e.profileId === profileId && e.at >= cutoff && !e.planned);
 
   const byItem = new Map();
   for (const e of entries) {
@@ -357,6 +362,32 @@ export function rescaleConsumption(id, newAmount) {
   return updated;
 }
 
+/**
+ * Aus "vorgemerkt" wird "gegessen".
+ *
+ * Ein geplanter Eintrag ist ein vollständiger Eintrag — Menge, Mahlzeit, Nährwerte stehen
+ * seit dem Übernehmen fest. Bestätigen nimmt deshalb nur die Marke weg und rechnet nichts
+ * neu: was man geplant hat, hat man dann auch so gegessen. War es anders, ist der
+ * Bearbeiten-Dialog der richtige Weg, und der ist von derselben Zeile aus einen Tipp entfernt.
+ *
+ * `at` bleibt der Zeitpunkt der Planung. Der Tag, zu dem der Eintrag zählt, steht in
+ * `dateKey`; `at` sagt nur, wann die Zeile entstanden ist, und das war beim Planen.
+ */
+export function bestaetigeGeplant(id) {
+  const entry = Store.getConsumption().find(e => e.id === id);
+  if (!entry?.planned) return null;
+  const { planned, ...ohneMarke } = entry;
+  Store.updateConsumption(ohneMarke);
+  return ohneMarke;
+}
+
+/** Alle vorgemerkten Einträge einer Mahlzeit auf einmal — der übliche Fall beim Essen. */
+export function bestaetigeMahlzeit(profileId, dateKey, meal) {
+  const offen = getConsumptionForDate(profileId, dateKey).filter(e => e.planned && e.meal === meal);
+  for (const e of offen) bestaetigeGeplant(e.id);
+  return offen.length;
+}
+
 export function setConsumptionMeal(id, meal) {
   const entry = Store.getConsumption().find(e => e.id === id);
   if (!entry) return null;
@@ -392,24 +423,33 @@ export function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
  * Portionsgröße ("1× (60 g)" usw.), in einer Zeile ohne Umbruch — bei vielen/langen Werten
  * scrollt die Zeile statt in eine zweite umzubrechen.
  */
-export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], nebenLabel = "" } = {}) {
+export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], chipNeben = "", grammNeben = "" } = {}) {
   const portions = servingG ? round1(grams / servingG) : null;
-  // `nebenLabel` sitzt rechts auf der ERSTEN Beschriftungszeile — dort ist ohnehin Platz,
-  // und die Eingabefelder darunter behalten ihre volle Breite. Auf einem schmalen Gerät ist
-  // das Zahlenfeld das Wichtigste; ihm für einen Zusatzknopf Platz wegzunehmen wäre der
-  // falsche Tausch.
-  const beschriftung = (fuer, text, mitNeben) => (mitNeben && nebenLabel
-    ? `<div class="klar-label-row"><label for="${fuer}">${text}</label>${nebenLabel}</div>`
-    : `<label for="${fuer}">${text}</label>`);
+  // Zusatzknöpfe sitzen NEBEN den Beschriftungen, nie über oder unter ihnen: die Eingabefelder
+  // behalten dadurch ihre volle Breite, und auf einem schmalen Gerät ist das Zahlenfeld das
+  // Wichtigste.
+  //
+  // `chipNeben` steht rechts in der Reihe der Portions-Chips, auf derselben Höhe und in
+  // derselben Größe wie "1× (415 g)". Die Chips selbst scrollen darunter weg, wenn sie zu
+  // breit werden — der Zusatzknopf bleibt stehen, sonst müsste man zu ihm hinscrollen.
+  // `grammNeben` steht rechts neben "Menge in Gramm".
+  //
+  // Ohne Portionsgröße gibt es keine Chip-Reihe; dann rücken beide auf die Gramm-Zeile.
+  const grammZeile = (servingG ? grammNeben : chipNeben + grammNeben);
   return `
     ${servingG ? `
-      <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
-        ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
+      <div class="klar-chip-line">
+        <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
+          ${multiples.map(n => `<button type="button" class="klar-chip qty-mult-chip ${n === portions ? "top" : ""}" data-portions="${n}" style="flex:none">${n}× (${round1(servingG * n)} g)</button>`).join("")}
+        </div>
+        ${chipNeben}
       </div>
-      ${beschriftung("qtyPortionsInput", "Portionen", true)}
+      <label for="qtyPortionsInput">Portionen</label>
       <input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">
     ` : ""}
-    ${beschriftung("qtyGramsInput", "Menge in Gramm", !servingG)}
+    ${grammZeile
+      ? `<div class="klar-label-row"><label for="qtyGramsInput">Menge in Gramm</label>${grammZeile}</div>`
+      : `<label for="qtyGramsInput">Menge in Gramm</label>`}
     <input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">
   `;
 }
@@ -595,12 +635,45 @@ export function teilenAktion(entry, onChange) {
   };
 }
 
-/** Der kleine "+ Name"-Knopf für die Beschriftungszeile im Bearbeiten-Sheet. */
+/** Der "+ Name"-Knopf — als Chip, damit er neben den Portions-Chips dieselbe Größe hat. */
 function teilenKnopfHtml() {
   const andere = otherProfiles();
   if (andere.length === 0) return "";
   const text = andere.length === 1 ? `+ ${andere[0].name}` : "+ Weitere";
-  return `<button type="button" class="klar-inline-chip" id="editShare">${esc(text)}</button>`;
+  return `<button type="button" class="klar-chip klar-chip-aktion" id="editShare">${esc(text)}</button>`;
+}
+
+/** Und der Einkaufskorb daneben — dasselbe Format, damit die Zeile ruhig bleibt. */
+function einkaufKnopfHtml() {
+  return `<button type="button" class="klar-chip klar-chip-aktion" id="editEinkauf" title="Auf die Einkaufsliste">🛒 Einkauf</button>`;
+}
+
+/**
+ * Was dieser Eintrag für die Einkaufsliste bedeutet.
+ *
+ * Bei einem Rezept sind es die Zutaten, heruntergerechnet auf die eingetragenen Portionen —
+ * "Cheeseburger Auflauf" kann man nicht kaufen, Hackfleisch und Gouda schon. Bei einem Produkt
+ * ist es das Produkt. Dieselbe Rechnung wie beim Essensplan (siehe planer.js), damit nicht
+ * zwei Stellen dieselbe Frage unterschiedlich beantworten.
+ */
+function aufEinkaufslisteSetzen(entry, menge) {
+  const rezeptId = String(entry.barcode || "").startsWith("recipe:")
+    ? entry.barcode.slice("recipe:".length)
+    : null;
+  const rezept = rezeptId ? Store.getRecipe(rezeptId) : null;
+  if (rezept) {
+    const zutaten = zutatenFuerRezept(rezept, menge > 0 ? menge : (entry.servings || 1));
+    const gesetzt = aufEinkaufsliste(zutaten);
+    return gesetzt > 0
+      ? `${gesetzt} Zutat(en) auf der Einkaufsliste`
+      : "Steht schon alles auf der Einkaufsliste";
+  }
+  // Kein Rezept (mehr): der Name genügt. Der Barcode wandert mit, damit die Einkaufsliste
+  // ihn später auflösen kann.
+  const schonDrauf = Store.get().shoppingList.some(i => !i.checked && i.text === entry.name);
+  if (schonDrauf) return "Steht schon auf der Einkaufsliste";
+  Store.addShoppingItem(entry.name, rezeptId ? null : (entry.barcode || null));
+  return "Auf Einkaufsliste gesetzt";
 }
 
 /** Öffnet einen Dialog zum Bearbeiten (Menge/Mahlzeit anpassen, live Vorschau) oder Löschen. */
@@ -629,8 +702,10 @@ export function openEditConsumptionModal(entry, onDone) {
       <div class="klar-sheet-title">${esc(entry.name)}</div>
       <div class="klar-sheet-sub">Menge anpassen — Nährwerte werden automatisch neu berechnet.</div>
 
-      ${gramsBase != null ? amountFieldsHtml(servingG, currentGrams, { nebenLabel: teilenKnopfHtml() }) : `
-        <div class="klar-label-row"><label for="qtyGramsInput">Portionen</label>${teilenKnopfHtml()}</div>
+      ${gramsBase != null
+        ? amountFieldsHtml(servingG, currentGrams, { chipNeben: teilenKnopfHtml(), grammNeben: einkaufKnopfHtml() })
+        : `
+        <div class="klar-label-row"><label for="qtyGramsInput">Portionen</label>${teilenKnopfHtml()}${einkaufKnopfHtml()}</div>
         <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
       `}
 
@@ -709,6 +784,10 @@ export function openEditConsumptionModal(entry, onDone) {
     showToast(`Auch für ${kopien.map(k => Store.get().profiles.find(p => p.id === k.profileId)?.name || "?").join(", ")} eingetragen`);
     close();
     onDone?.();
+  });
+
+  overlay.querySelector("#editEinkauf")?.addEventListener("click", () => {
+    showToast(aufEinkaufslisteSetzen(entry, toVal(getGrams())));
   });
 
   overlay.querySelector("#editSave").addEventListener("click", () => {

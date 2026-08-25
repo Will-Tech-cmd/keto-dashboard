@@ -96,6 +96,10 @@ const profil = {
 };
 
 // ---------------------------------------------------------------------------
+// `geplant` unterscheidet die vorgemerkte Mahlzeit von der gegessenen. Sie steht in
+// derselben Zeile und trägt denselben Nährwert-Schnappschuss — ein Plan ist nichts anderes
+// als ein Tag, der gefüllt ist, bevor er da ist.
+//
 // `barcode` trägt bei Rezepten weiterhin "recipe:<id>" — daran hängt die Schnellauswahl
 // im Eintragen-Sheet (rankFrequentItems gruppiert danach). Die Spalte rezept_id bleibt
 // deshalb leer: sie wäre eine zweite Wahrheit über dieselbe Zuordnung.
@@ -122,6 +126,7 @@ const mahlzeit = {
     netto_kh: zahl(e.netCarbs),
     fett: zahl(e.fat),
     eiweiss: zahl(e.protein),
+    geplant: !!e.planned,
     erfasst_am: iso(e.at),
     geaendert_am: iso(stempel(e.updatedAt, e.at)),
   }),
@@ -140,6 +145,10 @@ const mahlzeit = {
       protein: z.eiweiss == null ? null : Number(z.eiweiss),
       at: millis(z.erfasst_am),
     };
+    // `planned` nur setzen, wenn es zutrifft. Ein Feld, das an jeder Bestandszeile neu
+    // auftaucht, sieht für den Vergleich in ablage.js wie eine Änderung aus — der nächste
+    // Start schriebe die gesamte Historie ohne Anlass neu.
+    if (z.geplant) e.planned = true;
     // Entweder Gramm (Produkt) ODER Portionen (Rezept) — nie beides. Daran erkennt
     // rescaleConsumption(), in welcher Einheit es weiterrechnen muss.
     if (z.portionen != null) e.servings = Number(z.portionen);

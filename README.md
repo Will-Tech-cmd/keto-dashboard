@@ -22,7 +22,50 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   trägt bei beiden ein, rechts wie gewohnt nur bei dir. „Rückgängig" nimmt beide zurück. Ein
   Eintrag ist dabei eine Kopie, keine neue Rechnung: ändert sich das Produkt später, bleiben
   beide auf ihrem Stand
+- Im Bearbeiten-Dialog stehen rechts neben den Mengen zwei Chips: „+ Name" reicht die
+  angepasste Portion nachträglich weiter, **🛒 Einkauf** setzt sie auf die Einkaufsliste —
+  bei einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
+
+#### Essen für die nächsten Tage planen
+„🗓️ Planen" stellt einen Vorschlag für einen bis vier Tage zusammen. Welche Mahlzeiten
+geplant werden, wählst du selbst — wer mittags nur am Wochenende isst, wählt Mittag ab; die
+Auswahl bleibt für das nächste Mal gemerkt.
+
+- Der Vorschlag entsteht **aus dem, was da ist**: den eigenen Rezepten, den Favoriten und dem,
+  was in den letzten acht Wochen wirklich gegessen wurde — jeweils zu der Tageszeit, zu der es
+  sonst auf dem Tisch steht. Es wird nichts erfunden, und genau deshalb stimmen die Nährwerte:
+  jede Zahl stammt aus einem eigenen Rezept oder einem gescannten Etikett.
+- Vier Größen, jede mit ihrer eigenen Art von Vorgabe — und das steht auch unter jedem Tag:
+  - **Netto-KH** sind eine harte Grenze. Ein Tag darüber wird gar nicht erst vorgeschlagen.
+  - **Fett** ist ebenfalls eine Grenze, kein Ziel: darunter zu bleiben ist kein Mangel.
+  - **Eiweiß** ist die Zahl, die getroffen werden soll, mit zehn Gramm Spielraum nach oben
+    wie nach unten. Außerhalb davon wiegt zu wenig schwerer als zu viel.
+  - **Kalorien** sind der Rahmen.
+
+  Fett war zwischenzeitlich als Zielwert dabei, mit Abweichung in beide Richtungen. Das war
+  doppelt gezählt — bei festen Kalorien, Kohlenhydraten und Eiweiß ergibt es sich aus
+  `kcal = 4·KH + 4·Eiweiß + 9·Fett` von selbst — und es zog jeden Plan ein Stück ins Fettere,
+  weil mehr Fett die billigste Art war, die Fettnote zu senken. Und als bloßer Aufschlag
+  gemessen, lag es an 52 von 120 gewürfelten Tagen trotzdem über der Grenze: Fettgrenze und
+  Eiweißziel bedingen sich bei festen Kalorien gegenseitig, der Motor tauschte dann eben.
+  Eine Grenze, die in 43 % der Fälle nachgibt, ist keine.
+- Die vorgeschlagene Menge orientiert sich an der **üblichen** Portion (dem Median deiner
+  bisherigen), nicht an der zuletzt eingetragenen — sonst würde aus einer großzügig
+  bestätigten Planportion über ein paar Runden die neue Normalportion.
+- Jede Zeile lässt sich einzeln neu würfeln („🔄"), ohne den Rest des Tages anzufassen.
+- **Mit hinterlegtem Gemini-Schlüssel** kann der Vorschlag verfeinert werden. Auch dann gilt:
+  das Modell wählt aus derselben Liste aus, die App rechnet. Zurück kommen nur Verweise und
+  Mengen — kein Gericht, das es nicht gibt, und keine geschätzte Kalorienzahl.
+- „🛒 Zutaten" legt alles Nötige zusammengefasst auf die Einkaufsliste; gleiche Zutaten
+  addieren sich über die Tage.
+
+Ein übernommener Plan ist **keine eigene Datenart**, sondern derselbe Mahlzeiten-Eintrag wie
+sonst, nur als vorgemerkt markiert. Er zählt in den Ringen mit — dafür plant man ja — und ist
+überall daran erkennbar: getönte Zeile, ein Haken statt des Pfeils, und ein Hinweis unter den
+Ringen. Beim Essen bestätigt man ihn mit einem Tipp (je Zeile oder „✓ gegessen" für die ganze
+Mahlzeit); danach ist es ein Eintrag wie jeder andere. Solange er unbestätigt ist, steht das
+auch in der Auswertung und im KI-Bericht dabei.
 
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
@@ -47,6 +90,7 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
 - Jede Zeile klappt auf vier Nährwertkacheln je 100 g auf, mit „Eintragen" und „Werte korrigieren"
+- 🛒 setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie im Verlauf
 - Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
 
@@ -256,7 +300,8 @@ js/
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
   analysis.js           Textbericht für die KI-Analyse
-  ai.js                 optionale Gemini-Anbindung
+  planer.js             Essensplan: Katalog aus Rezepten/Verlauf, Motor, Übernahme, Einkauf
+  ai.js                 optionale Gemini-Anbindung (Zutatenerkennung, Plan verfeinern)
   sync.js               optionale Online-Synchronisierung über Supabase (Profil-Tab)
   modus.js              Schalter zwischen altem und neuem Speicherweg (Standard: alt)
   ablage.js             der neue Speicherweg aus Sicht von store.js (Vergleich → Zeilen)
@@ -269,7 +314,7 @@ js/
   scanner.js            Kamera und Barcode-Erkennung
   product-editor.js     gemeinsames Formular „Produkt anlegen / Werte korrigieren"
   ui.js                 geteilte Helfer: Dialoge, Snackbar, Tastaturabstand, Theme
-  views/                start.js, scan.js, recipes.js, profile.js, onboarding.js
+  views/                start.js, scan.js, recipes.js, profile.js, onboarding.js, planer.js
 
 vendor/                 eingecheckte Fremdbibliotheken (siehe unten)
 icons/                  PWA-Icons

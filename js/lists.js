@@ -463,6 +463,7 @@ function renderHistoryList(el, items) {
             <div class="name">${esc(entry.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
+          <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
           <button class="icon-btn star ${isFav ? "on" : ""}" data-action="fav"
             title="${isFav ? "Favorit entfernen" : "Als Favorit merken"}"
             aria-pressed="${isFav}">${isFav ? "★" : "☆"}</button>
@@ -481,6 +482,16 @@ function renderHistoryList(el, items) {
       e.stopPropagation();
       toggleFavoriteFromHistory(barcode);
       renderHistoryList(el, items);
+    });
+    // Derselbe Weg wie in der Favoritenliste: der Verlauf trägt den Namen bereits, es braucht
+    // also weder Netz noch Nachschlagen. stopPropagation, weil die Zeile selbst die
+    // Nährwerte aufklappt.
+    entry.querySelector('[data-action="cart"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      const eintrag = Store.getHistory().find(h => h.barcode === barcode);
+      if (!eintrag) return;
+      Store.addShoppingItem(eintrag.name, barcode);
+      showToast("Auf Einkaufsliste gesetzt");
     });
     entry.querySelector('[data-action="eat"]').addEventListener("click", async () => {
       const product = await resolveProduct(barcode);
@@ -551,6 +562,10 @@ function renderEvaluation(body, goToTab) {
     days.push({
       key,
       hasEntries: entries.length > 0,
+      // Vorgemerkte Mahlzeiten zählen in den Summen mit (siehe planer.js). In einer
+      // Auswertung, die zurückblickt, muss das dabeistehen — sonst liest sich ein Tag, an
+      // dem man den Plan nicht bestätigt hat, wie ein gegessener.
+      geplant: entries.filter(e => e.planned).length,
       totals: sumConsumption(entries),
       targets: getTargetsForDate(profile, key),
     });
@@ -697,7 +712,7 @@ function evalDayRowHtml(d) {
       <div class="progress-track" style="height:6px">
         <div class="progress-fill ${over ? "over" : ""}" style="width:${pct}%"></div>
       </div>
-      <div class="meta">${round1(d.totals.kcal)} kcal · F ${round1(d.totals.fat)} · E ${round1(d.totals.protein)}</div>
+      <div class="meta">${round1(d.totals.kcal)} kcal · F ${round1(d.totals.fat)} · E ${round1(d.totals.protein)}${d.geplant ? ` · ${d.geplant}× geplant` : ""}</div>
     </div>
   `;
 }
