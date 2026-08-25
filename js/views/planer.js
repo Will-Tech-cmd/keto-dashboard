@@ -116,8 +116,9 @@ function render(body, goToTab) {
 
       <div class="klar-hint" style="margin-top:14px">
         ${esc(dateLabel(keys[0]))} bis ${esc(dateLabel(keys[keys.length - 1]))} · ${esc(profile.name)} ·
-        höchstens ${getTargetsForDate(profile, keys[0]).netCarbG} g Netto-KH,
-        rund ${getTargetsForDate(profile, keys[0]).proteinG} g Eiweiß am Tag
+        höchstens ${getTargetsForDate(profile, keys[0]).netCarbG} g Netto-KH und
+        ${getTargetsForDate(profile, keys[0]).fatG} g Fett, rund
+        ${getTargetsForDate(profile, keys[0]).proteinG} g Eiweiß am Tag
       </div>
 
       <div class="btn-row" style="margin-top:16px">
@@ -252,7 +253,7 @@ function tagKarteHtml(tag, index) {
       </div>
       ${tag.ueberLimit ? `
         <div class="klar-hint" style="color:var(--warm)">
-          Über dem KH-Limit — mit dem, was hinterlegt ist, geht es an diesem Tag nicht enger.
+          Über einer der Grenzen — mit dem, was hinterlegt ist, geht es an diesem Tag nicht enger.
         </div>
       ` : ""}
       <div class="klar-meals-card" style="margin-top:6px">${zeilen}</div>
@@ -268,18 +269,19 @@ function mengeText(z) {
 }
 
 /**
- * Ist/Soll unter dem Tag.
+ * Was der Tag zusammengerechnet ergibt — und wogegen.
  *
- * Netto-KH und Eiweiß mit ihrem Zielwert, Fett nur als Zahl: es ist in einer Keto-Bilanz
- * keine Vorgabe, sondern das, was Kalorien minus Kohlenhydrate minus Eiweiß übrig lassen.
- * Ein "/ 183 g" daneben läse sich wie ein verfehltes Ziel, wo gar keines steht.
+ * Die drei Zahlen stehen für dreierlei, und das steht auch dran: "max" bei den beiden
+ * Grenzen (Kohlenhydrate, Fett), das blanke Ziel beim Eiweiß. Ein "/ 183 g" ohne Zusatz läse
+ * sich beim Fett wie ein verfehltes Ziel, wo in Wahrheit eine Obergrenze steht, die man gern
+ * unterschreiten darf.
  */
 function abweichungHtml(tag) {
   return `
     <div class="klar-meal-group-macros" style="margin-top:10px">
-      <span><b>${round1(tag.summe.netCarbs)}</b> / ${tag.ziele.netCarbG} g KH</span>
+      <span><b>${round1(tag.summe.netCarbs)}</b> / max ${tag.ziele.netCarbG} g KH</span>
       <span><b>${round1(tag.summe.protein)}</b> / ${tag.ziele.proteinG} g Eiweiß</span>
-      <span><b>${round1(tag.summe.fat)}</b> g Fett</span>
+      <span><b>${round1(tag.summe.fat)}</b> / max ${tag.ziele.fatG} g Fett</span>
     </div>
   `;
 }

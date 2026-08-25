@@ -304,67 +304,91 @@ function baueSlot(katalog, slot, budget, { wuerfel, strafe, gesperrt }) {
 }
 
 /**
- * Wie weit unter dem Eiweißziel es noch als getroffen gilt.
+ * Wie weit das Eiweiß vom Ziel abweichen darf, ohne dass es als verfehlt gilt.
  *
- * Der Zielkorridor ist "zehn Gramm drunter bis genau drauf". Darin kostet nichts — man
- * plant kein Gramm genau, und ein Tag mit 112 statt 118 g Eiweiß ist kein schlechterer Tag.
+ * Zehn Gramm nach BEIDEN Seiten. Man plant kein Gramm genau, und ein Tag mit 112 oder 126 g
+ * gegen ein Ziel von 118 g ist kein schlechterer Tag.
  */
 const EIWEISS_FENSTER_G = 10;
 
 /**
  * Wie gut trifft dieser Tag die Vorgaben? Kleiner ist besser.
  *
- * Drei Größen, nicht vier — und das ist der Punkt:
+ * Vier Größen, und jede mit ihrer eigenen Art von Vorgabe — das ist der Punkt:
  *
- *   NETTO-KH   die harte Grenze. Darüber ist kein Plan, sondern ein Fehler; solche Tage
- *              werden gar nicht erst vorgeschlagen.
- *   EIWEISS    die Zahl, die getroffen werden SOLL, mit einem Korridor von zehn Gramm nach
- *              unten. Zu wenig geht im Defizit an die Muskulatur und wiegt deshalb schwerer
- *              als zu viel.
- *   KALORIEN   der Rahmen.
+ *   NETTO-KH   eine harte GRENZE.
+ *   FETT       ebenfalls eine harte GRENZE, kein Ziel. Darunter zu bleiben kostet nichts.
+ *   EIWEISS    eine Zahl, die getroffen werden SOLL, mit zehn Gramm Spielraum nach oben wie
+ *              nach unten. Zu wenig geht im Defizit an die Muskulatur und wiegt außerhalb
+ *              des Fensters schwerer als zu viel.
+ *   KALORIEN   der Rahmen, symmetrisch.
  *
- * FETT steht bewusst nicht dabei. Es ist in einer Keto-Bilanz keine Zielgröße, sondern der
- * Rest: bei festgelegten Kalorien, Kohlenhydraten und Eiweiß ergibt sich das Fett aus
- * kcal = 4·KH + 4·Eiweiß + 9·Fett von selbst. Es zusätzlich zu bewerten hieß, dieselbe
- * Abweichung zweimal zu zählen — und zog den Plan bei jedem Anlauf ein Stück in Richtung
- * "fetter", weil das die billigste Art war, die Fettnote zu senken.
+ * Die beiden Grenzen sind absichtlich Ausschlüsse und keine Aufschläge. Als Aufschlag mit
+ * doppeltem Gewicht gemessen: an 52 von 120 gewürfelten Tagen lag das Fett trotzdem darüber,
+ * weil sich Fettgrenze und Eiweißziel bei festen Kalorien gegenseitig bedingen und der Motor
+ * dann eben tauschte. Eine Grenze, die in 43 % der Fälle nachgibt, ist keine.
+ *
+ * Fett war zwischenzeitlich als Zielwert drin, mit Abweichung in beide Richtungen. Das war
+ * doppelt gezählt — bei festgelegten Kalorien, Kohlenhydraten und Eiweiß ergibt sich das
+ * Fett aus kcal = 4·KH + 4·Eiweiß + 9·Fett von selbst — und es zog jeden Plan ein Stück in
+ * Richtung "fetter", weil mehr Fett die billigste Art war, die Fettnote zu senken. Als reine
+ * Obergrenze ist es beides nicht: unterhalb sagt es nichts, oberhalb sagt es genau das, was
+ * es soll.
  */
 export function bewerteTag(summe, ziele) {
   if (summe.netCarbs > ziele.netCarbG) return Infinity;
+  if (ziele.fatG > 0 && summe.fat > ziele.fatG) return Infinity;
   const rel = (ist, soll) => (soll > 0 ? Math.abs(ist - soll) / soll : 0);
 
-  const untergrenze = Math.max(0, ziele.proteinG - EIWEISS_FENSTER_G);
+  const unten = Math.max(0, ziele.proteinG - EIWEISS_FENSTER_G);
+  const oben = ziele.proteinG + EIWEISS_FENSTER_G;
   let eiweiss = 0;
-  if (summe.protein < untergrenze) eiweiss = (untergrenze - summe.protein) / (ziele.proteinG || 1) * 2.5;
-  else if (summe.protein > ziele.proteinG) eiweiss = (summe.protein - ziele.proteinG) / (ziele.proteinG || 1);
+  if (summe.protein < unten) eiweiss = (unten - summe.protein) / (ziele.proteinG || 1) * 2.5;
+  else if (summe.protein > oben) eiweiss = (summe.protein - oben) / (ziele.proteinG || 1);
 
   return rel(summe.kcal, ziele.kcal) * 1.0
     + rel(summe.netCarbs, ziele.netCarbG) * 1.5
-    + eiweiss * 1.4;
+    + eiweiss * 8.0;
 }
-
-/** Ersatzmaßstab, wenn KEIN Anlauf im Limit blieb: der am wenigsten schlimme Tag. */
-function bewerteNotfall(summe, ziele) {
-  const rel = (ist, soll) => (soll > 0 ? Math.abs(ist - soll) / soll : 0);
-  return rel(summe.kcal, ziele.kcal) + rel(summe.netCarbs, ziele.netCarbG) * 3;
-}
-
-const VERSUCHE = 200;
 
 /**
- * Wie viel schlechter als der beste Anlauf noch als gleich gut gilt.
- *
- * Ohne diese Spanne wäre "Neu würfeln" wirkungslos: bei zweihundert Anläufen und einem
- * überschaubaren Katalog findet der Motor jedes Mal dasselbe Optimum, egal mit welchem
- * Startwert. Gemessen, nachdem Fett aus der Bewertung fiel — die Note hat seither weniger
- * Terme und damit weniger Möglichkeiten, zwei Tage zu unterscheiden.
- *
- * Zwei Tage, die sich um weniger als das unterscheiden, sind rechnerisch gleich gut; welchen
- * man davon bekommt, darf der Zufall entscheiden. Das ist kein Verzicht auf Qualität, sondern
- * die Einsicht, dass die dritte Nachkommastelle einer Note kein Grund ist, immer dasselbe
- * Abendessen zu bekommen.
+ * Ersatzmaßstab, wenn KEIN Anlauf innerhalb der Grenzen blieb: der am wenigsten schlimme Tag.
+ * Zählt nur, um wie viel die beiden Grenzen gerissen sind — die Zielwerte sind in dieser Lage
+ * ohnehin nicht mehr das Problem.
  */
-const GLEICH_GUT = 0.05;
+function bewerteNotfall(summe, ziele) {
+  const ueber = (ist, grenze) => (grenze > 0 ? Math.max(0, ist - grenze) / grenze : 0);
+  const rel = (ist, soll) => (soll > 0 ? Math.abs(ist - soll) / soll : 0);
+  return ueber(summe.netCarbs, ziele.netCarbG) * 3
+    + ueber(summe.fat, ziele.fatG) * 2
+    + rel(summe.kcal, ziele.kcal) * 0.5;
+}
+
+const VERSUCHE = 500;
+
+/**
+ * Die engere Wahl: welche Anläufe am Ende noch zur Auswahl stehen.
+ *
+ * Ohne sie wäre "Neu würfeln" wirkungslos — bei fünfhundert Anläufen findet der Motor jedes
+ * Mal dasselbe Optimum, egal mit welchem Startwert. Tage, die sich um wenige Prozent der Note
+ * unterscheiden, sind aber praktisch gleich gut; welchen man davon bekommt, darf der Zufall
+ * entscheiden.
+ *
+ * Die Spanne ist RELATIV, nicht absolut. Eine absolute hängt an den Gewichten der Note: als
+ * das Eiweiß von 1.4 auf 8.0 stieg, spreizten sich die Noten, und dieselbe Spanne fasste
+ * plötzlich nur noch einen einzigen Anlauf. Die Mindestzahl von zwei ist der Rückfall, damit
+ * "Neu würfeln" auch in einem sehr engen Katalog etwas tut.
+ *
+ * Was das kostet, am echten Katalog dieses Haushalts gemessen (120 gewürfelte Tage je
+ * Profil): nimmt man immer nur den einen besten Tag, liegt das Eiweiß an 10 Tagen außerhalb
+ * seiner ±10 g; mit der engeren Wahl an 14 bis 17. Die harten Grenzen — Kohlenhydrate und
+ * Fett — bleiben in beiden Fällen bei null Überschreitungen. Vier Tage mehr mit leicht
+ * danebenliegendem Eiweiß sind der Preis dafür, dass ein zweiter Tipp einen anderen Plan
+ * ergibt; das ist er wert.
+ */
+const GLEICH_GUT_REL = 0.15;
+const GLEICH_GUT_ABS = 0.02;
+const ENGERE_WAHL_MIN = 2;
 
 // ---------------------------------------------------------------------------
 // Aufschläge auf die Tagesnote
@@ -454,13 +478,21 @@ function portionsAufschlag(zeilen) {
  *
  * Warum Anläufe und keine Optimierung: die Aufgabe ist ein Rucksackproblem mit vier
  * Nebenbedingungen, und eine echte Lösung wäre für zwei Dutzend Rezepte erheblich mehr Code,
- * als sie wert ist. Zweihundert gewürfelte Tage kosten zusammen wenige Millisekunden und
- * liefern verlässlich einen Tag, der die Zielwerte trifft — und weil gewürfelt wird, sieht
- * jeder Tag anders aus. Das ist hier ausdrücklich erwünscht.
+ * als sie wert ist. Gewürfelt zu suchen hat außerdem den erwünschten Nebeneffekt, dass jeder
+ * Tag anders aussieht.
+ *
+ * Fünfhundert Anläufe, gemessen am echten Katalog dieses Haushalts (rund 90 Einträge): mit
+ * zweihundert lag das Eiweiß an 25 von 120 Tagen außerhalb seines Fensters, mit fünfhundert
+ * an 10. Der Suchraum ist enger, als er aussieht — Fettgrenze und Eiweißziel bedingen sich
+ * bei festen Kalorien gegenseitig, es gibt also nur einen schmalen Korridor. Ein Vier-Tage-
+ * Plan kostet damit rund 90 ms; das merkt niemand.
  */
 export function baueTag(katalog, ziele, mahlzeiten, { saat, strafe = new Map() }) {
   const anteile = anteileFuer(mahlzeiten);
-  const gueltige = [];
+  // Nach Zusammensetzung, nicht nach Anlauf: von fünfhundert Würfen sind viele Wort für Wort
+  // derselbe Tag. Ohne diese Zusammenfassung besteht die engere Wahl am Ende aus vier Kopien
+  // desselben Plans, und "Neu würfeln" ändert nichts.
+  const gueltige = new Map();
   let besteNote = Infinity;
   let notfall = null;
   let notNote = Infinity;
@@ -492,7 +524,9 @@ export function baueTag(katalog, ziele, mahlzeiten, { saat, strafe = new Map() }
       + slotAufschlag(alle, summe.kcal)
       + portionsAufschlag(alle);
     if (Number.isFinite(note)) {
-      gueltige.push({ note, slots });
+      const kennung = alle.map(z => `${z.slot}:${z.kandidat.key}:${z.menge}`).sort().join("|");
+      const bisher = gueltige.get(kennung);
+      if (!bisher || note < bisher.note) gueltige.set(kennung, { note, slots });
       if (note < besteNote) besteNote = note;
     }
     const nNote = bewerteNotfall(summe, ziele);
@@ -500,7 +534,9 @@ export function baueTag(katalog, ziele, mahlzeiten, { saat, strafe = new Map() }
   }
 
   // Unter allen, die praktisch gleich gut sind, entscheidet der Startwert.
-  const engereWahl = gueltige.filter(g => g.note <= besteNote + GLEICH_GUT);
+  const sortiert = [...gueltige.values()].sort((a, b) => a.note - b.note);
+  const inSpanne = sortiert.filter(g => g.note <= besteNote * (1 + GLEICH_GUT_REL) + GLEICH_GUT_ABS).length;
+  const engereWahl = sortiert.slice(0, Math.max(inSpanne, Math.min(ENGERE_WAHL_MIN, sortiert.length)));
   const bester = engereWahl.length
     ? engereWahl[Math.floor(zufall(saat + 31)() * engereWahl.length)].slots
     : null;
@@ -628,7 +664,10 @@ export function tauscheZeile(tag, slot, index, { katalog, saat }) {
     ...tag,
     mahlzeiten,
     summe,
-    ueberLimit: summe.netCarbs > tag.ziele.netCarbG,
+    // Beide Grenzen, nicht nur die Kohlenhydrate: nach einem Tausch kann auch das Fett
+    // darüber liegen, und dann gehört es genauso dazugesagt.
+    ueberLimit: summe.netCarbs > tag.ziele.netCarbG
+      || (tag.ziele.fatG > 0 && summe.fat > tag.ziele.fatG),
     leer: alle.length === 0,
   };
 }
@@ -676,7 +715,7 @@ export function ausVorschlag(vorschlag, { katalog, ziele, dateKeys, mahlzeiten }
       ...t,
       summe,
       ziele,
-      ueberLimit: summe.netCarbs > ziele.netCarbG,
+      ueberLimit: summe.netCarbs > ziele.netCarbG || (ziele.fatG > 0 && summe.fat > ziele.fatG),
       leer: alle.length === 0,
     };
   });
@@ -748,32 +787,53 @@ export function verwirfPlan(profileId, dateKey) {
  * alle Tage addieren sich — sonst stünde "Eier" viermal auf der Liste und man kauft dreimal
  * zu wenig.
  */
-export function zutatenFuerPlan(plan) {
+/** Sammelt Namen und Mengen und fasst gleiche Namen zusammen. */
+function zutatenSammler() {
   const summe = new Map();
-  const merke = (name, gramm) => {
-    const schluessel = String(name || "").trim().toLowerCase();
-    if (!schluessel) return;
-    const cur = summe.get(schluessel) || { name: String(name).trim(), gramm: 0 };
-    cur.gramm += gramm || 0;
-    summe.set(schluessel, cur);
+  return {
+    merke(name, gramm) {
+      const schluessel = String(name || "").trim().toLowerCase();
+      if (!schluessel) return;
+      const cur = summe.get(schluessel) || { name: String(name).trim(), gramm: 0 };
+      cur.gramm += gramm || 0;
+      summe.set(schluessel, cur);
+    },
+    fertig() {
+      return [...summe.values()]
+        .map(z => ({ name: z.name, gramm: Math.round(z.gramm) }))
+        .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    },
   };
+}
 
+/**
+ * Die Zutaten eines Rezepts für eine bestimmte Portionszahl.
+ *
+ * Die Mengen in einem Rezept gelten für das GANZE Rezept, nicht für eine Portion — wer eine
+ * von vier Portionen plant, braucht ein Viertel davon. Auch der Bearbeiten-Dialog auf der
+ * Startseite rechnet darüber (siehe consumption.js).
+ */
+export function zutatenFuerRezept(rezept, portionen) {
+  const sammler = zutatenSammler();
+  const anteil = portionen / (rezept?.servings || 1);
+  for (const zutat of rezept?.ingredients || []) sammler.merke(zutat.name, (zutat.grams || 0) * anteil);
+  return sammler.fertig();
+}
+
+export function zutatenFuerPlan(plan) {
+  const sammler = zutatenSammler();
   for (const tag of plan) {
     for (const zeilen of Object.values(tag.mahlzeiten)) {
       for (const z of zeilen) {
-        if (!z.istRezept) { merke(z.name, z.menge); continue; }
+        if (!z.istRezept) { sammler.merke(z.name, z.menge); continue; }
         const rezept = Store.getRecipe(z.recipeId);
         // Rezept nicht (mehr) da: wenigstens der Name auf die Liste, statt es zu verschlucken.
-        if (!rezept) { merke(z.name, 0); continue; }
-        const anteil = z.menge / (rezept.servings || 1);
-        for (const zutat of rezept.ingredients || []) merke(zutat.name, (zutat.grams || 0) * anteil);
+        if (!rezept) { sammler.merke(z.name, 0); continue; }
+        for (const zutat of zutatenFuerRezept(rezept, z.menge)) sammler.merke(zutat.name, zutat.gramm);
       }
     }
   }
-
-  return [...summe.values()]
-    .map(z => ({ name: z.name, gramm: Math.round(z.gramm) }))
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  return sammler.fertig();
 }
 
 /** "Hähnchenbrustfilet 400 g" — was ohne Menge geführt wird (Gewürze), bleibt ohne Zahl. */

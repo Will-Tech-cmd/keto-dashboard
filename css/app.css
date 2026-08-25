@@ -1307,3 +1307,16 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 
 /* Ein Schalter, der aussieht wie eine Pille — an ist gefüllt, aus ist umrandet. */
 .klar-pill-btn.is-an { background: var(--accent-soft); border-color: var(--accent-soft-border); }
+
+/* Chip-Reihe mit festem Zusatzknopf rechts ("+ Sandra", "🛒 Einkauf").
+   Die Chips selbst scrollen waagerecht, wenn sie zu breit werden; der Zusatzknopf steht
+   außerhalb dieses Bereichs und bleibt deshalb sichtbar. Läge er in der Reihe, müsste man
+   zu ihm hinscrollen — bei vier Vielfachen auf 375 px immer. */
+.klar-chip-line { display: flex; align-items: center; gap: 8px; }
+.klar-chip-line > .klar-chip-row { flex: 1; min-width: 0; margin-bottom: 0; }
+.klar-chip-line > .klar-chip-aktion { flex: none; }
+
+/* Aktion im Format eines Chips: gleiche Höhe und Schrift wie "1× (415 g)" daneben, aber in
+   der Akzentfarbe — es ist ein Knopf, der etwas auslöst, und kein Wert zur Auswahl. */
+.klar-chip.klar-chip-aktion { color: var(--accent); font-weight: 800; white-space: nowrap; }
+.klar-label-row .klar-chip-aktion { margin-bottom: 4px; }

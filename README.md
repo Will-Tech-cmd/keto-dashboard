@@ -22,6 +22,9 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   trägt bei beiden ein, rechts wie gewohnt nur bei dir. „Rückgängig" nimmt beide zurück. Ein
   Eintrag ist dabei eine Kopie, keine neue Rechnung: ändert sich das Produkt später, bleiben
   beide auf ihrem Stand
+- Im Bearbeiten-Dialog stehen rechts neben den Mengen zwei Chips: „+ Name" reicht die
+  angepasste Portion nachträglich weiter, **🛒 Einkauf** setzt sie auf die Einkaufsliste —
+  bei einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 #### Essen für die nächsten Tage planen
@@ -33,15 +36,20 @@ Auswahl bleibt für das nächste Mal gemerkt.
   was in den letzten acht Wochen wirklich gegessen wurde — jeweils zu der Tageszeit, zu der es
   sonst auf dem Tisch steht. Es wird nichts erfunden, und genau deshalb stimmen die Nährwerte:
   jede Zahl stammt aus einem eigenen Rezept oder einem gescannten Etikett.
-- Drei Größen entscheiden, und jede auf ihre Art:
-  - **Netto-KH** sind eine Grenze, keine Zielgröße. Ein Tag, der sie reißt, wird gar nicht
-    erst vorgeschlagen.
-  - **Eiweiß** ist die Zahl, die getroffen werden soll — mit einem Korridor von zehn Gramm
-    nach unten. Zu wenig wiegt schwerer als zu viel.
+- Vier Größen, jede mit ihrer eigenen Art von Vorgabe — und das steht auch unter jedem Tag:
+  - **Netto-KH** sind eine harte Grenze. Ein Tag darüber wird gar nicht erst vorgeschlagen.
+  - **Fett** ist ebenfalls eine Grenze, kein Ziel: darunter zu bleiben ist kein Mangel.
+  - **Eiweiß** ist die Zahl, die getroffen werden soll, mit zehn Gramm Spielraum nach oben
+    wie nach unten. Außerhalb davon wiegt zu wenig schwerer als zu viel.
   - **Kalorien** sind der Rahmen.
-  - **Fett** ist bewusst keine Vorgabe, sondern der Rest: bei festgelegten Kalorien,
-    Kohlenhydraten und Eiweiß ergibt es sich aus `kcal = 4·KH + 4·Eiweiß + 9·Fett` von
-    selbst. Deshalb steht es unter dem Tag auch ohne „/ Ziel".
+
+  Fett war zwischenzeitlich als Zielwert dabei, mit Abweichung in beide Richtungen. Das war
+  doppelt gezählt — bei festen Kalorien, Kohlenhydraten und Eiweiß ergibt es sich aus
+  `kcal = 4·KH + 4·Eiweiß + 9·Fett` von selbst — und es zog jeden Plan ein Stück ins Fettere,
+  weil mehr Fett die billigste Art war, die Fettnote zu senken. Und als bloßer Aufschlag
+  gemessen, lag es an 52 von 120 gewürfelten Tagen trotzdem über der Grenze: Fettgrenze und
+  Eiweißziel bedingen sich bei festen Kalorien gegenseitig, der Motor tauschte dann eben.
+  Eine Grenze, die in 43 % der Fälle nachgibt, ist keine.
 - Die vorgeschlagene Menge orientiert sich an der **üblichen** Portion (dem Median deiner
   bisherigen), nicht an der zuletzt eingetragenen — sonst würde aus einer großzügig
   bestätigten Planportion über ein paar Runden die neue Normalportion.

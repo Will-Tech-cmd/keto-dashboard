@@ -65,6 +65,11 @@ console.log("\n1) Das KH-Limit ist eine Grenze, keine Zielgroesse");
     for (const tag of plan(saat)) if (tag.summe.netCarbs > ZIELE.netCarbG + 1e-9) ueber++;
   }
   ok("in 100 geplanten Tagen keiner ueber dem Limit", ueber === 0, `${ueber} daneben`);
+  let fettUeber = 0;
+  for (let saat = 1; saat <= 25; saat++) {
+    for (const tag of plan(saat)) if (tag.summe.fat > ZIELE.fatG + 1e-9) fettUeber++;
+  }
+  ok("und keiner ueber der Fettgrenze", fettUeber === 0, `${fettUeber} daneben`);
   ok("bewerteTag verwirft alles ueber dem Limit",
      p.bewerteTag({ kcal: 1900, netCarbs: 20.1, fat: 150, protein: 110 }, ZIELE) === Infinity);
   ok("genau auf dem Limit ist noch gueltig",
@@ -257,6 +262,15 @@ console.log("\n11) Zutaten fuer den Einkauf");
     { dateKey: "2026-09-01", mahlzeiten: { dinner: [zeile(2)] } },
     { dateKey: "2026-09-02", mahlzeiten: { dinner: [zeile(1)], breakfast: [produktZeile] } },
   ];
+  // Einzeln: dieselbe Rechnung nutzt der Bearbeiten-Dialog auf der Startseite (consumption.js).
+  const einzeln = p.zutatenFuerRezept(r, 2);
+  ok("Rezept einzeln: Haelfte von vier Portionen",
+     einzeln.find(z => z.name === "Hackfleisch")?.gramm === 250, JSON.stringify(einzeln));
+  ok("Rezept einzeln: alphabetisch", einzeln.map(z => z.name).join(",") === "Gouda,Hackfleisch,Salz");
+  ok("null Portionen ergibt nichts Essbares",
+     p.zutatenFuerRezept(r, 0).every(z => z.gramm === 0));
+  ok("kein Rezept -> leere Liste", p.zutatenFuerRezept(null, 1).length === 0);
+
   const zutaten = p.zutatenFuerPlan(testPlan);
   const finde = (n) => zutaten.find(z => z.name === n);
   // 2 Portionen von 4 = die Haelfte des Rezepts, dazu 1 Portion = ein Viertel: 500 * 0.75.
@@ -369,24 +383,38 @@ console.log("\n14) Bestaetigen");
 }
 
 // ---------------------------------------------------------------------------
-console.log("\n15) Eiweiss ist das Ziel, Fett ist der Rest");
+console.log("\n15) Eiweiss mit Spielraum, Fett als Obergrenze");
 {
   const note = (kcal, netCarbs, fat, protein) => p.bewerteTag({ kcal, netCarbs, fat, protein }, ZIELE);
   const genau = note(1900, 15, 150, 110);
 
-  // Der Korridor: bis zehn Gramm unter dem Ziel ist getroffen, nicht verfehlt.
+  // Eiweiss: zehn Gramm Spielraum nach BEIDEN Seiten. Man plant kein Gramm genau.
   ok("5 g unter dem Ziel kostet nichts", note(1900, 15, 150, 105) === genau, String(note(1900, 15, 150, 105)));
   ok("genau 10 g unter kostet nichts", note(1900, 15, 150, 100) === genau);
+  ok("5 g ueber dem Ziel kostet nichts", note(1900, 15, 150, 115) === genau);
+  ok("genau 10 g ueber kostet nichts", note(1900, 15, 150, 120) === genau);
   ok("15 g unter kostet", note(1900, 15, 150, 95) > genau);
+  ok("15 g ueber kostet", note(1900, 15, 150, 125) > genau);
   ok("darunter wird es stetig schlimmer", note(1900, 15, 150, 80) > note(1900, 15, 150, 95));
-  ok("ueber dem Ziel kostet ebenfalls", note(1900, 15, 150, 130) > genau);
-  // Gleicher Abstand, unterschiedliches Gewicht: zu wenig geht im Defizit an die Muskulatur.
-  ok("20 g zu wenig wiegt schwerer als 20 g zu viel",
-     note(1900, 15, 150, 90) > note(1900, 15, 150, 130));
+  // Gleicher Abstand vom Fenster, unterschiedliches Gewicht: zu wenig geht im Defizit an die
+  // Muskulatur.
+  ok("20 g unter dem Fenster wiegt schwerer als 20 g darueber",
+     note(1900, 15, 150, 80) > note(1900, 15, 150, 140));
 
-  // Fett ist bei festen Kalorien, KH und Eiweiss rechnerisch bestimmt — es noch einmal zu
-  // bewerten hiesse, dieselbe Abweichung zweimal zu zaehlen.
-  ok("Fett aendert die Note nicht", note(1900, 15, 60, 110) === genau && note(1900, 15, 260, 110) === genau);
+  // Fett ist eine Obergrenze, kein Ziel: darunter sagt es nichts, darueber sagt es alles.
+  // Fett ist eine Grenze wie die Kohlenhydrate, kein Ziel: darunter sagt es nichts, darueber
+  // ist der Tag ungueltig. Als blosser Aufschlag gemessen, lag es an 52 von 120 gewuerfelten
+  // Tagen trotzdem darueber — Fettgrenze und Eiweissziel bedingen sich bei festen Kalorien
+  // gegenseitig, und der Motor tauschte dann eben. ZIELE.fatG ist 150.
+  ok("weit unter der Fettgrenze kostet dasselbe wie genau darauf",
+     note(1900, 15, 60, 110) === genau, String(note(1900, 15, 60, 110)));
+  ok("ein Gramm unter der Grenze ebenfalls", note(1900, 15, 149, 110) === genau);
+  ok("ein Gramm darueber ist ungueltig", note(1900, 15, 151, 110) === Infinity);
+  ok("weit darueber ebenfalls", note(1900, 15, 300, 110) === Infinity);
+  // Ohne Fettziel (fatG 0 oder fehlend) darf die Grenze nicht alles ausschliessen.
+  ok("ohne Fettziel keine Fettgrenze",
+     Number.isFinite(p.bewerteTag({ kcal: 1900, netCarbs: 15, fat: 300, protein: 110 },
+                                  { ...ZIELE, fatG: 0 })));
   ok("Kalorien zaehlen weiterhin", note(1500, 15, 150, 110) > genau);
   ok("KH ueber dem Limit bleibt ungueltig", note(1900, 21, 150, 110) === Infinity);
 }
