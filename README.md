@@ -24,6 +24,31 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   beide auf ihrem Stand
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
+#### Essen für die nächsten Tage planen
+„🗓️ Planen" stellt einen Vorschlag für einen bis vier Tage zusammen — Frühstück, Mittag,
+Abend, auf Wunsch Snacks.
+
+- Der Vorschlag entsteht **aus dem, was da ist**: den eigenen Rezepten, den Favoriten und dem,
+  was in den letzten acht Wochen wirklich gegessen wurde — jeweils zu der Tageszeit, zu der es
+  sonst auf dem Tisch steht. Es wird nichts erfunden, und genau deshalb stimmen die Nährwerte:
+  jede Zahl stammt aus einem eigenen Rezept oder einem gescannten Etikett.
+- Das **Netto-KH-Limit ist eine Grenze, keine Zielgröße.** Ein Tag, der es reißt, wird gar
+  nicht erst vorgeschlagen. Kalorien, Fett und Eiweiß sind Richtwerte; zu wenig Eiweiß wiegt
+  dabei schwerer als zu viel.
+- Jede Zeile lässt sich einzeln neu würfeln („🔄"), ohne den Rest des Tages anzufassen.
+- **Mit hinterlegtem Gemini-Schlüssel** kann der Vorschlag verfeinert werden. Auch dann gilt:
+  das Modell wählt aus derselben Liste aus, die App rechnet. Zurück kommen nur Verweise und
+  Mengen — kein Gericht, das es nicht gibt, und keine geschätzte Kalorienzahl.
+- „🛒 Zutaten" legt alles Nötige zusammengefasst auf die Einkaufsliste; gleiche Zutaten
+  addieren sich über die Tage.
+
+Ein übernommener Plan ist **keine eigene Datenart**, sondern derselbe Mahlzeiten-Eintrag wie
+sonst, nur als vorgemerkt markiert. Er zählt in den Ringen mit — dafür plant man ja — und ist
+überall daran erkennbar: getönte Zeile, ein Haken statt des Pfeils, und ein Hinweis unter den
+Ringen. Beim Essen bestätigt man ihn mit einem Tipp (je Zeile oder „✓ gegessen" für die ganze
+Mahlzeit); danach ist es ein Eintrag wie jeder andere. Solange er unbestätigt ist, steht das
+auch in der Auswertung und im KI-Bericht dabei.
+
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
@@ -47,6 +72,7 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
 - Jede Zeile klappt auf vier Nährwertkacheln je 100 g auf, mit „Eintragen" und „Werte korrigieren"
+- 🛒 setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie im Verlauf
 - Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
 
@@ -256,7 +282,8 @@ js/
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
   analysis.js           Textbericht für die KI-Analyse
-  ai.js                 optionale Gemini-Anbindung
+  planer.js             Essensplan: Katalog aus Rezepten/Verlauf, Motor, Übernahme, Einkauf
+  ai.js                 optionale Gemini-Anbindung (Zutatenerkennung, Plan verfeinern)
   sync.js               optionale Online-Synchronisierung über Supabase (Profil-Tab)
   modus.js              Schalter zwischen altem und neuem Speicherweg (Standard: alt)
   ablage.js             der neue Speicherweg aus Sicht von store.js (Vergleich → Zeilen)
@@ -269,7 +296,7 @@ js/
   scanner.js            Kamera und Barcode-Erkennung
   product-editor.js     gemeinsames Formular „Produkt anlegen / Werte korrigieren"
   ui.js                 geteilte Helfer: Dialoge, Snackbar, Tastaturabstand, Theme
-  views/                start.js, scan.js, recipes.js, profile.js, onboarding.js
+  views/                start.js, scan.js, recipes.js, profile.js, onboarding.js, planer.js
 
 vendor/                 eingecheckte Fremdbibliotheken (siehe unten)
 icons/                  PWA-Icons

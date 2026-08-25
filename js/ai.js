@@ -64,7 +64,14 @@ function numOrNull(v) {
   return typeof v === "number" && !Number.isNaN(v) ? v : null;
 }
 
-async function callGemini(parts, key) {
+/**
+ * Ein Aufruf, ein Schema, ein Objekt zurück.
+ *
+ * Das Schema kommt von außen, weil es inzwischen zwei Aufgaben gibt: Zutaten erkennen und
+ * einen Essensplan zusammenstellen. Was mit dem Ergebnis geschieht, entscheidet die
+ * aufrufende Funktion — hier steht nur, wie man mit Gemini redet und was schiefgehen kann.
+ */
+async function callGemini(parts, key, schema) {
   let res;
   try {
     res = await fetch(ENDPOINT, {
@@ -77,7 +84,7 @@ async function callGemini(parts, key) {
         // fertig ist — die Zutatenliste bricht dann mittendrin ab.
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: INGREDIENT_SCHEMA,
+          responseSchema: schema,
           maxOutputTokens: 8192,
         },
       }),
@@ -112,16 +119,27 @@ async function callGemini(parts, key) {
     throw err;
   }
 
-  let parsed;
   try {
-    parsed = JSON.parse(textOut);
+    return JSON.parse(textOut);
   } catch {
     const err = new Error("Antwort von Gemini war kein gültiges JSON.");
     err.apiError = true;
     throw err;
   }
+}
 
-  return (parsed.ingredients || [])
+/** Wirft, wenn kein Schlüssel hinterlegt ist — die KI-Knöpfe erscheinen dann gar nicht erst. */
+function schluesselOderFehler() {
+  const key = getApiKey();
+  if (key) return key;
+  const err = new Error("Kein Gemini-API-Schlüssel hinterlegt.");
+  err.noKey = true;
+  throw err;
+}
+
+/** Die Zutaten-Antwort in die Schreibweise der App. */
+function zuZutaten(parsed) {
+  return (parsed?.ingredients || [])
     .map(i => ({
       name: String(i.name || "").trim(),
       grams: numOrNull(i.grams),
@@ -141,13 +159,8 @@ async function callGemini(parts, key) {
 
 /** Schickt eine Zutatenliste als Text an Gemini. Wirft, wenn kein Schlüssel hinterlegt ist. */
 export async function recognizeIngredientsFromText(text) {
-  const key = getApiKey();
-  if (!key) {
-    const err = new Error("Kein Gemini-API-Schlüssel hinterlegt.");
-    err.noKey = true;
-    throw err;
-  }
-  return callGemini([{ text: `${PROMPT}\n\nZutatenliste:\n${text}` }], key);
+  const key = schluesselOderFehler();
+  return zuZutaten(await callGemini([{ text: `${PROMPT}\n\nZutatenliste:\n${text}` }], key, INGREDIENT_SCHEMA));
 }
 
 /**
@@ -156,21 +169,16 @@ export async function recognizeIngredientsFromText(text) {
  * lesbaren Screenshots.
  */
 export async function recognizeIngredientsFromImage(file) {
-  const key = getApiKey();
-  if (!key) {
-    const err = new Error("Kein Gemini-API-Schlüssel hinterlegt.");
-    err.noKey = true;
-    throw err;
-  }
+  const key = schluesselOderFehler();
   // Sehr hohe Scrolling-Screenshots vorher verkleinern — sonst wird der Base64-Upload
   // unnötig riesig (und kann Gemini's Größenlimit für inlineData reißen).
   const prepared = await downscaleImageIfNeeded(file);
   const data = await fileToBase64(prepared);
   const mimeType = prepared.type || file.type || "image/jpeg";
-  return callGemini([
+  return zuZutaten(await callGemini([
     { text: PROMPT },
     { inlineData: { mimeType, data } },
-  ], key);
+  ], key, INGREDIENT_SCHEMA));
 }
 
 async function fileToBase64(file) {
@@ -213,4 +221,108 @@ export function describeAiError(err) {
   if (err.quotaExceeded) return "Gemini-Tageskontingent erschöpft — später erneut versuchen.";
   if (err.networkError) return "Keine Verbindung zu Gemini möglich (offline?).";
   return "KI-Erkennung fehlgeschlagen: " + err.message;
+}
+
+// ---------------------------------------------------------------------------
+// Essensplan verfeinern
+//
+// Der lokale Motor (planer.js) stellt einen Tag zusammen, der die Zielwerte trifft. Was er
+// nicht kann, ist Geschmack: dass Lachs und Spinat zusammengehören, Frischkäse und Krakauer
+// aber nicht in dieselbe Schüssel. Genau dafür ist dieser Aufruf da.
+//
+// Die Regel, die ihn ungefährlich macht:
+//
+//     DAS MODELL WÄHLT AUS, DIE APP RECHNET.
+//
+// Zurück kommen nur Verweise auf den mitgeschickten Katalog und Mengen — kein Name, keine
+// Kalorienzahl, kein neues Gericht. Ein Verweis, den der Katalog nicht kennt, wird verworfen
+// (siehe planer.js: ausVorschlag). Damit kann hier nichts hereinkommen, das der Haushalt
+// nicht hat, und keine Zahl, die geschätzt statt gerechnet wurde.
+// ---------------------------------------------------------------------------
+
+const PLAN_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    eintraege: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          tag: { type: "STRING" },
+          mahlzeit: { type: "STRING" },
+          nr: { type: "NUMBER" },
+          menge: { type: "NUMBER" },
+        },
+        required: ["tag", "mahlzeit", "nr", "menge"],
+      },
+    },
+  },
+  required: ["eintraege"],
+};
+
+// Mehr als das schickt der Prompt nicht mit: die seltenen Einträge tragen zur Auswahl kaum
+// etwas bei und kosten nur Platz.
+const KATALOG_GRENZE = 60;
+
+function katalogText(katalog) {
+  return katalog.map((k, i) => {
+    const einheit = k.einheit === "portion" ? "Portion" : "100 g";
+    const p = k.per;
+    return `${i}. ${k.name} — je ${einheit}: ${Math.round(p.kcal)} kcal, `
+      + `${p.netCarbs} g KH, ${p.fat ?? "?"} g Fett, ${p.protein ?? "?"} g Eiweiß`
+      + ` | Einheit: ${k.einheit === "portion" ? "Portionen" : "Gramm"}`
+      + `, üblich ${k.standard}, von ${k.min} bis ${k.max}, Schritt ${k.schritt}`;
+  }).join("\n");
+}
+
+/**
+ * Lässt Gemini aus dem Katalog einen Plan zusammenstellen.
+ *
+ * Gibt die Einträge bereits mit `katalogKey` zurück — die Nummern sind nur eine Abkürzung für
+ * den Prompt, außerhalb dieser Datei haben sie nichts zu suchen.
+ */
+export async function verfeinerePlan({ katalog, ziele, tage, mahlzeiten }) {
+  const key = schluesselOderFehler();
+
+  // Die naheliegendsten zuerst, damit die Grenze die richtigen abschneidet.
+  const kurz = [...katalog]
+    .sort((a, b) => (b.anzahl + (b.favorit ? 3 : 0)) - (a.anzahl + (a.favorit ? 3 : 0)))
+    .slice(0, KATALOG_GRENZE);
+
+  const namen = { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" };
+  const auftrag = [
+    "Du stellst einen Essensplan zusammen. Verwende AUSSCHLIESSLICH die nummerierten Gerichte",
+    "aus der Liste — erfinde nichts und schlage nichts vor, was nicht in der Liste steht.",
+    "",
+    `Tage: ${tage.join(", ")}`,
+    `Mahlzeiten je Tag: ${mahlzeiten.map(m => `${m} (${namen[m]})`).join(", ")}`,
+    "",
+    "Zielwerte für JEDEN einzelnen Tag (Summe über alle Mahlzeiten):",
+    `- Netto-Kohlenhydrate: HÖCHSTENS ${ziele.netCarbG} g. Das ist eine harte Grenze, keine Zielgröße.`,
+    `- Kalorien: etwa ${ziele.kcal} kcal (±10 %)`,
+    `- Eiweiß: mindestens ${ziele.proteinG} g`,
+    `- Fett: etwa ${ziele.fatG} g`,
+    "",
+    "Regeln:",
+    "1. Je Mahlzeit ein bis zwei Einträge. Was zusammen auf einem Teller Sinn ergibt, gehört zusammen.",
+    "2. An einem Tag kommt kein Gericht zweimal vor, und an zwei aufeinanderfolgenden Tagen",
+    "   steht nicht dasselbe auf dem Tisch.",
+    "3. `menge` in der Einheit des Gerichts, innerhalb der angegebenen Grenzen und auf die",
+    "   angegebene Schrittweite gerundet.",
+    "4. `nr` ist die Nummer aus der Liste, `tag` genau einer der oben genannten Tage,",
+    "   `mahlzeit` genau einer der englischen Schlüssel.",
+    "",
+    "Gerichte:",
+    katalogText(kurz),
+  ].join("\n");
+
+  const antwort = await callGemini([{ text: auftrag }], key, PLAN_SCHEMA);
+  return (antwort?.eintraege || [])
+    .map(e => ({
+      tag: String(e.tag || ""),
+      mahlzeit: String(e.mahlzeit || ""),
+      katalogKey: kurz[Math.round(Number(e.nr))]?.key || null,
+      menge: numOrNull(e.menge),
+    }))
+    .filter(e => e.katalogKey && e.menge != null);
 }

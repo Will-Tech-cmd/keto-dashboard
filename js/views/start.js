@@ -6,6 +6,7 @@ import {
   getConsumptionForDate, sumConsumption, openEditConsumptionModal,
   getActiveDateKey, shiftActiveDate, setActiveDateKey, dateLabel, MEAL_LABELS,
   logWater, getWaterForDate, sumWater, undoLastWater,
+  bestaetigeGeplant, bestaetigeMahlzeit,
 } from "../consumption.js";
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
 import { openTodayQuestionModal } from "../analysis.js";
@@ -93,18 +94,20 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
     </div>
     <div id="klarMeals"></div>
     <div class="klar-day-actions">
+      <button type="button" class="klar-pill-btn" id="planBtn">🗓️ Planen</button>
       <button type="button" class="klar-pill-btn" id="saveImageBtn">📸 Screenshot</button>
       <button type="button" class="klar-pill-btn" id="todayQuestionBtn">🤖 Was geht noch?</button>
     </div>
   `;
 
+  container.querySelector("#planBtn").addEventListener("click", () => goToTab("planer"));
   container.querySelector("#saveImageBtn").addEventListener("click", () => saveDashboardAsImage(container));
   container.querySelector("#todayQuestionBtn").addEventListener("click", () => openTodayQuestionModal(dateKey));
 
   renderKlarWeekStrip(container, dateKey, refresh);
-  renderKlarMacros(container, totals, targets, goToTab, profile, refresh);
+  renderKlarMacros(container, totals, targets, goToTab, profile, refresh, entries);
   renderKlarWater(container, profile, dateKey, refresh);
-  renderKlarMeals(container, entries, refresh, openEntrySheet);
+  renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey);
 }
 
 function renderKlarWeekStrip(container, activeKey, refresh) {
@@ -190,7 +193,23 @@ function wireDateSwipe(el, days, refresh) {
   el.addEventListener("touchcancel", () => { startX = null; settle(); }, { passive: true });
 }
 
-function renderKlarMacros(container, totals, targets, goToTab, profile, refresh) {
+/**
+ * Ein Tag mit vorgemerkten Mahlzeiten sieht aus wie ein Tag mit gegessenen — dieselben Ringe,
+ * dieselben Summen. Genau das ist beim Planen erwünscht, wäre beim Zurückblicken aber eine
+ * stille Unwahrheit. Deshalb steht überall dabei, woran man ist: geplant zählt mit, und man
+ * sieht, dass es geplant ist.
+ */
+function geplantHinweis(entries, dateKey) {
+  const offen = entries.filter(e => e.planned).length;
+  if (offen === 0) return "";
+  const zukunft = dateKey > dateKeyOf(Date.now());
+  const was = offen === 1 ? "Eine Mahlzeit ist" : `${offen} Mahlzeiten sind`;
+  return zukunft
+    ? `${was} vorgemerkt — beim Essen bestätigen.`
+    : `${was} noch als Plan eingetragen, nicht als gegessen bestätigt.`;
+}
+
+function renderKlarMacros(container, totals, targets, goToTab, profile, refresh, entries) {
   const el = container.querySelector("#klarMacros");
   const rings = [
     { label: "Kalorien", unit: "kcal", target: targets.kcal, consumed: totals.kcal },
@@ -200,10 +219,11 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh)
   ];
   const carbsLeft = targets.netCarbG - totals.netCarbs;
   const budgetHint = carbsLeft > 0 ? klarBudgetHint(carbsLeft) : "";
+  const planHint = geplantHinweis(entries, getActiveDateKey());
 
   el.innerHTML = `
     <div class="klar-card-head">
-      <span class="klar-eyebrow">Nährwerte ${esc(dateLabel(getActiveDateKey()).toLowerCase())}</span>
+      <span class="klar-eyebrow">Nährwerte ${esc(dateLabel(getActiveDateKey()).toLowerCase())}${planHint ? " · geplant" : ""}</span>
       <div class="klar-head-actions">
         <button type="button" class="klar-pill-btn icon-only" id="klarScanBtn" title="Produkt scannen" aria-label="Produkt scannen">📷</button>
         <button type="button" class="klar-pill-btn" id="klarEvalBtn">📊 Auswertung</button>
@@ -211,6 +231,7 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh)
     </div>
     ${ringDiagramHtml(rings, profile.ringStyle)}
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
+    ${planHint ? `<div class="klar-hint klar-plan-hint">${esc(planHint)}</div>` : ""}
     <div id="klarWater"></div>
   `;
 
@@ -381,7 +402,7 @@ function renderKlarWater(container, profile, dateKey, refresh) {
   });
 }
 
-function renderKlarMeals(container, entries, refresh, openEntrySheet) {
+function renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey) {
   const el = container.querySelector("#klarMeals");
   if (entries.length === 0) {
     el.innerHTML = `<div class="klar-empty-row" id="klarEmptyRow"><span class="plus">+</span>Noch nichts eingetragen</div>`;
@@ -401,8 +422,14 @@ function renderKlarMeals(container, entries, refresh, openEntrySheet) {
     if (items.length === 0) continue;
     const sum = (f) => items.reduce((s, e) => s + (e[f] || 0), 0);
     const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key].replace(/^\S+\s/, "");
+    // Steht die ganze Mahlzeit noch als Plan da, ist "alles gegessen" ein Tipp statt drei.
+    // Das ist der Regelfall: man kocht und isst eine Mahlzeit, nicht eine halbe.
+    const offen = items.filter(e => e.planned).length;
     blocks.push(`
-      <div class="klar-meal-group-title">${esc(label)}</div>
+      <div class="klar-meal-group-title">
+        ${esc(label)}
+        ${offen > 0 ? `<button type="button" class="klar-inline-chip" data-bestaetige-mahlzeit="${key}">✓ gegessen</button>` : ""}
+      </div>
       <div class="klar-meal-group-macros">
         <span><b>${Math.round(sum("kcal"))}</b> kcal</span>
         <span><b>${round1(sum("netCarbs"))}</b> g KH</span>
@@ -410,10 +437,13 @@ function renderKlarMeals(container, entries, refresh, openEntrySheet) {
         <span><b>${round1(sum("protein"))}</b> g Eiweiß</span>
       </div>
       ${items.map(e => `
-        <div class="klar-meal-row" data-id="${e.id}">
+        <div class="klar-meal-row ${e.planned ? "ist-geplant" : ""}" data-id="${e.id}">
           <span class="name">${esc(e.name)}</span>
-          <span class="meta">${entryAmountLabel(e)} · ${e.kcal ?? "–"} kcal · ${e.netCarbs ?? "–"} g KH</span>
-          <span class="chevron">›</span>
+          <span class="meta">${entryAmountLabel(e)} · ${e.kcal == null ? "–" : Math.round(e.kcal)} kcal · ${e.netCarbs ?? "–"} g KH</span>
+          ${e.planned
+            ? `<button type="button" class="icon-btn klar-bestaetigen" data-bestaetige="${e.id}"
+                 title="Als gegessen bestätigen" aria-label="Als gegessen bestätigen">✓</button>`
+            : `<span class="chevron">›</span>`}
         </div>
       `).join("")}
     `);
@@ -424,6 +454,31 @@ function renderKlarMeals(container, entries, refresh, openEntrySheet) {
     row.addEventListener("click", () => {
       const entry = Store.getConsumption().find(c => c.id === row.dataset.id);
       if (entry) openEditConsumptionModal(entry, refresh);
+    });
+  });
+
+  // Bestätigen darf die Zeile nicht gleichzeitig zum Bearbeiten öffnen.
+  el.querySelectorAll("[data-bestaetige]").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const bestaetigt = bestaetigeGeplant(btn.dataset.bestaetige);
+      refresh();
+      if (bestaetigt) {
+        showSnackbar({
+          title: `${bestaetigt.name} gegessen`,
+          subtitle: "Zählt jetzt als eingetragen, nicht mehr als Plan",
+          onUndo: () => { Store.updateConsumption({ ...bestaetigt, planned: true }); refresh(); },
+        });
+      }
+    });
+  });
+
+  el.querySelectorAll("[data-bestaetige-mahlzeit]").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const anzahl = bestaetigeMahlzeit(profile.id, dateKey, btn.dataset.bestaetigeMahlzeit);
+      refresh();
+      if (anzahl > 0) showToast(`${anzahl} Eintrag/Einträge bestätigt`);
     });
   });
 }

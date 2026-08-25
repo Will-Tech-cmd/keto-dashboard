@@ -159,7 +159,11 @@ export function undoLastWater(profileId, dateKey) {
  */
 export function rankFrequentItems(profileId, meal, { maxFrequent = 6, maxRecent = 4 } = {}) {
   const cutoff = Date.now() - 30 * 86400000;
-  const entries = Store.getConsumption().filter(e => e.profileId === profileId && e.at >= cutoff);
+  // Geplantes bleibt draußen: es ist noch nicht gegessen. Ohne diesen Filter füttert sich
+  // der Planer selbst — was er für Donnerstag vorschlägt, stünde ab sofort als "isst du
+  // oft" in der Schnellauswahl und käme deshalb beim nächsten Plan noch häufiger.
+  const entries = Store.getConsumption()
+    .filter(e => e.profileId === profileId && e.at >= cutoff && !e.planned);
 
   const byItem = new Map();
   for (const e of entries) {
@@ -355,6 +359,32 @@ export function rescaleConsumption(id, newAmount) {
 
   Store.updateConsumption(updated);
   return updated;
+}
+
+/**
+ * Aus "vorgemerkt" wird "gegessen".
+ *
+ * Ein geplanter Eintrag ist ein vollständiger Eintrag — Menge, Mahlzeit, Nährwerte stehen
+ * seit dem Übernehmen fest. Bestätigen nimmt deshalb nur die Marke weg und rechnet nichts
+ * neu: was man geplant hat, hat man dann auch so gegessen. War es anders, ist der
+ * Bearbeiten-Dialog der richtige Weg, und der ist von derselben Zeile aus einen Tipp entfernt.
+ *
+ * `at` bleibt der Zeitpunkt der Planung. Der Tag, zu dem der Eintrag zählt, steht in
+ * `dateKey`; `at` sagt nur, wann die Zeile entstanden ist, und das war beim Planen.
+ */
+export function bestaetigeGeplant(id) {
+  const entry = Store.getConsumption().find(e => e.id === id);
+  if (!entry?.planned) return null;
+  const { planned, ...ohneMarke } = entry;
+  Store.updateConsumption(ohneMarke);
+  return ohneMarke;
+}
+
+/** Alle vorgemerkten Einträge einer Mahlzeit auf einmal — der übliche Fall beim Essen. */
+export function bestaetigeMahlzeit(profileId, dateKey, meal) {
+  const offen = getConsumptionForDate(profileId, dateKey).filter(e => e.planned && e.meal === meal);
+  for (const e of offen) bestaetigeGeplant(e.id);
+  return offen.length;
 }
 
 export function setConsumptionMeal(id, meal) {

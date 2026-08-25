@@ -6,6 +6,7 @@ import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
 import { renderRecipes } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
+import { renderPlanerPage } from "./views/planer.js";
 import {
   logConsumption, rankFrequentItems, MEAL_LABELS, mealShort, suggestMeal,
   getActiveDateKey, getConsumptionForDate, sumConsumption, teilenAktion,
@@ -35,8 +36,11 @@ const RENDERERS = {
   lists: () => renderLists(view, goToTab),
   recipes: () => renderRecipes(view),
   profile: () => renderProfile(view, updateProfileSwitchLabel),
-  // Unterseite ohne eigenen Reiter (Design "Klar"), erreichbar aus der Nährwertkarte auf Start.
+  // Unterseiten ohne eigenen Reiter (Design "Klar"), erreichbar von der Startseite aus. Die
+  // Tableiste ist mit fünf Reitern voll; was man nicht mehrmals täglich braucht, gehört
+  // dorthin, wo der Anlass entsteht.
   evaluation: () => renderEvaluationPage(view, goToTab),
+  planer: () => renderPlanerPage(view, goToTab),
 };
 
 // Jeder Tab-Wechsel bekommt einen eigenen History-Eintrag, damit die Zurück-Geste am Handy

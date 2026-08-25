@@ -59,7 +59,9 @@ function defaultState() {
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
     history: [],        // { id, barcode, name, brand, grade, netCarbs100, source, profileName, at }
-    consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at }
+    // `planned: true` heißt vorgemerkt, aber noch nicht bestätigt gegessen (siehe planer.js).
+    // Das Feld fehlt an gegessenen Einträgen, statt dort false zu stehen — siehe rows.js.
+    consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at, planned? }
     water: [],          // { id, profileId, dateKey, ml, at }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
     fiberOverrides: {},  // barcode -> true|false|null (null = bewusst zurückgesetzt), überschreibt die EU/US-Erkennung
