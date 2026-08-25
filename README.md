@@ -25,16 +25,26 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 #### Essen für die nächsten Tage planen
-„🗓️ Planen" stellt einen Vorschlag für einen bis vier Tage zusammen — Frühstück, Mittag,
-Abend, auf Wunsch Snacks.
+„🗓️ Planen" stellt einen Vorschlag für einen bis vier Tage zusammen. Welche Mahlzeiten
+geplant werden, wählst du selbst — wer mittags nur am Wochenende isst, wählt Mittag ab; die
+Auswahl bleibt für das nächste Mal gemerkt.
 
 - Der Vorschlag entsteht **aus dem, was da ist**: den eigenen Rezepten, den Favoriten und dem,
   was in den letzten acht Wochen wirklich gegessen wurde — jeweils zu der Tageszeit, zu der es
   sonst auf dem Tisch steht. Es wird nichts erfunden, und genau deshalb stimmen die Nährwerte:
   jede Zahl stammt aus einem eigenen Rezept oder einem gescannten Etikett.
-- Das **Netto-KH-Limit ist eine Grenze, keine Zielgröße.** Ein Tag, der es reißt, wird gar
-  nicht erst vorgeschlagen. Kalorien, Fett und Eiweiß sind Richtwerte; zu wenig Eiweiß wiegt
-  dabei schwerer als zu viel.
+- Drei Größen entscheiden, und jede auf ihre Art:
+  - **Netto-KH** sind eine Grenze, keine Zielgröße. Ein Tag, der sie reißt, wird gar nicht
+    erst vorgeschlagen.
+  - **Eiweiß** ist die Zahl, die getroffen werden soll — mit einem Korridor von zehn Gramm
+    nach unten. Zu wenig wiegt schwerer als zu viel.
+  - **Kalorien** sind der Rahmen.
+  - **Fett** ist bewusst keine Vorgabe, sondern der Rest: bei festgelegten Kalorien,
+    Kohlenhydraten und Eiweiß ergibt es sich aus `kcal = 4·KH + 4·Eiweiß + 9·Fett` von
+    selbst. Deshalb steht es unter dem Tag auch ohne „/ Ziel".
+- Die vorgeschlagene Menge orientiert sich an der **üblichen** Portion (dem Median deiner
+  bisherigen), nicht an der zuletzt eingetragenen — sonst würde aus einer großzügig
+  bestätigten Planportion über ein paar Runden die neue Normalportion.
 - Jede Zeile lässt sich einzeln neu würfeln („🔄"), ohne den Rest des Tages anzufassen.
 - **Mit hinterlegtem Gemini-Schlüssel** kann der Vorschlag verfeinert werden. Auch dann gilt:
   das Modell wählt aus derselben Liste aus, die App rechnet. Zurück kommen nur Verweise und

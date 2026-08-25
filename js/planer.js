@@ -80,6 +80,22 @@ export function naehrwerte(kandidat, menge) {
  * Ohne die Untergrenze bliebe ein Slot leer, für den noch nie etwas eingetragen wurde — und
  * der allererste Plan eines neuen Profils hätte gar keine Mahlzeiten.
  */
+/**
+ * Die übliche Menge dieses Lebensmittels — der Median, nicht die zuletzt genommene.
+ *
+ * Das ist kein Detail. Der Planer schlägt eine Menge vor, man bestätigt sie beim Essen, und
+ * damit wäre sie beim nächsten Plan die "letzte Menge" und dürfte wieder das Anderthalbfache
+ * davon werden. Über ein paar Runden schaukelt sich so aus 150 g Avocado 300 g auf, ohne dass
+ * je jemand etwas dazu gesagt hätte. Der Median bewegt sich dagegen erst, wenn man wirklich
+ * mehrfach mehr isst — und das ist dann auch die richtige Auskunft.
+ */
+function uebliche(mengen) {
+  const sortiert = [...mengen].filter(m => m > 0).sort((a, b) => a - b);
+  if (sortiert.length === 0) return null;
+  const mitte = Math.floor(sortiert.length / 2);
+  return sortiert.length % 2 ? sortiert[mitte] : (sortiert[mitte - 1] + sortiert[mitte]) / 2;
+}
+
 function mahlzeitGewichte(zaehler, gesamt) {
   const g = {};
   for (const slot of SLOTS) g[slot] = Math.max(0.15, (zaehler[slot] || 0) / gesamt);
@@ -109,13 +125,13 @@ export function sammleKatalog(profileId, { tage = 60 } = {}) {
     if (e.profileId !== profileId || !e.barcode || e.planned) continue;
     if ((e.at || 0) < cutoff) continue;
     const cur = ausVerlauf.get(e.barcode)
-      || { anzahl: 0, slots: {}, letzteMenge: null, letztAm: 0, name: e.name };
+      || { anzahl: 0, slots: {}, mengen: [], letztAm: 0, name: e.name };
     cur.anzahl++;
     if (e.meal) cur.slots[e.meal] = (cur.slots[e.meal] || 0) + 1;
     const menge = e.servings != null ? e.servings : e.grams;
-    if ((e.at || 0) >= cur.letztAm && menge > 0) {
+    if (menge > 0) cur.mengen.push(menge);
+    if ((e.at || 0) >= cur.letztAm) {
       cur.letztAm = e.at || 0;
-      cur.letzteMenge = menge;
       cur.name = e.name;
     }
     ausVerlauf.set(e.barcode, cur);
@@ -145,7 +161,7 @@ export function sammleKatalog(profileId, { tage = 60 } = {}) {
       // Spinat (675 g)" ist keine Mahlzeit mehr, sondern eine Rechnung mit Namen.
       min: 0.5,
       max: 1.5,
-      standard: verlauf?.letzteMenge > 0 ? verlauf.letzteMenge : 1,
+      standard: uebliche(verlauf?.mengen || []) || 1,
       servingG: gesamtGramm > 0 ? Math.round(gesamtGramm / (rezept.servings || 1)) : null,
       anzahl: verlauf?.anzahl || 0,
       gewicht: mahlzeitGewichte(verlauf?.slots || {}, Math.max(1, verlauf?.anzahl || 0)),
@@ -168,9 +184,9 @@ export function sammleKatalog(profileId, { tage = 60 } = {}) {
     // ersten Durchlauf war er doppelt so weit, und weil der Motor die Menge immer gegen das
     // Slot-Budget hochrechnet, landete er verlässlich an der Obergrenze: 300 g Avocado zu
     // Mittag, 40 g Butter zum Frühstück. Rechnerisch tadellos, als Essen Unsinn.
-    const basis = verlauf?.letzteMenge > 0
-      ? verlauf.letzteMenge
-      : (produkt ? parseServingGrams(produkt.servingSize) : null) || 100;
+    const basis = uebliche(verlauf?.mengen || [])
+      || (produkt ? parseServingGrams(produkt.servingSize) : null)
+      || 100;
     katalog.push({
       key: barcode,
       name: produkt?.name || favorit?.name || verlauf?.name || "Unbenannt",
@@ -288,28 +304,43 @@ function baueSlot(katalog, slot, budget, { wuerfel, strafe, gesperrt }) {
 }
 
 /**
+ * Wie weit unter dem Eiweißziel es noch als getroffen gilt.
+ *
+ * Der Zielkorridor ist "zehn Gramm drunter bis genau drauf". Darin kostet nichts — man
+ * plant kein Gramm genau, und ein Tag mit 112 statt 118 g Eiweiß ist kein schlechterer Tag.
+ */
+const EIWEISS_FENSTER_G = 10;
+
+/**
  * Wie gut trifft dieser Tag die Vorgaben? Kleiner ist besser.
  *
- * Die Gewichte sagen, was zählt: Netto-KH am schwersten (das ist die Zahl, um die es bei Keto
- * geht), dann die Kalorien, dann Eiweiß, dann Fett — Fett füllt in einer Keto-Bilanz ohnehin
- * das auf, was die anderen beiden übrig lassen.
+ * Drei Größen, nicht vier — und das ist der Punkt:
  *
- * Zwei Sonderfälle, weil Abweichung nicht gleich Abweichung ist:
- *   - Netto-KH ÜBER dem Tageslimit ist kein Fehler von ein paar Prozent, sondern ein Plan,
- *     den man so nicht vorschlagen darf. Er gilt hier als ungültig.
- *   - Eiweiß zu WENIG wiegt doppelt. Zu viel Eiweiß ist unschön, zu wenig geht im Defizit
- *     an die Muskulatur.
+ *   NETTO-KH   die harte Grenze. Darüber ist kein Plan, sondern ein Fehler; solche Tage
+ *              werden gar nicht erst vorgeschlagen.
+ *   EIWEISS    die Zahl, die getroffen werden SOLL, mit einem Korridor von zehn Gramm nach
+ *              unten. Zu wenig geht im Defizit an die Muskulatur und wiegt deshalb schwerer
+ *              als zu viel.
+ *   KALORIEN   der Rahmen.
+ *
+ * FETT steht bewusst nicht dabei. Es ist in einer Keto-Bilanz keine Zielgröße, sondern der
+ * Rest: bei festgelegten Kalorien, Kohlenhydraten und Eiweiß ergibt sich das Fett aus
+ * kcal = 4·KH + 4·Eiweiß + 9·Fett von selbst. Es zusätzlich zu bewerten hieß, dieselbe
+ * Abweichung zweimal zu zählen — und zog den Plan bei jedem Anlauf ein Stück in Richtung
+ * "fetter", weil das die billigste Art war, die Fettnote zu senken.
  */
 export function bewerteTag(summe, ziele) {
   if (summe.netCarbs > ziele.netCarbG) return Infinity;
   const rel = (ist, soll) => (soll > 0 ? Math.abs(ist - soll) / soll : 0);
-  const eiweiss = summe.protein < ziele.proteinG
-    ? rel(summe.protein, ziele.proteinG) * 2
-    : rel(summe.protein, ziele.proteinG);
+
+  const untergrenze = Math.max(0, ziele.proteinG - EIWEISS_FENSTER_G);
+  let eiweiss = 0;
+  if (summe.protein < untergrenze) eiweiss = (untergrenze - summe.protein) / (ziele.proteinG || 1) * 2.5;
+  else if (summe.protein > ziele.proteinG) eiweiss = (summe.protein - ziele.proteinG) / (ziele.proteinG || 1);
+
   return rel(summe.kcal, ziele.kcal) * 1.0
     + rel(summe.netCarbs, ziele.netCarbG) * 1.5
-    + eiweiss * 0.8
-    + rel(summe.fat, ziele.fatG) * 0.5;
+    + eiweiss * 1.4;
 }
 
 /** Ersatzmaßstab, wenn KEIN Anlauf im Limit blieb: der am wenigsten schlimme Tag. */
@@ -319,6 +350,21 @@ function bewerteNotfall(summe, ziele) {
 }
 
 const VERSUCHE = 200;
+
+/**
+ * Wie viel schlechter als der beste Anlauf noch als gleich gut gilt.
+ *
+ * Ohne diese Spanne wäre "Neu würfeln" wirkungslos: bei zweihundert Anläufen und einem
+ * überschaubaren Katalog findet der Motor jedes Mal dasselbe Optimum, egal mit welchem
+ * Startwert. Gemessen, nachdem Fett aus der Bewertung fiel — die Note hat seither weniger
+ * Terme und damit weniger Möglichkeiten, zwei Tage zu unterscheiden.
+ *
+ * Zwei Tage, die sich um weniger als das unterscheiden, sind rechnerisch gleich gut; welchen
+ * man davon bekommt, darf der Zufall entscheiden. Das ist kein Verzicht auf Qualität, sondern
+ * die Einsicht, dass die dritte Nachkommastelle einer Note kein Grund ist, immer dasselbe
+ * Abendessen zu bekommen.
+ */
+const GLEICH_GUT = 0.05;
 
 // ---------------------------------------------------------------------------
 // Aufschläge auf die Tagesnote
@@ -414,7 +460,7 @@ function portionsAufschlag(zeilen) {
  */
 export function baueTag(katalog, ziele, mahlzeiten, { saat, strafe = new Map() }) {
   const anteile = anteileFuer(mahlzeiten);
-  let bester = null;
+  const gueltige = [];
   let besteNote = Infinity;
   let notfall = null;
   let notNote = Infinity;
@@ -445,10 +491,19 @@ export function baueTag(katalog, ziele, mahlzeiten, { saat, strafe = new Map() }
       + wiederholungsAufschlag(alle, strafe, summe.kcal)
       + slotAufschlag(alle, summe.kcal)
       + portionsAufschlag(alle);
-    if (note < besteNote) { besteNote = note; bester = slots; }
+    if (Number.isFinite(note)) {
+      gueltige.push({ note, slots });
+      if (note < besteNote) besteNote = note;
+    }
     const nNote = bewerteNotfall(summe, ziele);
     if (nNote < notNote) { notNote = nNote; notfall = slots; }
   }
+
+  // Unter allen, die praktisch gleich gut sind, entscheidet der Startwert.
+  const engereWahl = gueltige.filter(g => g.note <= besteNote + GLEICH_GUT);
+  const bester = engereWahl.length
+    ? engereWahl[Math.floor(zufall(saat + 31)() * engereWahl.length)].slots
+    : null;
 
   // Kein einziger Anlauf blieb im KH-Limit — dann lieber den knappsten Plan zeigen und das
   // dazusagen, als gar keinen. Wer nur Brot und Nudeln im Katalog hat, soll sehen, woran es

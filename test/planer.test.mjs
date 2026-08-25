@@ -368,5 +368,59 @@ console.log("\n14) Bestaetigen");
   for (const e of getConsumptionForDate(ich.id, "2026-09-05")) Store.removeConsumption(e.id);
 }
 
+// ---------------------------------------------------------------------------
+console.log("\n15) Eiweiss ist das Ziel, Fett ist der Rest");
+{
+  const note = (kcal, netCarbs, fat, protein) => p.bewerteTag({ kcal, netCarbs, fat, protein }, ZIELE);
+  const genau = note(1900, 15, 150, 110);
+
+  // Der Korridor: bis zehn Gramm unter dem Ziel ist getroffen, nicht verfehlt.
+  ok("5 g unter dem Ziel kostet nichts", note(1900, 15, 150, 105) === genau, String(note(1900, 15, 150, 105)));
+  ok("genau 10 g unter kostet nichts", note(1900, 15, 150, 100) === genau);
+  ok("15 g unter kostet", note(1900, 15, 150, 95) > genau);
+  ok("darunter wird es stetig schlimmer", note(1900, 15, 150, 80) > note(1900, 15, 150, 95));
+  ok("ueber dem Ziel kostet ebenfalls", note(1900, 15, 150, 130) > genau);
+  // Gleicher Abstand, unterschiedliches Gewicht: zu wenig geht im Defizit an die Muskulatur.
+  ok("20 g zu wenig wiegt schwerer als 20 g zu viel",
+     note(1900, 15, 150, 90) > note(1900, 15, 150, 130));
+
+  // Fett ist bei festen Kalorien, KH und Eiweiss rechnerisch bestimmt — es noch einmal zu
+  // bewerten hiesse, dieselbe Abweichung zweimal zu zaehlen.
+  ok("Fett aendert die Note nicht", note(1900, 15, 60, 110) === genau && note(1900, 15, 260, 110) === genau);
+  ok("Kalorien zaehlen weiterhin", note(1500, 15, 150, 110) > genau);
+  ok("KH ueber dem Limit bleibt ungueltig", note(1900, 21, 150, 110) === Infinity);
+}
+
+// ---------------------------------------------------------------------------
+console.log("\n16) Die uebliche Portion ist der Median, nicht die letzte");
+{
+  const barcode = "77001";
+  Store.cacheProduct(barcode, {
+    barcode, name: "Testkaese", brand: "", servingSize: "30 g",
+    per100: { kcal: 350, carbs: 0, fiber: 0, fat: 27, protein: 25 },
+  });
+  const iss = (gramm, vorTagen) => Store.addConsumption({
+    id: crypto.randomUUID(), profileId: ich.id, barcode, name: "Testkaese", grams: gramm,
+    servingG: 30, meal: "breakfast", dateKey: "2026-08-0" + (vorTagen % 9 + 1),
+    kcal: 3.5 * gramm, netCarbs: 0, fat: 0.27 * gramm, protein: 0.25 * gramm,
+    at: Date.now() - vorTagen * 86400000,
+  });
+  [40, 40, 50, 40, 40].forEach((g, i) => iss(g, i + 1));
+  const finde = () => p.sammleKatalog(ich.id).find(k => k.key === barcode);
+  ok("Median der ueblichen Mengen", finde().standard === 40, String(finde().standard));
+
+  // Ein einzelner Ausreisser — etwa eine bestaetigte, aber grosszuegige Planportion — darf
+  // die uebliche Menge NICHT verschieben. Sonst schaukelt sich der naechste Plan daran hoch.
+  iss(200, 0);
+  ok("ein Ausreisser verschiebt sie nicht", finde().standard === 40, String(finde().standard));
+  ok("und damit auch die Obergrenze nicht", finde().max === 60, String(finde().max));
+
+  // Isst man wirklich mehrfach mehr, zieht der Median nach — das ist dann die richtige Auskunft.
+  [200, 200, 200].forEach((g, i) => iss(g, i + 20));
+  ok("mehrfach mehr zieht ihn nach", finde().standard > 40, String(finde().standard));
+
+  for (const e of Store.getConsumption().filter(e => e.barcode === barcode)) Store.removeConsumption(e.id);
+}
+
 console.log(fails === 0 ? "\nAlle Pruefungen bestanden." : "\n" + fails + " fehlgeschlagen.");
 process.exit(fails === 0 ? 0 : 1);

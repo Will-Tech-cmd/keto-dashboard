@@ -20,10 +20,31 @@ const round1 = (v) => Math.round(v * 10) / 10;
 // hat, ist bewusst nichts, was den nächsten App-Start überdauert.
 let anzahlTage = 3;
 let abMorgen = true;
-let mitSnack = false;
 let plan = null;
 let katalog = null;
 let saat = 1;
+
+/**
+ * Welche Mahlzeiten geplant werden — DAS überdauert sehr wohl.
+ *
+ * Wer nur unter der Woche mittags nichts isst, will das nicht bei jedem Plan neu abwählen.
+ * Bewusst ein eigener Speicherschlüssel und nicht im Zustand: es ist eine Einstellung dieses
+ * Geräts für diese Seite, kein Datum, das abgeglichen werden müsste.
+ */
+const MAHLZEITEN_KEY = "keto-dashboard-planer-mahlzeiten";
+const STANDARD_MAHLZEITEN = ["breakfast", "lunch", "dinner"];
+
+function ladeMahlzeiten() {
+  try {
+    const roh = JSON.parse(localStorage.getItem(MAHLZEITEN_KEY) || "null");
+    const gefiltert = Array.isArray(roh) ? roh.filter(m => Planer.SLOTS.includes(m)) : [];
+    return gefiltert.length > 0 ? gefiltert : STANDARD_MAHLZEITEN;
+  } catch {
+    return STANDARD_MAHLZEITEN;
+  }
+}
+
+let gewaehlteMahlzeiten = ladeMahlzeiten();
 
 export function renderPlanerPage(container, goToTab) {
   container.innerHTML = `
@@ -43,8 +64,23 @@ function tageKeys() {
   return Planer.planTage(abMorgen ? shiftDateKey(heute, 1) : heute, anzahlTage);
 }
 
+/** Immer in der Reihenfolge des Tages, egal in welcher angetippt wurde. */
 function mahlzeitenListe() {
-  return mitSnack ? ["breakfast", "lunch", "dinner", "snack"] : ["breakfast", "lunch", "dinner"];
+  return Planer.SLOTS.filter(m => gewaehlteMahlzeiten.includes(m));
+}
+
+/**
+ * Eine Mahlzeit an- oder abwählen. Die letzte lässt sich nicht abwählen — ein Plan über
+ * null Mahlzeiten wäre kein Plan, und ein leerer Bildschirm erklärt sich nicht von selbst.
+ */
+function schalteMahlzeit(slot) {
+  const drin = gewaehlteMahlzeiten.includes(slot);
+  if (drin && gewaehlteMahlzeiten.length === 1) return false;
+  gewaehlteMahlzeiten = drin
+    ? gewaehlteMahlzeiten.filter(m => m !== slot)
+    : [...gewaehlteMahlzeiten, slot];
+  try { localStorage.setItem(MAHLZEITEN_KEY, JSON.stringify(gewaehlteMahlzeiten)); } catch { /* dann eben nur diesmal */ }
+  return true;
 }
 
 function render(body, goToTab) {
@@ -68,16 +104,20 @@ function render(body, goToTab) {
         <button type="button" class="klar-meal-segment ${abMorgen ? "active" : ""}" data-start="morgen">Morgen</button>
       </div>
 
-      <div class="klar-water-head" style="margin-top:18px">
-        <span class="klar-water-title">Snacks mitplanen</span>
-        <button type="button" class="klar-pill-btn ${mitSnack ? "is-an" : ""}" id="snackSchalter">
-          ${mitSnack ? "an" : "aus"}
-        </button>
+      <div class="klar-eyebrow" style="margin-top:18px">Welche Mahlzeiten</div>
+      <div class="klar-chip-row" style="margin-top:10px;flex-wrap:wrap">
+        ${Planer.SLOTS.map(slot => `
+          <button type="button" class="klar-chip ${gewaehlteMahlzeiten.includes(slot) ? "top" : ""}"
+            data-mahlzeit="${slot}" aria-pressed="${gewaehlteMahlzeiten.includes(slot)}">
+            ${esc(mealShort(slot))}
+          </button>
+        `).join("")}
       </div>
 
       <div class="klar-hint" style="margin-top:14px">
-        ${esc(dateLabel(keys[0]))} bis ${esc(dateLabel(keys[keys.length - 1]))} ·
-        ${esc(profile.name)} · Ziel ${getTargetsForDate(profile, keys[0]).netCarbG} g Netto-KH am Tag
+        ${esc(dateLabel(keys[0]))} bis ${esc(dateLabel(keys[keys.length - 1]))} · ${esc(profile.name)} ·
+        höchstens ${getTargetsForDate(profile, keys[0]).netCarbG} g Netto-KH,
+        rund ${getTargetsForDate(profile, keys[0]).proteinG} g Eiweiß am Tag
       </div>
 
       <div class="btn-row" style="margin-top:16px">
@@ -100,8 +140,15 @@ function render(body, goToTab) {
   body.querySelectorAll("[data-start]").forEach(btn => {
     btn.addEventListener("click", () => { abMorgen = btn.dataset.start === "morgen"; plan = null; neu(); });
   });
-  body.querySelector("#snackSchalter").addEventListener("click", () => {
-    mitSnack = !mitSnack; plan = null; neu();
+  body.querySelectorAll("[data-mahlzeit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!schalteMahlzeit(btn.dataset.mahlzeit)) {
+        showToast("Mindestens eine Mahlzeit muss geplant werden");
+        return;
+      }
+      plan = null;
+      neu();
+    });
   });
   body.querySelector("#planBauen").addEventListener("click", () => { baue(profile); neu(); });
   body.querySelector("#planKi")?.addEventListener("click", () => verfeinere(body, goToTab));
@@ -220,18 +267,19 @@ function mengeText(z) {
     : `${z.menge} g`;
 }
 
-/** Ist/Soll in einer Zeile — dieselben vier Werte wie die Ringe auf der Startseite. */
+/**
+ * Ist/Soll unter dem Tag.
+ *
+ * Netto-KH und Eiweiß mit ihrem Zielwert, Fett nur als Zahl: es ist in einer Keto-Bilanz
+ * keine Vorgabe, sondern das, was Kalorien minus Kohlenhydrate minus Eiweiß übrig lassen.
+ * Ein "/ 183 g" daneben läse sich wie ein verfehltes Ziel, wo gar keines steht.
+ */
 function abweichungHtml(tag) {
-  const werte = [
-    ["Netto-KH", round1(tag.summe.netCarbs), tag.ziele.netCarbG, "g"],
-    ["Fett", round1(tag.summe.fat), tag.ziele.fatG, "g"],
-    ["Eiweiß", round1(tag.summe.protein), tag.ziele.proteinG, "g"],
-  ];
   return `
     <div class="klar-meal-group-macros" style="margin-top:10px">
-      ${werte.map(([label, ist, soll, einheit]) => `
-        <span><b>${ist}</b> / ${soll} ${esc(einheit)} ${esc(label)}</span>
-      `).join("")}
+      <span><b>${round1(tag.summe.netCarbs)}</b> / ${tag.ziele.netCarbG} g KH</span>
+      <span><b>${round1(tag.summe.protein)}</b> / ${tag.ziele.proteinG} g Eiweiß</span>
+      <span><b>${round1(tag.summe.fat)}</b> g Fett</span>
     </div>
   `;
 }
