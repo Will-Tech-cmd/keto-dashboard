@@ -265,10 +265,8 @@ body.chrome-hidden .klar-recipe-head { padding-top: calc(env(safe-area-inset-top
 }
 .klar-split-btn > button:active { filter: brightness(.9); }
 
-/* Beschriftungszeile mit einer kleinen Aktion rechts — die Eingabefelder darunter behalten
-   ihre volle Breite. */
-.klar-label-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
-.klar-label-row label { flex: 1; min-width: 0; }
+/* Kleine Aktion in einer Überschriftszeile ("✓ gegessen" über einer geplanten Mahlzeit).
+   Für Aktionen neben einem Eingabefeld siehe .klar-feld-zeile weiter unten. */
 .klar-inline-chip {
   flex: none; margin-bottom: 4px;
   border: 1px solid var(--border); border-radius: 999px;
@@ -738,11 +736,15 @@ body[data-design="klar"] .fab-btn {
   display: flex; align-items: center; justify-content: center;
 }
 .klar-stepper-btn-sm:active { background: var(--bg-elevated); }
-.klar-ing-amount-compact { display: flex; align-items: baseline; gap: 2px; padding: 0 3px; }
+.klar-ing-amount-compact { display: flex; align-items: baseline; gap: 2px; padding: 0 2px; }
+/* 68 px, nicht 52: bei vierstelligen Mengen (1250 g Mandelmehl in einem Achter-Rezept ist
+   keine Ausnahme) lief die Zahl über den Rand hinaus — gemessen 56 px Inhalt in 52 px Feld.
+   Die beiden Knöpfe bleiben unverändert; die Breite kommt aus dem Feld selbst und einem
+   Millimeter Innenabstand. */
 body[data-design="klar"] .klar-ing-amount-compact input {
   appearance: none; -webkit-appearance: none;
   border: none; background: none !important; text-align: right; font-size: 14px; font-weight: 800;
-  color: var(--text); width: 52px; padding: 0; min-height: auto; border-radius: 0;
+  color: var(--text); width: 68px; padding: 0; min-height: auto; border-radius: 0;
 }
 .klar-ing-amount-compact input::-webkit-outer-spin-button, .klar-ing-amount-compact input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .klar-ing-amount-compact span { font-size: 11px; font-weight: 700; color: var(--text-muted); }
@@ -1308,15 +1310,14 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 /* Ein Schalter, der aussieht wie eine Pille — an ist gefüllt, aus ist umrandet. */
 .klar-pill-btn.is-an { background: var(--accent-soft); border-color: var(--accent-soft-border); }
 
-/* Chip-Reihe mit festem Zusatzknopf rechts ("+ Sandra", "🛒 Einkauf").
-   Die Chips selbst scrollen waagerecht, wenn sie zu breit werden; der Zusatzknopf steht
-   außerhalb dieses Bereichs und bleibt deshalb sichtbar. Läge er in der Reihe, müsste man
-   zu ihm hinscrollen — bei vier Vielfachen auf 375 px immer. */
-.klar-chip-line { display: flex; align-items: center; gap: 8px; }
-.klar-chip-line > .klar-chip-row { flex: 1; min-width: 0; margin-bottom: 0; }
-.klar-chip-line > .klar-chip-aktion { flex: none; }
+/* Eingabefeld mit Aktion daneben ("+ Sandra" beim Portionen-Feld, "🛒 Einkauf" bei den
+   Gramm). Das Feld gibt Breite ab, die es nicht braucht: eine Menge ist drei- bis
+   vierstellig. Der Knopf steht dadurch bei der Zahl, auf die er sich bezieht, statt über
+   ihr in der Beschriftungszeile. */
+.klar-feld-zeile { display: flex; align-items: stretch; gap: 8px; }
+.klar-feld-zeile > input { flex: 1; min-width: 0; }
+.klar-feld-zeile > .klar-chip-aktion { flex: none; align-self: stretch; }
 
-/* Aktion im Format eines Chips: gleiche Höhe und Schrift wie "1× (415 g)" daneben, aber in
-   der Akzentfarbe — es ist ein Knopf, der etwas auslöst, und kein Wert zur Auswahl. */
+/* Aktion im Format eines Chips, in der Akzentfarbe — es ist ein Knopf, der etwas auslöst,
+   und kein Wert zur Auswahl. */
 .klar-chip.klar-chip-aktion { color: var(--accent); font-weight: 800; white-space: nowrap; }
-.klar-label-row .klar-chip-aktion { margin-bottom: 4px; }
