@@ -10,6 +10,23 @@ import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
  * prefillName: Namensvorschlag für ein wirklich neues Produkt (z.B. aus der Namenssuche).
  * Die Reihenfolge der Nährwertfelder folgt der Verpackungsangabe (Energie, Fett, KH, …).
  */
+/**
+ * Eine Zeile der Nährwerttabelle: Bezeichnung links, Feld und Einheit rechts — dieselbe
+ * Anordnung wie auf der Verpackung, damit man beim Abtippen nur noch Zeile für Zeile
+ * vergleichen muss. `sub` rückt die „davon …"-Zeilen ein, wie im Etikett.
+ */
+function nutriRow(label, id, value, { unit = "g", step = 0.1, sub = false } = {}) {
+  return `
+    <div class="klar-nutri-row${sub ? " sub" : ""}">
+      <label for="${id}">${label}</label>
+      <div class="klar-nutri-field">
+        <input type="number" step="${step}" id="${id}" value="${value ?? ""}" inputmode="decimal">
+        <span>${unit}</span>
+      </div>
+    </div>
+  `;
+}
+
 export function ownProductFormHtml(barcode, existing = null, prefillName = "", { inCard = true } = {}) {
   const p = existing?.per100 || {};
   const body = `
@@ -21,20 +38,16 @@ export function ownProductFormHtml(barcode, existing = null, prefillName = "", {
       <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
     </div>
     <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
-    <label>Energie (kcal)</label><input type="number" step="1" id="opKcal" value="${p.kcal ?? ""}">
-    <div class="field-row">
-      <div><label>Fett (g)</label><input type="number" step="0.1" id="opFat" value="${p.fat ?? ""}"></div>
-      <div><label>davon gesättigte Fettsäuren (g)</label><input type="number" step="0.1" id="opSatFat" value="${p.saturatedFat ?? ""}"></div>
+    <div class="klar-nutri-table">
+      ${nutriRow("Brennwert", "opKcal", p.kcal, { unit: "kcal", step: 1 })}
+      ${nutriRow("Fett", "opFat", p.fat)}
+      ${nutriRow("davon gesättigte Fettsäuren", "opSatFat", p.saturatedFat, { sub: true })}
+      ${nutriRow("Kohlenhydrate", "opCarbs", p.carbs)}
+      ${nutriRow("davon Zucker", "opSugars", p.sugars, { sub: true })}
+      ${nutriRow("Ballaststoffe", "opFiber", p.fiber)}
+      ${nutriRow("Eiweiß", "opProtein", p.protein)}
+      ${nutriRow("Salz", "opSalt", p.salt, { step: 0.01 })}
     </div>
-    <div class="field-row">
-      <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="opCarbs" value="${p.carbs ?? ""}"></div>
-      <div><label>davon Zucker (g)</label><input type="number" step="0.1" id="opSugars" value="${p.sugars ?? ""}"></div>
-    </div>
-    <div class="field-row">
-      <div><label>Ballaststoffe (g)</label><input type="number" step="0.1" id="opFiber" value="${p.fiber ?? ""}"></div>
-      <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="opProtein" value="${p.protein ?? ""}"></div>
-    </div>
-    <label>Salz (g)</label><input type="number" step="0.01" id="opSalt" value="${p.salt ?? ""}">
     <label>Zutaten (optional, für Warnhinweise)</label>
     <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">
     <div class="btn-row" style="margin-top:14px">

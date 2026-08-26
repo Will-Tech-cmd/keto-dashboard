@@ -223,6 +223,16 @@ function estimateNetCarbs(item) {
   return netCarbs100 != null ? round1(netCarbs100 * item.amount / 100) : null;
 }
 
+/**
+ * Menge eines Schnellauswahl-Chips. item.amount ist die zuletzt benutzte Menge und bleibt
+ * bewusst ungerundet — damit wird tatsächlich eingetragen (250 g eines 345-g-Rezepts sind
+ * 0.7246376811594203 Portionen). Nur die Anzeige wird gekürzt; ungerundet stand genau diese
+ * Zahl auf dem Chip.
+ */
+function amountLabel(item) {
+  return item.isRecipe ? `${round1(item.amount)} P.` : `${round1(item.amount)} g`;
+}
+
 function chipHtml(item, extraClass, carbsLeft) {
   const netCarbs = estimateNetCarbs(item);
   const over = netCarbs != null && carbsLeft != null && netCarbs > carbsLeft;
@@ -230,7 +240,7 @@ function chipHtml(item, extraClass, carbsLeft) {
     <button type="button" class="klar-chip ${extraClass} ${over ? "over" : ""}" data-key="${esc(item.key)}">
       ${esc(item.name)}
       ${item.count > 1 ? `<span class="klar-chip-count">${item.count}×</span>` : ""}
-      <span class="klar-chip-amount">+${item.isRecipe ? `${item.amount} P.` : `${item.amount} g`}${netCarbs != null ? ` ${netCarbs} g KH` : ""}</span>
+      <span class="klar-chip-amount">+${amountLabel(item)}${netCarbs != null ? ` ${netCarbs} g KH` : ""}</span>
     </button>
   `;
 }
@@ -257,7 +267,7 @@ async function logQuickEntry(item, meal) {
   const neuZeichnen = () => { if (activeTab === "start") RENDERERS.start(); };
   showSnackbar({
     title: `${item.name} eingetragen`,
-    subtitle: `${item.isRecipe ? `${item.amount} Portion(en)` : `${item.amount} g`} · ${mealShort(meal)}`,
+    subtitle: `${item.isRecipe ? `${round1(item.amount)} Portion(en)` : `${round1(item.amount)} g`} · ${mealShort(meal)}`,
     // Die Schnellauswahl trägt ohne Dialog ein — hier ist die Snackbar die einzige Stelle,
     // an der "auch für sie" mit einem Tipp erreichbar ist. Verpasst man sie, geht es über
     // den Eintrag auf der Startseite genauso.

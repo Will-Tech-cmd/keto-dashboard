@@ -938,6 +938,32 @@ body[data-design="klar"] .klar-result-card { background: #12201a; }
 }
 .klar-fullscreen-body > h2:first-child { display: none; } /* Titel steht schon im Kopf */
 
+/* Nährwerte als Tabelle statt als Feldpaare: Bezeichnung links, Wert rechts — dieselbe
+   Anordnung wie auf der Verpackung, damit sich Zeile für Zeile abgleichen lässt. */
+.klar-nutri-table {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--bg-elevated);
+}
+.klar-nutri-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.klar-nutri-row:last-child { border-bottom: none; }
+.klar-nutri-row > label {
+  flex: 1; min-width: 0; margin: 0;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+/* „davon …" gehört zur Zeile darüber — eingerückt und leiser, wie im Etikett. */
+.klar-nutri-row.sub > label { padding-left: 14px; font-weight: 600; color: var(--text-muted); }
+.klar-nutri-field { flex: none; display: flex; align-items: baseline; gap: 5px; }
+body[data-design="klar"] .klar-nutri-field input {
+  width: 74px; min-height: 38px; text-align: right;
+  padding: 0 10px; font-size: 14px; font-weight: 800; border-radius: 9px;
+}
+.klar-nutri-field input::-webkit-outer-spin-button,
+.klar-nutri-field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.klar-nutri-field span { width: 30px; font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+
 /* ---------- „Klar": Ringraster auf der Startseite (4 Zielwerte + Wasser in einer Karte) ---------- */
 .klar-head-actions { display: flex; gap: 8px; align-items: center; flex: none; }
 .klar-pill-btn.icon-only { padding: 6px 10px; font-size: 14px; }
