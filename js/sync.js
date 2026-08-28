@@ -158,10 +158,26 @@ async function authedFetch(url, opts = {}, { retried = false } = {}) {
 let syncing = false;
 let queued = false;
 
+// Wer wissen will, wann ein Abgleich tatsächlich fremde Änderungen eingespielt hat (app.js
+// zeichnet dann den sichtbaren Reiter neu). Nach dem Vorbild von onStoreChange in store.js —
+// so muss sync.js nichts über die Oberfläche wissen.
+const syncAppliedListeners = [];
+export function onSyncApplied(fn) {
+  syncAppliedListeners.push(fn);
+}
+function meldeSyncAngewendet() {
+  // Ein Fehler im Neuzeichnen darf den Abgleich nicht als gescheitert dastehen lassen —
+  // die Daten sind zu diesem Zeitpunkt längst sicher gespeichert.
+  syncAppliedListeners.forEach(fn => { try { fn(); } catch (e) { console.warn("onSyncApplied:", e); } });
+}
+
 /**
- * Ein Durchlauf: lesen, einmischen, schreiben. Gibt false zurück, wenn zwischen Lesen und
- * Schreiben ein anderes Gerät geschrieben hat — dann ist der ganze Durchlauf zu wiederholen,
- * weil unsere Fassung dessen Änderungen noch nicht kennt.
+ * Ein Durchlauf: lesen, einmischen, schreiben. Liefert `{ fertig, veraendert }`:
+ * - `fertig` ist false, wenn zwischen Lesen und Schreiben ein anderes Gerät geschrieben hat —
+ *   dann ist der ganze Durchlauf zu wiederholen, weil unsere Fassung dessen Änderungen noch
+ *   nicht kennt.
+ * - `veraendert` sagt, ob durch das Einmischen wirklich etwas Fremdes dazugekommen ist. Nur
+ *   das rechtfertigt, der offenen App einen Bildschirmaufbau zuzumuten.
  */
 async function syncOnce() {
   const res = await authedFetch(`${REST}/keto_sync_state?id=eq.${ROW_ID}&select=daten`);
@@ -172,13 +188,23 @@ async function syncOnce() {
   }
   const rows = await res.json();
   const remote = rows[0]?.daten || null;
-  if (remote) Store.mergeJSONQuiet(JSON.stringify(remote));
+
+  // Ob durch das Einmischen wirklich etwas dazugekommen ist — der Vergleich vorher/nachher ist
+  // die einzige ehrliche Antwort darauf. mergeJSONQuiet() meldet nur "es wurde gespeichert",
+  // auch wenn der Serverstand längst bekannt war; darauf einen Bildschirmaufbau zu hängen hieße,
+  // im Vordergrund alle 60 Sekunden ohne Anlass neu zu zeichnen.
+  let veraendert = false;
+  if (remote) {
+    const vorher = Store.exportJSON();
+    Store.mergeJSONQuiet(JSON.stringify(remote));
+    veraendert = Store.exportJSON() !== vorher;
+  }
 
   // Nur hochladen, wenn es hier wirklich etwas Neues gibt. Sonst schriebe jeder Blick auf den
   // Server denselben Stand sinnlos zurück — bei einem Zustand von einigen hundert Kilobyte ist
   // das der Unterschied zwischen "kaum spürbar" und "läuft das Datenvolumen leer".
   const mark = pendingPushMark();
-  if (!mark) return true;
+  if (!mark) return { fertig: true, veraendert };
 
   const version = Number(remote?.syncVersion) || 0;
   const wer = Store.getActiveProfile()?.name || null;
@@ -195,7 +221,7 @@ async function syncOnce() {
     });
     if (!insert.ok) throw new Error(`Hochladen fehlgeschlagen (Status ${insert.status}).`);
     clearPendingPush(mark);
-    return true;
+    return { fertig: true, veraendert };
   }
 
   // Optimistische Sperre: der PATCH greift nur, solange dort noch die Version steht, die wir
@@ -213,10 +239,12 @@ async function syncOnce() {
   );
   if (!patch.ok) throw new Error(`Hochladen fehlgeschlagen (Status ${patch.status}).`);
   const geschrieben = await patch.json().catch(() => []);
-  if (!Array.isArray(geschrieben) || geschrieben.length === 0) return false; // jemand war schneller
+  // Jemand war schneller: der ganze Durchlauf wird wiederholt. `veraendert` wandert mit, damit
+  // ein im ersten Anlauf eingemischter Fremdstand nicht dadurch unter den Tisch fällt.
+  if (!Array.isArray(geschrieben) || geschrieben.length === 0) return { fertig: false, veraendert };
 
   clearPendingPush(mark);
-  return true;
+  return { fertig: true, veraendert };
 }
 
 /**
@@ -262,11 +290,18 @@ export async function syncNow() {
   syncing = true;
   try {
     let fertig = false;
+    let veraendert = false;
     for (let versuch = 1; versuch <= MAX_SYNC_ATTEMPTS && !fertig; versuch++) {
-      fertig = await syncOnce();
+      const ergebnis = await syncOnce();
+      fertig = ergebnis.fertig;
+      if (ergebnis.veraendert) veraendert = true;
     }
     if (!fertig) throw new Error("Das andere Gerät war schneller — gleich noch einmal versuchen.");
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
+    // Erst jetzt, und nur bei echtem Zuwachs: die offene App zeigt sonst bis zur nächsten
+    // Berührung den Stand von vorher. Im Zeilenmodus übernimmt das der "remote"-Store-Hinweis
+    // (siehe zeilenAbgleich), deshalb wird hier bewusst nichts doppelt gemeldet.
+    if (veraendert) meldeSyncAngewendet();
   } finally {
     syncing = false;
     if (queued) { queued = false; syncNow().catch(() => {}); }

@@ -4,7 +4,7 @@ import { renderStart } from "./views/start.js";
 import { renderScan, cleanupScan, openScanSearch } from "./views/scan.js";
 import { renderLists, openListsSubtab, renderEvaluationPage } from "./lists.js";
 import { renderProfile } from "./views/profile.js";
-import { renderRecipes } from "./views/recipes.js";
+import { renderRecipes, isRecipeEditorOpen } from "./views/recipes.js";
 import { renderOnboarding } from "./views/onboarding.js";
 import { renderPlanerPage } from "./views/planer.js";
 import {
@@ -15,7 +15,7 @@ import { logRecipeConsumption, calcPerServing } from "./recipes.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { getTargetsForDate } from "./profiles.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
-import { isSyncEnabled, syncNow } from "./sync.js";
+import { isSyncEnabled, syncNow, onSyncApplied } from "./sync.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -104,8 +104,19 @@ profileSwitchBtn.addEventListener("click", () => {
 });
 
 /** Rendert den sichtbaren Tab neu, ohne die History anzufassen — nur für Tabs ohne eigenen,
- * zwischenzeitlichen Bearbeitungszustand (Rezept-Editor und Scanner bleiben deshalb außen vor). */
+ * zwischenzeitlichen Bearbeitungszustand (der Scanner bleibt deshalb außen vor).
+ *
+ * Seit der Abgleich das von sich aus auslöst (alle 60 Sekunden im Vordergrund, siehe sync.js),
+ * kann das mitten in eine Eingabe platzen: die Reiter werden über innerHTML neu aufgebaut, ein
+ * halb getippter Einkaufslisten-Artikel oder Suchbegriff wäre damit weg. Deshalb wird
+ * ausgesetzt, solange der Fokus in einem Eingabefeld steht — der nächste Durchlauf holt es
+ * nach, und bis dahin sieht man eben ein paar Sekunden den vorherigen Stand.
+ */
 function refreshCurrentTabIfSafe() {
+  const el = document.activeElement;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+  // Der Rezepte-Reiter zeigt entweder die Liste (gefahrlos) oder den Vollbild-Editor (nicht).
+  if (activeTab === "recipes") { if (!isRecipeEditorOpen()) RENDERERS.recipes(); return; }
   if (activeTab === "start" || activeTab === "profile" || activeTab === "lists") RENDERERS[activeTab]();
 }
 
@@ -357,6 +368,11 @@ function initialTabFromUrl() {
 onStoreChange((origin) => {
   if (origin === "remote" && istZeilenModus()) refreshCurrentTabIfSafe();
 });
+
+// Im klassischen Modus (Standard, siehe modus.js) gibt es diesen "remote"-Hinweis nicht in
+// brauchbarer Form — dort meldet jeder Abgleich eine Änderung, auch wenn der Serverstand längst
+// bekannt war. sync.js sagt deshalb selbst Bescheid, und zwar nur bei echtem Zuwachs.
+onSyncApplied(refreshCurrentTabIfSafe);
 
 /**
  * Den Browser bitten, die Daten dieser App nicht wegzuräumen.

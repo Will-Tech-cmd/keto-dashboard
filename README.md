@@ -210,6 +210,12 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
   gegebenenfalls vier Profil-Reiter da. Ab dem dritten Profil erscheint neben jedem
   nicht-aktiven Profil ein ✕ zum Aufräumen — und das hält jetzt: gelöschte Profile haben
   einen Grabstein wie jede andere Liste und kommen beim nächsten Abgleich nicht zurück.
+- **Wann abgeglichen wird:** beim Start, beim Zurückkehren aus dem Hintergrund, nach eigenen
+  Änderungen (4 s verzögert) und alle 60 Sekunden, solange die App im Vordergrund sichtbar ist.
+  Im Hintergrund läuft nichts. Bringt ein Abgleich wirklich etwas Neues mit, zeichnet sich der
+  sichtbare Reiter selbst neu — vorher sah man fremde Einträge erst, wenn man ohnehin etwas
+  antippte. Ausgesetzt wird das nur, solange der Fokus in einem Eingabefeld steht oder der
+  Rezept-Editor offen ist: ein Neuaufbau mitten in der Eingabe würde sie verwerfen.
 - **Neuer Speicher (Profil-Tab, standardmäßig aus).** Der bisherige Weg legt den kompletten
   Zustand als *ein* JSON ab und gleicht ihn auch als Ganzes ab — die Zusammenführung muss
   deshalb im Client nachgebaut werden, und genau dort steckten die Datenverluste. Der neue
