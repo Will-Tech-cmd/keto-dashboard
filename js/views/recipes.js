@@ -21,6 +21,12 @@ import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage,
 let openRecipeId = null;
 let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-Phase
 
+/** Steht gerade ein Rezept offen zum Bearbeiten? Der Abgleich fragt danach, bevor er den
+ * Reiter auffrischt — ein Neuzeichnen mitten im Editor würde die halbe Eingabe verwerfen. */
+export function isRecipeEditorOpen() {
+  return openRecipeId != null;
+}
+
 /** Ampel-Grenzwerte des aktiven Profils (Ernährungsform), für konsistente Bewertung. */
 function activeThresholds() {
   return calcTargets(Store.getActiveProfile()).gradeThresholds;
