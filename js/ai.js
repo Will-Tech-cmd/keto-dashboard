@@ -71,7 +71,7 @@ function numOrNull(v) {
  * einen Essensplan zusammenstellen. Was mit dem Ergebnis geschieht, entscheidet die
  * aufrufende Funktion — hier steht nur, wie man mit Gemini redet und was schiefgehen kann.
  */
-async function callGemini(parts, key, schema) {
+async function callGemini(parts, key, schema, { maxOutputTokens = 8192 } = {}) {
   let res;
   try {
     res = await fetch(ENDPOINT, {
@@ -85,7 +85,7 @@ async function callGemini(parts, key, schema) {
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          maxOutputTokens: 8192,
+          maxOutputTokens,
         },
       }),
     });
@@ -112,18 +112,37 @@ async function callGemini(parts, key, schema) {
   }
 
   const json = await res.json();
-  const textOut = json.candidates?.[0]?.content?.parts?.[0]?.text;
+  const kandidat = json.candidates?.[0];
+  const textOut = kandidat?.content?.parts?.[0]?.text;
+
   if (!textOut) {
-    const err = new Error("Keine verwertbare Antwort von Gemini erhalten.");
+    // Der häufigste Fall ist nicht "nichts gefunden", sondern "Budget alle": das Modell denkt
+    // erst und schreibt dann — reicht es dafür nicht mehr, kommt eine leere Antwort mit
+    // finishReason MAX_TOKENS zurück. Das muss man auseinanderhalten können, sonst sucht man
+    // den Fehler beim Bild statt beim Limit.
+    const grund = kandidat?.finishReason || json.promptFeedback?.blockReason;
+    const err = new Error(
+      grund === "MAX_TOKENS" ? "Die Antwort war zu lang und wurde abgeschnitten."
+      : grund === "SAFETY" || grund === "PROHIBITED_CONTENT" ? "Gemini hat die Antwort blockiert."
+      : grund ? `Gemini lieferte keine Antwort (${grund}).`
+      : "Keine verwertbare Antwort von Gemini erhalten."
+    );
     err.apiError = true;
+    if (grund === "MAX_TOKENS") err.tooLong = true;
     throw err;
   }
 
   try {
     return JSON.parse(textOut);
   } catch {
-    const err = new Error("Antwort von Gemini war kein gültiges JSON.");
+    // Abgeschnittenes JSON ist unbrauchbar, aber der Grund ist derselbe wie oben — dann auch
+    // dieselbe Auskunft geben statt eines nichtssagenden "kein gültiges JSON".
+    const abgeschnitten = kandidat?.finishReason === "MAX_TOKENS";
+    const err = new Error(abgeschnitten
+      ? "Die Antwort war zu lang und brach mittendrin ab."
+      : "Antwort von Gemini war kein gültiges JSON.");
     err.apiError = true;
+    if (abgeschnitten) err.tooLong = true;
     throw err;
   }
 }
@@ -220,6 +239,9 @@ export function describeAiError(err) {
   if (err.invalidKey) return "Gemini-API-Schlüssel ungültig — im Profil-Tab prüfen.";
   if (err.quotaExceeded) return "Gemini-Tageskontingent erschöpft — später erneut versuchen.";
   if (err.networkError) return "Keine Verbindung zu Gemini möglich (offline?).";
+  // Handlungsleitend statt nur richtig: bei abgeschnittener Antwort hilft ein engerer
+  // Bildausschnitt sofort weiter, während "fehlgeschlagen" den Menschen ratlos lässt.
+  if (err.tooLong) return "Zu viel auf einmal — nochmal versuchen, notfalls mit engerem Bildausschnitt.";
   return "KI-Erkennung fehlgeschlagen: " + err.message;
 }
 
@@ -356,7 +378,6 @@ const TELLER_SCHEMA = {
           alternativen: { type: "ARRAY", items: { type: "STRING" } },
           kcal100: { type: "NUMBER" },
           carbs100: { type: "NUMBER" },
-          fiber100: { type: "NUMBER" },
           fat100: { type: "NUMBER" },
           protein100: { type: "NUMBER" },
         },
@@ -369,7 +390,7 @@ const TELLER_SCHEMA = {
 
 const TELLER_PROMPT = `Du siehst das Foto einer Mahlzeit. Schätze, was darauf liegt und wie viel davon.
 
-beschreibung: ein bis zwei Sätze in natürlichem Deutsch, was auf dem Teller zu sehen ist.
+beschreibung: EIN kurzer Satz, was auf dem Teller zu sehen ist.
 
 posten: die einzelnen Bestandteile GETRENNT, nicht als ein Gesamtgericht. Fleisch, Beilage,
 Gemüse, Soße, Salat sind eigene Posten. Für jeden:
@@ -378,19 +399,21 @@ Gemüse, Soße, Salat sind eigene Posten. Für jeden:
   Größenverhältnissen (Teller ca. 26-28 cm, Besteck, Gläser). Realistische Restaurantportionen.
 - sicher: true, wenn das Lebensmittel eindeutig erkennbar ist. false, wenn es mit etwas anderem
   verwechselbar ist — glasiertes helles Fleisch, paniertes, Pürees, undurchsichtige Soßen.
-- alternativen: bei sicher=false zwei bis vier plausible Möglichkeiten, die wahrscheinlichste
+- alternativen: bei sicher=false höchstens DREI plausible Möglichkeiten, die wahrscheinlichste
   zuerst; der Name selbst darf darunter sein. Bei sicher=true leer lassen.
-- kcal100/carbs100/fiber100/fat100/protein100: STANDARD-Nährwerte pro 100 g nach üblichen
-  deutschen Nährwerttabellen, für das zubereitete Lebensmittel wie abgebildet (gebraten also
-  inklusive des üblichen Bratfetts). carbs100 sind NETTO-Kohlenhydrate, Ballaststoffe bereits
-  abgezogen.
+- kcal100/carbs100/fat100/protein100: STANDARD-Nährwerte pro 100 g nach üblichen deutschen
+  Nährwerttabellen, für das zubereitete Lebensmittel wie abgebildet (gebraten also inklusive
+  des üblichen Bratfetts). carbs100 sind NETTO-Kohlenhydrate, Ballaststoffe bereits abgezogen.
 
 Rechne mit, was zum Anrichten gehört, aber nicht sichtbar ist: Bratfett, Butter am Gemüse,
 Öl im Dressing. Lieber als eigenen kleinen Posten führen als unterschlagen.
 
-hinweis: eine kurze Warnung, wenn etwas Wesentliches am Foto nicht beurteilbar ist und die
+hinweis: EIN kurzer Satz, wenn etwas Wesentliches am Foto nicht beurteilbar ist und die
 Kohlenhydrate spürbar beeinflussen könnte — etwa eine Soße, die gezuckert sein kann, oder
 eine Panade. Sonst leer lassen.
+
+Fasse dich kurz und halte die Liste auf das Wesentliche begrenzt: lieber acht klar benannte
+Posten als zwanzig Kleinstmengen.
 
 Antworte ausschließlich mit dem JSON-Objekt gemäß Schema, ohne zusätzlichen Text.`;
 
@@ -406,7 +429,7 @@ export async function erkenneTellerFoto(file) {
   const parsed = await callGemini([
     { text: TELLER_PROMPT },
     { inlineData: { mimeType, data } },
-  ], key, TELLER_SCHEMA);
+  ], key, TELLER_SCHEMA, { maxOutputTokens: 24576 });
 
   return {
     beschreibung: String(parsed?.beschreibung || "").trim(),
@@ -421,7 +444,7 @@ export async function erkenneTellerFoto(file) {
         per100: {
           kcal: numOrNull(p.kcal100),
           carbs: numOrNull(p.carbs100),
-          fiber: numOrNull(p.fiber100),
+          fiber: null, // carbs sind bereits netto — ein Ballaststoffwert daneben zöge doppelt ab
           sugars: null,
           fat: numOrNull(p.fat100),
           saturatedFat: null,
