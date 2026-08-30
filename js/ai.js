@@ -326,3 +326,109 @@ export async function verfeinerePlan({ katalog, ziele, tage, mahlzeiten }) {
     }))
     .filter(e => e.katalogKey && e.menge != null);
 }
+
+// ---------------------------------------------------------------------------
+// Tellerfoto — was liegt da, und wie viel davon?
+//
+// Bewusst etwas anderes als recognizeIngredientsFromImage(): dort wird eine GESCHRIEBENE
+// Zutatenliste abgelesen, hier muss geschätzt werden. Deshalb zwei Zusätze, die es dort
+// nicht braucht:
+//   - `sicher` + `alternativen`: glasierte Putenstreifen sehen aus wie Garnelen. Eine App,
+//     die sich in so einem Fall einfach festlegt, trägt stillschweigend Falsches ein — hier
+//     sagt die Erkennung, dass sie unsicher ist, und der Mensch tippt die richtige Fassung an.
+//   - `hinweis`: was ein Foto grundsätzlich nicht zeigt (Öl in der Pfanne, Zucker in der
+//     Soße). Lieber benennen als Genauigkeit vortäuschen.
+// ---------------------------------------------------------------------------
+
+const TELLER_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    beschreibung: { type: "STRING" },
+    hinweis: { type: "STRING" },
+    posten: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          name: { type: "STRING" },
+          grams: { type: "NUMBER" },
+          sicher: { type: "BOOLEAN" },
+          alternativen: { type: "ARRAY", items: { type: "STRING" } },
+          kcal100: { type: "NUMBER" },
+          carbs100: { type: "NUMBER" },
+          fiber100: { type: "NUMBER" },
+          fat100: { type: "NUMBER" },
+          protein100: { type: "NUMBER" },
+        },
+        required: ["name", "grams", "sicher", "kcal100", "carbs100", "fat100", "protein100"],
+      },
+    },
+  },
+  required: ["beschreibung", "posten"],
+};
+
+const TELLER_PROMPT = `Du siehst das Foto einer Mahlzeit. Schätze, was darauf liegt und wie viel davon.
+
+beschreibung: ein bis zwei Sätze in natürlichem Deutsch, was auf dem Teller zu sehen ist.
+
+posten: die einzelnen Bestandteile GETRENNT, nicht als ein Gesamtgericht. Fleisch, Beilage,
+Gemüse, Soße, Salat sind eigene Posten. Für jeden:
+- name: das Lebensmittel auf Deutsch, ohne Mengenangabe
+- grams: geschätztes Gewicht dieses Bestandteils auf dem Teller. Orientiere dich an sichtbaren
+  Größenverhältnissen (Teller ca. 26-28 cm, Besteck, Gläser). Realistische Restaurantportionen.
+- sicher: true, wenn das Lebensmittel eindeutig erkennbar ist. false, wenn es mit etwas anderem
+  verwechselbar ist — glasiertes helles Fleisch, paniertes, Pürees, undurchsichtige Soßen.
+- alternativen: bei sicher=false zwei bis vier plausible Möglichkeiten, die wahrscheinlichste
+  zuerst; der Name selbst darf darunter sein. Bei sicher=true leer lassen.
+- kcal100/carbs100/fiber100/fat100/protein100: STANDARD-Nährwerte pro 100 g nach üblichen
+  deutschen Nährwerttabellen, für das zubereitete Lebensmittel wie abgebildet (gebraten also
+  inklusive des üblichen Bratfetts). carbs100 sind NETTO-Kohlenhydrate, Ballaststoffe bereits
+  abgezogen.
+
+Rechne mit, was zum Anrichten gehört, aber nicht sichtbar ist: Bratfett, Butter am Gemüse,
+Öl im Dressing. Lieber als eigenen kleinen Posten führen als unterschlagen.
+
+hinweis: eine kurze Warnung, wenn etwas Wesentliches am Foto nicht beurteilbar ist und die
+Kohlenhydrate spürbar beeinflussen könnte — etwa eine Soße, die gezuckert sein kann, oder
+eine Panade. Sonst leer lassen.
+
+Antworte ausschließlich mit dem JSON-Objekt gemäß Schema, ohne zusätzlichen Text.`;
+
+/**
+ * Schickt ein Tellerfoto an Gemini und liefert die geschätzten Bestandteile.
+ * Nährwerte kommen in derselben Schreibweise wie überall in der App (per100).
+ */
+export async function erkenneTellerFoto(file) {
+  const key = schluesselOderFehler();
+  const prepared = await downscaleImageIfNeeded(file);
+  const data = await fileToBase64(prepared);
+  const mimeType = prepared.type || file.type || "image/jpeg";
+  const parsed = await callGemini([
+    { text: TELLER_PROMPT },
+    { inlineData: { mimeType, data } },
+  ], key, TELLER_SCHEMA);
+
+  return {
+    beschreibung: String(parsed?.beschreibung || "").trim(),
+    hinweis: String(parsed?.hinweis || "").trim(),
+    posten: (parsed?.posten || [])
+      .map(p => ({
+        id: crypto.randomUUID(),
+        name: String(p.name || "").trim(),
+        grams: numOrNull(p.grams) ?? 0,
+        sicher: p.sicher !== false,
+        alternativen: (p.alternativen || []).map(a => String(a).trim()).filter(Boolean),
+        per100: {
+          kcal: numOrNull(p.kcal100),
+          carbs: numOrNull(p.carbs100),
+          fiber: numOrNull(p.fiber100),
+          sugars: null,
+          fat: numOrNull(p.fat100),
+          saturatedFat: null,
+          protein: numOrNull(p.protein100),
+          salt: null,
+        },
+      }))
+      .filter(p => p.name),
+  };
+}
