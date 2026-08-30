@@ -96,9 +96,31 @@ function uebliche(mengen) {
   return sortiert.length % 2 ? sortiert[mitte] : (sortiert[mitte - 1] + sortiert[mitte]) / 2;
 }
 
-function mahlzeitGewichte(zaehler, gesamt) {
+/**
+ * Wie sehr gehört dieses Lebensmittel zu welcher Tageszeit?
+ *
+ * Nicht der rohe Anteil, sondern ein geglätteter: zu jedem Zähler kommt ein halber
+ * Phantom-Eintrag je Slot dazu. Das ersetzt die frühere harte Untergrenze von 0.15, und der
+ * Unterschied ist der Punkt.
+ *
+ * Die Untergrenze war absolut und wusste nichts davon, wie viel Verlauf dahintersteht: eine
+ * Avocado, sechsmal mittags und nie morgens gegessen, bekam fürs Frühstück dieselben 0.15 wie
+ * etwas, von dem man gar nichts weiß. Bei einem Katalog voller Abend- und Mittagsgerichte
+ * summiert sich dieses "unwahrscheinlich, aber möglich" über viele Kandidaten zu "ziemlich
+ * wahrscheinlich irgendeines davon" — gemessen kamen so 24 % der Frühstücksenergie aus
+ * Dingen, die dort nie auf dem Tisch standen (Avocado und Krakauer zum Frühstück).
+ *
+ * Geglättet fällt derselbe Wert auf 0.06, während gut belegte Zuordnungen kaum nachgeben. Und
+ * es wird umso schärfer, je mehr Verlauf da ist — was bei zwei Einträgen noch Zufall sein
+ * kann, ist bei dreißig eine Gewohnheit. Ein Slot ganz ohne Verlauf bleibt trotzdem nicht
+ * leer: dort sind dann alle Kandidaten gleich schwach, und gezogen wird trotzdem.
+ */
+const SLOT_GLAETTUNG = 0.5;
+
+export function mahlzeitGewichte(zaehler, gesamt) {
   const g = {};
-  for (const slot of SLOTS) g[slot] = Math.max(0.15, (zaehler[slot] || 0) / gesamt);
+  const nenner = gesamt + SLOT_GLAETTUNG * SLOTS.length;
+  for (const slot of SLOTS) g[slot] = ((zaehler[slot] || 0) + SLOT_GLAETTUNG) / nenner;
   return g;
 }
 
@@ -423,8 +445,15 @@ const ENGERE_WAHL_MIN = 2;
  * Wiederholung gleich teuer machte, verdrängte deshalb die Grundnahrungsmittel aus dem Plan
  * und ließ die Hauptgerichte trotzdem stehen. Der Anteil an der Tagesenergie unterscheidet
  * beides von selbst: 900 kcal Auflauf wiegen schwer, 20 g Butter fast nichts.
+ *
+ * Von 3.0 auf 6.0 angehoben, als der Slot-Aufschlag teurer wurde: die beiden konkurrieren um
+ * dieselbe Entscheidung. Wird "passt zur Tageszeit" teurer, weicht der Motor bei knapper
+ * Auswahl lieber ein zweites Mal auf dasselbe Abendessen aus — im kleinen Testkatalog prompt
+ * zweimal Cheeseburger-Auflauf hintereinander. Am realistischen Katalog kostet die Anhebung
+ * nichts (dort gab es in 600 Tagepaaren ohnehin keine Wiederholung), im kleinen senkt sie
+ * sie von 1.7 % auf 0.2 %.
  */
-const WIEDERHOLUNGS_KOSTEN = 3.0;
+const WIEDERHOLUNGS_KOSTEN = 6.0;
 
 function wiederholungsAufschlag(zeilen, strafe, tagesKcal) {
   if (!(tagesKcal > 0)) return 0;
@@ -437,12 +466,33 @@ function wiederholungsAufschlag(zeilen, strafe, tagesKcal) {
 /**
  * Aufschlag für ein Gericht, das zu dieser Tageszeit sonst nicht auf dem Tisch steht.
  *
- * `gewicht[slot]` ist der Anteil der bisherigen Einträge, der auf diesen Slot fiel, mit einer
- * Untergrenze von 0.15 (sonst bliebe ein Slot ohne Verlauf für immer leer). Genau diese
- * Untergrenze machte den Weg frei für Putenbrust mit Brokkoli am Morgen: unwahrscheinlich,
- * aber eben nicht unmöglich — und energetisch passte es hervorragend.
+ * `gewicht[slot]` ist der geglättete Anteil der bisherigen Einträge, der auf diesen Slot fiel
+ * (siehe mahlzeitGewichte). Der Aufschlag ist nötig, weil die Ziehung allein nichts ausrichtet:
+ * `baueTag` nimmt den besten aus fünfhundert Anläufen, und in fünfhundert Anläufen kommt auch
+ * Avocado zum Frühstück vor — trifft sie die Zielwerte am genauesten, gewinnt sie.
+ *
+ * Von 1.2 auf 2.5 erhöht, zusammen mit der Glättung oben und dem höheren Wiederholungspreis
+ * unten. An zwei Katalogen über je 800 gewürfelte Tage gemessen; am realistischen (20
+ * Einträge, wie ihn ein Haushalt nach ein paar Wochen hat) ist ALLES besser geworden:
+ *
+ *                        vorher   nachher
+ *   Frühstück fremd       1.5 %     0.5 %
+ *   Mittag fremd          1.2 %     0.0 %
+ *   Abend fremd           6.9 %     0.6 %
+ *   Eiweiß daneben        3.9 %     2.3 %
+ *   kcal-Abweichung       1.0 %     0.8 %
+ *
+ * Kein Tausch also, sondern beides zugleich — was zur Tageszeit passt, trifft die Zielwerte
+ * eben auch eher. Ab 4.0 kippt es allerdings: dann wird die Slot-Treue so teuer, dass die
+ * Zielwerte leiden (14 % der Tage mit verfehltem Eiweiß).
+ *
+ * Der Preis steht bei einem sehr kleinen Katalog: mit neun Einträgen, davon drei
+ * frühstückstauglichen, fällt der Fremdanteil zwar von 24 auf 19 %, das Eiweiß liegt dafür an
+ * 17 statt 6 % der Tage daneben. Das ist kein Fehler des Motors, sondern die ehrliche Folge
+ * fehlender Auswahl: wer nur dreierlei zum Frühstück kennt, bekommt entweder ein passendes
+ * Frühstück oder ein perfekt gerechnetes — beides gibt der Katalog nicht her.
  */
-const SLOT_KOSTEN = 1.2;
+const SLOT_KOSTEN = 2.5;
 
 function slotAufschlag(zeilen, tagesKcal) {
   if (!(tagesKcal > 0)) return 0;

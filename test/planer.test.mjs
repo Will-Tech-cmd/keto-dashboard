@@ -24,8 +24,7 @@ const TAGE = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"];
 
 /** Ein Katalogeintrag von Hand — so kommt der Motor ohne Store und ohne echte Daten aus. */
 function rezept(name, per, { anzahl = 5, slots = {} } = {}) {
-  const gewicht = {};
-  for (const s of p.SLOTS) gewicht[s] = Math.max(0.15, (slots[s] || 0) / Math.max(1, anzahl));
+  const gewicht = p.mahlzeitGewichte(slots, Math.max(1, anzahl));
   return {
     key: `recipe:${name}`, name, istRezept: true, recipeId: name, barcode: null,
     per, einheit: "portion", schritt: 0.25, min: 0.5, max: 2, standard: 1,
@@ -33,8 +32,7 @@ function rezept(name, per, { anzahl = 5, slots = {} } = {}) {
   };
 }
 function produkt(name, per, { anzahl = 5, slots = {}, favorit = false } = {}) {
-  const gewicht = {};
-  for (const s of p.SLOTS) gewicht[s] = Math.max(0.15, (slots[s] || 0) / Math.max(1, anzahl));
+  const gewicht = p.mahlzeitGewichte(slots, Math.max(1, anzahl));
   return {
     key: name, name, istRezept: false, recipeId: null, barcode: name,
     per, einheit: "gramm", schritt: 10, min: 20, max: 200, standard: 60,

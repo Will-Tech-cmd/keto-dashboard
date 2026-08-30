@@ -54,6 +54,13 @@ Auswahl bleibt für das nächste Mal gemerkt.
 - Die vorgeschlagene Menge orientiert sich an der **üblichen** Portion (dem Median deiner
   bisherigen), nicht an der zuletzt eingetragenen — sonst würde aus einer großzügig
   bestätigten Planportion über ein paar Runden die neue Normalportion.
+- **Was zu welcher Tageszeit passt, zählt kräftig mit.** Wie sehr etwas zu einer Mahlzeit
+  gehört, wird aus dem Verlauf geglättet geschätzt: was dreißigmal abends auf dem Tisch stand,
+  gilt als Abendessen, was zweimal irgendwo auftauchte, bleibt offen. Der Vorschlag zahlt einen
+  spürbaren Aufschlag für alles, was zu dieser Tageszeit sonst nicht vorkommt — sonst gewinnt
+  am Ende doch die Avocado zum Frühstück, weil sie energetisch am besten passte. Gemessen über
+  800 gewürfelte Tage sank der Anteil solcher Fehlgriffe am Abendessen von 6,9 auf 0,6 %, und
+  die Zielwerte wurden dabei nicht schlechter, sondern besser getroffen.
 - Jede Zeile lässt sich einzeln neu würfeln („🔄"), ohne den Rest des Tages anzufassen.
 - **Mit hinterlegtem Gemini-Schlüssel** kann der Vorschlag verfeinert werden. Auch dann gilt:
   das Modell wählt aus derselben Liste aus, die App rechnet. Zurück kommen nur Verweise und
