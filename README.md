@@ -90,7 +90,8 @@ auch in der Auswertung und im KI-Bericht dabei.
 
 ### Tellerfoto (optional, Gemini-Schlüssel nötig)
 Für unterwegs, wo es keinen Barcode gibt: über „Eintragen → 📸 Teller" ein Foto der Mahlzeit
-aufnehmen. Gemini schätzt daraus die **einzelnen Bestandteile** — Fleisch, Beilage, Soße,
+aufnehmen — oder eines aus der Galerie wählen, wenn im Restaurant nur fotografiert und erst
+zu Hause eingetragen wird. Gemini schätzt daraus die **einzelnen Bestandteile** — Fleisch, Beilage, Soße,
 Salat getrennt — samt Gewicht und Nährwerten, dazu ein Satz, was es zu sehen glaubt.
 
 Der Punkt ist der Schritt davor: eingetragen wird erst nach dem Prüfen. Jeder Posten lässt
