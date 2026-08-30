@@ -88,6 +88,23 @@ auch in der Auswertung und im KI-Bericht dabei.
   ein Knopf am einzelnen Produkt, der vorher zeigt, was genau gesendet würde. Nie automatisch,
   nie mit den erfundenen Barcodes für Produkte ohne Scan, nie ohne Nährwerte
 
+### Tellerfoto (optional, Gemini-Schlüssel nötig)
+Für unterwegs, wo es keinen Barcode gibt: über „Eintragen → 📸 Teller" ein Foto der Mahlzeit
+aufnehmen. Gemini schätzt daraus die **einzelnen Bestandteile** — Fleisch, Beilage, Soße,
+Salat getrennt — samt Gewicht und Nährwerten, dazu ein Satz, was es zu sehen glaubt.
+
+Der Punkt ist der Schritt davor: eingetragen wird erst nach dem Prüfen. Jeder Posten lässt
+sich umbenennen, in der Menge korrigieren oder löschen. **Wo die Erkennung selbst unsicher
+ist, sagt sie das und bietet ihre Alternativen zum Antippen an** — glasierte Putenstreifen
+sehen nun einmal aus wie Garnelen, und eine App, die sich in so einem Fall stillschweigend
+festlegt, trägt Falsches ein, ohne dass es jemand merkt. Die Auswahl bleibt danach stehen,
+damit ein Fehltipp nicht bedeutet, den Namen von Hand schreiben zu müssen.
+
+Was ein Foto grundsätzlich nicht zeigt — Öl in der Pfanne, Zucker in einer dunklen Soße —,
+benennt die Antwort als Hinweis, statt Genauigkeit vorzutäuschen. Die Werte sind Schätzungen:
+gut genug für „passt das grob ins Budget", keine Etikett-Genauigkeit. Das Foto selbst wird
+nur zur Auswertung verschickt und nicht gespeichert.
+
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
 - Jede Zeile klappt auf vier Nährwertkacheln je 100 g auf, mit „Eintragen" und „Werte korrigieren"

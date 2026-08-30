@@ -16,6 +16,8 @@ import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { getTargetsForDate } from "./profiles.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
 import { isSyncEnabled, syncNow, onSyncApplied } from "./sync.js";
+import { openTellerFoto } from "./teller.js";
+import { hasApiKey } from "./ai.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -159,6 +161,7 @@ export function openEntrySheet() {
           <button type="button" class="klar-entry-way primary" data-way="scan">📷 Scannen</button>
           <button type="button" class="klar-entry-way secondary" data-way="search">🔎 Suchen</button>
           <button type="button" class="klar-entry-way secondary" data-way="recipe">🍳 Rezept</button>
+          ${hasApiKey() ? `<button type="button" class="klar-entry-way secondary" data-way="foto">📸 Teller</button>` : ""}
         </div>
 
         <div class="klar-meal-select-head">
@@ -202,7 +205,8 @@ export function openEntrySheet() {
       btn.addEventListener("click", () => {
         const way = btn.dataset.way;
         close(() => {
-          if (way === "recipe") goToTab("recipes");
+          if (way === "foto") openTellerFoto(refreshCurrentTabIfSafe);
+          else if (way === "recipe") goToTab("recipes");
           else if (way === "search") { goToTab("scan"); openScanSearch(view); }
           else goToTab("scan");
         });
