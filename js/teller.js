@@ -40,8 +40,12 @@ function summe(posten) {
 }
 
 /**
- * Einstieg aus dem Eintragen-Sheet: Kamera bzw. Galerie öffnen, danach auswerten.
- * `capture="environment"` bringt am Handy direkt die Rückkamera — unterwegs zählt jeder Tipp.
+ * Einstieg aus dem Eintragen-Sheet: Bild wählen, danach auswerten.
+ *
+ * Bewusst OHNE `capture`: das Attribut springt am Handy direkt in die Kamera und nimmt einem
+ * damit die Galerie weg. Genau das war der Fall — fotografiert wird oft im Restaurant, aber
+ * eingetragen erst später zu Hause, und dann liegt das Bild längst in der Galerie. Ohne
+ * `capture` fragt das Handy selbst, ob Kamera oder Galerie; ein Tipp mehr, dafür beide Wege.
  */
 export function openTellerFoto(onLogged) {
   if (!hasApiKey()) {
@@ -51,7 +55,6 @@ export function openTellerFoto(onLogged) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "image/*";
-  input.capture = "environment";
   input.style.display = "none";
   document.body.appendChild(input);
   input.addEventListener("change", async () => {
