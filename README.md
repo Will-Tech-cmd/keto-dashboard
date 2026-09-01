@@ -96,10 +96,15 @@ auch in der Auswertung und im KI-Bericht dabei.
   nie mit den erfundenen Barcodes für Produkte ohne Scan, nie ohne Nährwerte
 
 ### Tellerfoto (optional, Gemini-Schlüssel nötig)
-Für unterwegs, wo es keinen Barcode gibt: über „Eintragen → 📸 Teller" ein Foto der Mahlzeit
-aufnehmen — oder eines aus der Galerie wählen, wenn im Restaurant nur fotografiert und erst
-zu Hause eingetragen wird. Gemini schätzt daraus die **einzelnen Bestandteile** — Fleisch, Beilage, Soße,
-Salat getrennt — samt Gewicht und Nährwerten, dazu ein Satz, was es zu sehen glaubt.
+Für unterwegs, wo es keinen Barcode gibt: über „Eintragen → 📸 Teller" fragt die App zuerst,
+ob **aufgenommen oder aus der Galerie gewählt** werden soll — auf das Handy ist dabei kein
+Verlass, je nach Android-Fassung und Browser öffnet es sonst ungefragt nur eines von beidem.
+Ein hier aufgenommenes Foto wird nur ausgewertet und landet **nicht** in der Galerie des
+Handys; das lässt sich von einer Webseite aus nicht ändern. Wer es behalten will, fotografiert
+mit der Kamera-App und wählt es anschließend über „Aus Galerie".
+
+Gemini schätzt aus dem Bild die **einzelnen Bestandteile** — Fleisch, Beilage, Soße, Salat
+getrennt — samt Gewicht und Nährwerten, dazu ein Satz, was es zu sehen glaubt.
 
 Der Punkt ist der Schritt davor: eingetragen wird erst nach dem Prüfen. Jeder Posten lässt
 sich umbenennen, in der Menge korrigieren oder löschen. **Wo die Erkennung selbst unsicher

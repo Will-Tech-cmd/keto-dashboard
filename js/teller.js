@@ -40,29 +40,78 @@ function summe(posten) {
 }
 
 /**
- * Einstieg aus dem Eintragen-Sheet: Bild wählen, danach auswerten.
+/**
+ * Einstieg aus dem Eintragen-Sheet: erst fragen, woher das Bild kommt, dann auswerten.
  *
- * Bewusst OHNE `capture`: das Attribut springt am Handy direkt in die Kamera und nimmt einem
- * damit die Galerie weg. Genau das war der Fall — fotografiert wird oft im Restaurant, aber
- * eingetragen erst später zu Hause, und dann liegt das Bild längst in der Galerie. Ohne
- * `capture` fragt das Handy selbst, ob Kamera oder Galerie; ein Tipp mehr, dafür beide Wege.
+ * Die Wahl gehört in die App, nicht ans Betriebssystem. Beide Varianten für sich waren falsch:
+ * mit `capture="environment"` öffnet sich immer die Kamera und die Galerie ist unerreichbar —
+ * schlecht, wenn im Restaurant fotografiert und erst zu Hause eingetragen wird. Ohne das
+ * Attribut sollte das Handy eigentlich selbst fragen; gemessen an einem echten Gerät tut es
+ * das aber nicht zuverlässig, sondern öffnet direkt die Galerie und lässt die Kamera weg.
+ * Ob überhaupt gefragt wird, hängt an Android-Fassung, Browser und daran, ob einmal "Immer"
+ * für eine App gewählt wurde — darauf kann sich eine App nicht verlassen.
+ *
+ * Deshalb zwei Knöpfe mit je einem eigenen Eingabefeld. Der Hinweis darunter steht da, weil es
+ * sonst wie ein Fehler aussieht: was die Kamera hier aufnimmt, geht direkt an die Seite und
+ * landet NICHT in der Galerie des Handys. Das ist so vorgesehen und von einer Webseite aus
+ * nicht zu ändern — wer das Bild behalten will, fotografiert mit der Kamera-App und wählt es
+ * anschließend hier aus der Galerie.
  */
 export function openTellerFoto(onLogged) {
   if (!hasApiKey()) {
     showToast("Dafür wird der Gemini-Schlüssel gebraucht — Profil → Zusatzfunktionen");
     return;
   }
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "image/*";
-  input.style.display = "none";
-  document.body.appendChild(input);
-  input.addEventListener("change", async () => {
-    const file = input.files?.[0];
-    input.remove();
-    if (file) await auswertenUndZeigen(file, onLogged);
-  });
-  input.click();
+
+  const overlay = document.createElement("div");
+  overlay.className = "klar-sheet-overlay";
+  overlay.innerHTML = `
+    <div class="klar-sheet">
+      <div class="klar-sheet-handle"></div>
+      <div class="klar-sheet-title">Teller erfassen</div>
+      <div class="klar-sheet-sub">Woher soll das Bild kommen?</div>
+      <div class="btn-row" style="margin-top:16px">
+        <button type="button" class="btn" id="tellerKamera">📷 Foto aufnehmen</button>
+        <button type="button" class="btn secondary" id="tellerGalerie">🖼️ Aus Galerie</button>
+      </div>
+      <p class="hint" style="margin-top:12px">Ein hier aufgenommenes Foto wird nur ausgewertet und
+      landet nicht in deiner Galerie. Soll es dort bleiben, nimm es mit der Kamera-App auf und
+      wähle es dann über „Aus Galerie".</p>
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" class="btn ghost" id="tellerAbbruch">Abbrechen</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const schliessen = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) schliessen(); });
+  overlay.querySelector("#tellerAbbruch").addEventListener("click", schliessen);
+
+  const waehlen = (vonKamera) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    // Nur beim Kamera-Weg, und ausdrücklich über setAttribute: `input.capture = "environment"`
+    // legt in Chromium bloß eine JS-Eigenschaft an, das HTML-Attribut bleibt ungesetzt — der
+    // Knopf hätte also gar nichts bewirkt. Nachgemessen, nicht vermutet.
+    if (vonKamera) input.setAttribute("capture", "environment");
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (!file) return;
+      // Über den Callback schließen, nicht davor: bindBackClose räumt seinen History-Eintrag
+      // erst beim nächsten popstate ab. Wer sofort danach den nächsten Dialog aufmacht, dessen
+      // Eintrag wird von genau diesem popstate wieder eingerissen — das Prüf-Sheet erschien
+      // dann gar nicht erst (siehe ui.js, afterHistorySync).
+      schliessen(() => { auswertenUndZeigen(file, onLogged); });
+    });
+    input.click();
+  };
+
+  overlay.querySelector("#tellerKamera").addEventListener("click", () => waehlen(true));
+  overlay.querySelector("#tellerGalerie").addEventListener("click", () => waehlen(false));
 }
 
 async function auswertenUndZeigen(file, onLogged) {
