@@ -1238,7 +1238,12 @@ body[data-design="klar"] .klar-switch::after { width: 18px; height: 18px; }
 body[data-design="klar"] .klar-switch.on::after { left: 19px; }
 
 /* ---- 11. Ampelpunkt, Kachel-Einheit, Listenkarte ---- */
+/* `display: inline-block` ist nicht Kosmetik: als reines Inline-Element ignoriert ein
+   <span> Breite und Höhe. In den Listenzeilen fiel das nie auf, weil der Elternteil dort
+   ein Flexcontainer ist und den Punkt zum Flex-Element macht — in den Verlaufs-Kacheln,
+   wo er neben einer Zahl im Fließtext steht, war er schlicht unsichtbar. */
 body[data-design="klar"] .klar-dot {
+  display: inline-block; vertical-align: 0.02em;
   width: 10px; height: 10px; border-radius: 50%; flex: none;
   background: var(--text-faint);
 }
