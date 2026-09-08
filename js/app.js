@@ -15,6 +15,7 @@ import { logRecipeConsumption, calcPerServing } from "./recipes.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { getTargetsForDate } from "./profiles.js";
 import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme, kommaAlsPunkt } from "./ui.js";
+import { ikon, setzeIkon } from "./ikonen.js";
 import { isSyncEnabled, syncNow, onSyncApplied } from "./sync.js";
 import { openTellerFoto } from "./teller.js";
 import { hasApiKey } from "./ai.js";
@@ -158,10 +159,10 @@ export function openEntrySheet() {
         <div class="klar-sheet-sub">Sortiert nach dem, was du um diese Zeit wirklich isst.</div>
 
         <div class="klar-entry-ways">
-          <button type="button" class="klar-entry-way primary" data-way="scan">📷 Scannen</button>
-          <button type="button" class="klar-entry-way secondary" data-way="search">🔎 Suchen</button>
-          <button type="button" class="klar-entry-way secondary" data-way="recipe">🍳 Rezept</button>
-          ${hasApiKey() ? `<button type="button" class="klar-entry-way secondary" data-way="foto">📸 Teller</button>` : ""}
+          <button type="button" class="klar-entry-way primary" data-way="scan">${ikon("kamera", { groesse: 18 })} Scannen</button>
+          <button type="button" class="klar-entry-way secondary" data-way="search">${ikon("suche", { groesse: 18 })} Suchen</button>
+          <button type="button" class="klar-entry-way secondary" data-way="recipe">${ikon("rezepte", { groesse: 18 })} Rezept</button>
+          ${hasApiKey() ? `<button type="button" class="klar-entry-way secondary" data-way="foto">${ikon("teller", { groesse: 18 })} Teller</button>` : ""}
         </div>
 
         <div class="klar-meal-select-head">
@@ -423,6 +424,12 @@ const drainedFromKochbuch = Store.drainKochbuchInbox();
 // zentral angemeldet, weil die Felder in Dialogen entstehen, die es beim Start noch nicht
 // gibt — ein Aufruf je Ansicht wäre eine Stelle, die man vergessen kann.
 kommaAlsPunkt();
+
+// Die Ikonen der Tableiste stehen in index.html nur als leere Plätze mit `data-ikon`.
+// Gezeichnet werden sie hier, aus der einen Quelle (ikonen.js) — sie zweimal zu pflegen,
+// einmal im Markup und einmal im Modul, wäre genau die Stelle, an der später eine der
+// beiden Fassungen abweicht.
+document.querySelectorAll("[data-ikon]").forEach(el => setzeIkon(el, el.dataset.ikon, { groesse: 22 }));
 
 // Init
 if (Store.isOnboarded()) {

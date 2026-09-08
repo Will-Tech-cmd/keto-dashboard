@@ -28,6 +28,13 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 - Eine Zeile **Gewicht** unter den Ringen: der Wert des Tages, der Trend in einem Satz
   und ein Knopf zum Wiegen. Für einen Tag ohne Messung steht der letzte bekannte Wert
   zurückgenommen da („zuletzt Do., 04.09."), damit niemand ihn für die heutige Zahl hält
+- Unter den Mahlzeiten drei gleich breite Knöpfe in **einer** Reihe: Planen, Screenshot,
+  „Was geht noch?". Vorher lagen fünf Aktionen an drei Stellen und die Reihe brach in 2+1
+  um. Die Kamera ist dorthin gezogen, wo das Eintragen ohnehin lebt (der +-Knopf), die
+  Auswertung steht am Kopf der Nährwertkarte — bei den Zahlen, um die es geht
+- Die Mahlzeitengruppen zeigen **kcal und Netto-KH** neben dem Namen; Fett und Eiweiß
+  kommen beim Antippen der Gruppenzeile. Vorher standen vor dem ersten Lebensmittel
+  sechzehn Zahlen. In den Zeilen entfällt „0 g KH", wo nichts drin ist
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 #### Essen für die nächsten Tage planen
@@ -348,6 +355,25 @@ Reines HTML, CSS und ES-Module. **Kein Build-Schritt, keine npm-Abhängigkeiten*
 Repository liegt, ist genau das, was ausgeliefert wird. Alle Fremdbibliotheken sind unter
 `vendor/` eingecheckt, damit die App vollständig offline funktioniert.
 
+### Ikonen statt Emoji
+
+Jedes Bedien-Ikon der App war ein Emoji. Zwei Nebenwirkungen wogen schwerer als das
+Aussehen: ein Emoji nimmt keine Farbe an (der aktive Reiter der Tableiste war grün, sein
+Bildchen blieb bunt), und es gibt sie nicht auf jedem Gerät — fehlt eines, steht dort ein
+leeres Rechteck.
+
+`js/ikonen.js` hält sie jetzt als Strichzeichnungen auf einem 24er-Raster mit
+`stroke="currentColor"`: sie erben die Farbe des Zustands, in dem sie stehen, und sitzen in
+Hell wie Dunkel richtig. Die Tableiste in `index.html` trägt nur leere Plätze mit
+`data-ikon`, gezeichnet wird beim Start aus derselben Quelle.
+
+Geblieben sind die Avocado in der Kopfzeile (sie bedient nichts, sie ist das Zeichen der
+App) und einfarbige Schriftzeichen wie ✓, ✕ und ★ — die sind schon Text.
+
+Nebenbei aufgefallen: `MEAL_LABELS` trug ein Emoji vor jedem Mahlzeitennamen, das an
+**jeder** Anzeigestelle wieder abgeschnitten wurde, und dieselben vier Wörter lagen ein
+zweites Mal in `mealShort()`. Beides ist jetzt eine Liste.
+
 ### Wasser wird nicht mehr erfasst
 
 Der Trinkzähler auf der Startseite und das Trinkziel im Profil sind entfernt — er wurde nicht
@@ -414,6 +440,7 @@ js/
   recipes.js            Rezeptrechnung, Zutatenerkennung, Texterkennung
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
+  ikonen.js             die Bedien-Ikonen als Inline-SVG (eine Quelle für alle Ansichten)
   gewicht.js            Gewichtsverlauf: Trend, erwartete Rate, Formulierungen (ohne DOM)
   gewicht-eingabe.js    Dialog: Gewicht eintragen, nachtragen, ändern, löschen
   analysis.js           Textbericht für die KI-Analyse

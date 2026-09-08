@@ -1,5 +1,6 @@
 // views/recipes.js — Rezepte: Liste, Editor, Zutatensuche, Bild-/Text-Import mit Review.
 import { Store } from "../store.js";
+import { ikon } from "../ikonen.js";
 import { lookupProduct, searchProductsByName, searchOwnProducts } from "../off.js";
 import { searchLocalFoods, bestLocalFoodMatch } from "../foods-db.js";
 import { calcNetCarbs, ketoGrade, GRADE_LABEL } from "../keto.js";
@@ -48,10 +49,11 @@ function renderList(container) {
   const recipes = Store.getRecipes();
   container.innerHTML = `
     <h1 class="section-title">Rezepte</h1>
-    <button class="btn" id="newRecipeBtn">➕ Neues Rezept</button>
+    <button class="btn" id="newRecipeBtn">${ikon("neu", { groesse: 17 })} Neues Rezept</button>
     ${recipes.length > 0 ? `
-      <input type="text" id="recipeSearch" placeholder="🔎 Rezept oder Zutat suchen …"
-        autocomplete="off" value="${esc(recipeFilter)}" style="margin-top:12px">
+      <div class="such-feld" style="margin-top:12px">${ikon("suche", { groesse: 17 })}
+        <input type="text" id="recipeSearch" placeholder="Rezept oder Zutat suchen …"
+          autocomplete="off" value="${esc(recipeFilter)}"></div>
     ` : ""}
     <div id="recipeListBody" style="margin-top:12px"></div>
   `;
@@ -85,13 +87,13 @@ function renderRecipeRows(container) {
   const all = Store.getRecipes();
 
   if (all.length === 0) {
-    body.innerHTML = `<div class="empty-state"><span class="emoji">🍳</span>Noch keine Rezepte angelegt.</div>`;
+    body.innerHTML = `<div class="empty-state"><span class="emoji">${ikon("rezepte", { groesse: 34 })}</span>Noch keine Rezepte angelegt.</div>`;
     return;
   }
 
   const recipes = all.filter(r => matchesRecipe(r, recipeFilter));
   if (recipes.length === 0) {
-    body.innerHTML = `<div class="empty-state"><span class="emoji">🔎</span>Kein Rezept passt zu „${esc(recipeFilter)}".</div>`;
+    body.innerHTML = `<div class="empty-state"><span class="emoji">${ikon("suche", { groesse: 34 })}</span>Kein Rezept passt zu „${esc(recipeFilter)}".</div>`;
     return;
   }
 
@@ -106,8 +108,8 @@ function renderRecipeRows(container) {
           <div class="name">${esc(r.name)}</div>
           <div class="meta" title="${r.ingredients.length} Zutaten, ${r.servings} Portionen">1 P.${gramsPer ? ` (${gramsPer} g)` : ""} · ${perServing.kcal != null ? Math.round(perServing.kcal) : "–"} kcal · ${perServing.netCarbs ?? "–"} g KH</div>
         </div>
-        <button class="icon-btn" data-action="addToday" title="Zum Tag hinzufügen">🍽️</button>
-        <button class="icon-btn" data-action="delete" title="Löschen">🗑️</button>
+        <button class="icon-btn" data-action="addToday" title="Zum Tag hinzufügen" aria-label="Zum Tag hinzufügen">${ikon("essen", { groesse: 19 })}</button>
+        <button class="icon-btn" data-action="delete" title="Löschen" aria-label="Löschen">${ikon("loeschen", { groesse: 19 })}</button>
       </div>
     `;
   }).join("")}</div>`;
@@ -257,11 +259,11 @@ function renderEditor(container, recipeId) {
         <div class="klar-recipe-title">${esc(recipe.name)}</div>
         <div class="klar-recipe-status" id="recStatus">Gespeichert</div>
       </div>
-      <button type="button" class="klar-icon-btn" id="editNameBtn" title="Name & Portionen bearbeiten">✎</button>
+      <button type="button" class="klar-icon-btn" id="editNameBtn" title="Name & Portionen bearbeiten" aria-label="Name und Portionen bearbeiten">${ikon("bearbeiten", { groesse: 19 })}</button>
     </div>
 
     <div class="klar-result-card" id="totalsCard"></div>
-    <button class="btn" id="addTodayBtn" style="margin-bottom:14px">🍽️ Zum Tag hinzufügen</button>
+    <button class="btn" id="addTodayBtn" style="margin-bottom:14px">${ikon("essen", { groesse: 17 })} Zum Tag hinzufügen</button>
 
     <div class="klar-section-head">
       <h2 class="section-title">Zutaten</h2>
@@ -273,16 +275,16 @@ function renderEditor(container, recipeId) {
       <label for="ingSearchInput">Zutat suchen und hinzufügen</label>
       <input type="text" id="ingSearchInput" placeholder="z.B. Rinderhackfleisch, Bacon …" autocomplete="off">
       <div id="ingSearchResults" style="margin-top:8px"></div>
-      ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">📷 Zutat scannen</button>` : ""}
-      <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">✏️ Zutat manuell eintragen</button>
+      ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">${ikon("kamera", { groesse: 17 })} Zutat scannen</button>` : ""}
+      <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">${ikon("bearbeiten", { groesse: 17 })} Zutat manuell eintragen</button>
       <div id="manualIngWrap" style="display:none;margin-top:10px"></div>
 
       <hr class="klar-divider">
       <p class="hint" style="margin-top:0">Ganze Zutatenliste aus Foto oder Text übernehmen. Ergebnis kannst du danach prüfen und korrigieren.${hasApiKey() ? " Optional per KI (Gemini) erkennen lassen — genauer bei unbekannten Zutaten, braucht aber Internet." : ""}</p>
       <input type="file" id="recipeImageInput" accept="image/*" style="display:none">
       <div class="btn-row">
-        <button class="btn secondary" id="importImageBtn">📷 Bild wählen</button>
-        <button class="btn secondary" id="importTextBtn">📋 Text einfügen</button>
+        <button class="btn secondary" id="importImageBtn">${ikon("bild", { groesse: 17 })} Bild wählen</button>
+        <button class="btn secondary" id="importTextBtn">${ikon("text", { groesse: 17 })} Text einfügen</button>
       </div>
       <div id="importStatus" class="hint" style="margin-top:8px"></div>
       <div id="textPasteWrap" style="display:none;margin-top:10px"></div>
@@ -291,9 +293,9 @@ function renderEditor(container, recipeId) {
     <div id="reviewWrap"></div>
 
     <div class="btn-row" style="margin-top:20px">
-      <button class="btn secondary" id="ingToShoppingBtn">🛒 Auf Einkaufsliste</button>
-      <button class="btn secondary" id="toKochbuchBtn">📖 Im Kochbuch öffnen</button>
-      <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">🗑️ Löschen</button>
+      <button class="btn secondary" id="ingToShoppingBtn">${ikon("einkauf", { groesse: 17 })} Auf Einkaufsliste</button>
+      <button class="btn secondary" id="toKochbuchBtn">${ikon("kochbuch", { groesse: 17 })} Im Kochbuch öffnen</button>
+      <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">${ikon("loeschen", { groesse: 17 })} Löschen</button>
     </div>
   `;
 
@@ -454,7 +456,7 @@ function renderIngredientList(container, recipeId) {
     // Zähler neben der Überschrift mit leeren — sonst bliebe der Stand vor dem Löschen stehen.
     const emptyCount = container.querySelector("#ingCount");
     if (emptyCount) emptyCount.textContent = "";
-    el.innerHTML = `<div class="empty-state"><span class="emoji">🥄</span>Noch keine Zutaten. Unten suchen, manuell eintragen oder importieren.</div>`;
+    el.innerHTML = `<div class="empty-state"><span class="emoji">${ikon("zutat", { groesse: 34 })}</span>Noch keine Zutaten. Unten suchen, manuell eintragen oder importieren.</div>`;
     return;
   }
 
@@ -501,8 +503,8 @@ function renderIngredientList(container, recipeId) {
             <div class="list-detail" hidden>
               ${nutriTilesHtml({ kcal: ing.per100.kcal, netCarbs: netCarbs100, fat: ing.per100.fat, protein: ing.per100.protein })}
               <div class="klar-ing-detail-actions">
-                <button class="klar-icon-btn" data-action="edit" title="Nährwerte korrigieren">✎</button>
-                <button class="klar-icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+                <button class="klar-icon-btn" data-action="edit" title="Nährwerte korrigieren" aria-label="Nährwerte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
+                <button class="klar-icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
                 <button class="btn secondary" data-action="focusAmount">Menge eingeben</button>
               </div>
             </div>
@@ -676,7 +678,7 @@ function wireIngredientSearch(container, recipeId) {
     renderIngSearchResults(combined, true);
   };
 
-  const SOURCE_ICON = { local: "🥑", own: "📝" };
+  const QUELLE_IKON = { local: "zutat", own: "notiz" };
   const SOURCE_LABEL = { local: "Grundnahrungsmittel", own: "Eigenes Produkt" };
 
   function renderIngSearchResults(items, isFinal) {
@@ -686,7 +688,7 @@ function wireIngredientSearch(container, recipeId) {
     }
     resultsEl.innerHTML = items.map((p, i) => `
       <div class="list-item" data-idx="${i}" style="cursor:pointer">
-        <span style="flex-shrink:0">${SOURCE_ICON[p.source] || "🏷️"}</span>
+        <span style="flex-shrink:0;color:var(--text-muted)">${ikon(QUELLE_IKON[p.source] || "welt", { groesse: 17 })}</span>
         <div class="info">
           <div class="name">${esc(p.name)}</div>
           <div class="meta">${p.brand ? esc(p.brand) + " · " : ""}${SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
@@ -900,7 +902,7 @@ function wireImport(container, recipeId) {
       <textarea id="pasteText" rows="6" style="width:100%;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);padding:10px;font:inherit"></textarea>
       <div class="btn-row" style="margin-top:10px">
         <button class="btn" id="pasteParseBtn">Zeilen prüfen</button>
-        ${withAi ? `<button class="btn secondary" id="pasteAiBtn">🤖 Mit KI erkennen</button>` : ""}
+        ${withAi ? `<button class="btn secondary" id="pasteAiBtn">${ikon("ki", { groesse: 17 })} Mit KI erkennen</button>` : ""}
       </div>
     `;
     wrap.querySelector("#pasteParseBtn").addEventListener("click", () => {
@@ -912,7 +914,7 @@ function wireImport(container, recipeId) {
     wrap.querySelector("#pasteAiBtn")?.addEventListener("click", async () => {
       const text = wrap.querySelector("#pasteText").value;
       if (!text.trim()) { showToast("Bitte Text einfügen"); return; }
-      statusEl.textContent = "🤖 Gemini analysiert den Text …";
+      statusEl.textContent = "Gemini analysiert den Text …";
       try {
         const ingredients = await recognizeIngredientsFromText(text);
         statusEl.textContent = "";
@@ -935,7 +937,7 @@ function wireAiImageImport(container, recipeId, statusEl) {
   btn.className = "btn ghost";
   btn.id = "importAiImageBtn";
   btn.style.marginTop = "8px";
-  btn.textContent = "🤖 Bild direkt mit KI auswerten";
+  btn.textContent = "Bild direkt mit KI auswerten";
   card.querySelector(".btn-row").insertAdjacentElement("afterend", btn);
 
   const aiFileInput = document.createElement("input");
@@ -949,7 +951,7 @@ function wireAiImageImport(container, recipeId, statusEl) {
     const file = aiFileInput.files[0];
     aiFileInput.value = "";
     if (!file) return;
-    statusEl.textContent = "🤖 Gemini liest das Bild …";
+    statusEl.textContent = "Gemini liest das Bild …";
     try {
       const ingredients = await recognizeIngredientsFromImage(file);
       statusEl.textContent = "";
@@ -1000,9 +1002,9 @@ function startReview(container, recipeId, text) {
 const UNCERTAIN_MATCH = new Set(["substring", "fuzzy"]);
 
 function matchLabelText(r) {
-  if (r.matchQuality === "ai") return `🤖 KI-Schätzung — Werte vor dem Übernehmen prüfen`;
+  if (r.matchQuality === "ai") return `KI-Schätzung — Werte vor dem Übernehmen prüfen`;
   if (!r.matchedName) return "Keine Zuordnung gefunden — Menge/Nährwerte manuell prüfen oder Zeile entfernen";
-  if (UNCERTAIN_MATCH.has(r.matchQuality)) return `⚠️ Unsichere Zuordnung: ${esc(r.matchedName)} — bitte prüfen`;
+  if (UNCERTAIN_MATCH.has(r.matchQuality)) return `Unsichere Zuordnung: ${esc(r.matchedName)} — bitte prüfen`;
   return `Zuordnung: ${esc(r.matchedName)}`;
 }
 
@@ -1037,7 +1039,7 @@ function renderReview(container, recipeId) {
       </div>
       <p class="hint rv-match-label" style="margin-top:6px;${matchLabelStyle(r)}">${matchLabelText(r)}</p>
       <div class="btn-row" style="margin-top:6px">
-        <button class="btn ghost rv-research" style="width:auto">🔎 Neu zuordnen</button>
+        <button class="btn ghost rv-research" style="width:auto">${ikon("suche", { groesse: 16 })} Neu zuordnen</button>
         <button class="btn ghost rv-remove" style="width:auto;color:var(--red-fg)">Entfernen</button>
       </div>
       <div class="rv-research-wrap" style="display:none;margin-top:8px"></div>

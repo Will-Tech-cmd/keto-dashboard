@@ -9,6 +9,7 @@
 // Eingetragen wird über logConsumption() wie jeder andere Eintrag auch — ein Foto-Posten ist
 // hinterher nichts Besonderes mehr und lässt sich ganz normal bearbeiten oder löschen.
 import { erkenneTellerFoto, hasApiKey, describeAiError } from "./ai.js";
+import { ikon } from "./ikonen.js";
 import {
   logConsumption, suggestMeal, mealShort, MEAL_LABELS, isViewingToday,
   dateLabel, getActiveDateKey, logButtonRowHtml, askShareTargets, copyConsumptionTo,
@@ -71,8 +72,8 @@ export function openTellerFoto(onLogged) {
       <div class="klar-sheet-title">Teller erfassen</div>
       <div class="klar-sheet-sub">Woher soll das Bild kommen?</div>
       <div class="btn-row" style="margin-top:16px">
-        <button type="button" class="btn" id="tellerKamera">📷 Foto aufnehmen</button>
-        <button type="button" class="btn secondary" id="tellerGalerie">🖼️ Aus Galerie</button>
+        <button type="button" class="btn" id="tellerKamera">${ikon("kamera", { groesse: 17 })} Foto aufnehmen</button>
+        <button type="button" class="btn secondary" id="tellerGalerie">${ikon("bild", { groesse: 17 })} Aus Galerie</button>
       </div>
       <p class="hint" style="margin-top:12px">Ein hier aufgenommenes Foto wird nur ausgewertet und
       landet nicht in deiner Galerie. Soll es dort bleiben, nimm es mit der Kamera-App auf und
@@ -157,7 +158,7 @@ function zeigePruefung(overlay, schliessen, ergebnis, file, onLogged) {
         <div class="klar-sheet-sub">${isViewingToday() ? "Eintrag für Heute" : `Eintrag für ${esc(dateLabel(getActiveDateKey()))}`}</div>
 
         <p class="hint" style="margin-top:10px">${esc(ergebnis.beschreibung)}</p>
-        ${ergebnis.hinweis ? `<p class="hint" style="color:var(--warm)">⚠️ ${esc(ergebnis.hinweis)}</p>` : ""}
+        ${ergebnis.hinweis ? `<p class="hint" style="color:var(--warm)">${ikon("warnung", { groesse: 15 })} ${esc(ergebnis.hinweis)}</p>` : ""}
 
         <div id="tellerPosten" style="margin-top:12px"></div>
 
@@ -204,7 +205,7 @@ function zeigePruefung(overlay, schliessen, ergebnis, file, onLogged) {
                     style="background:none;border:none;color:var(--red-fg);font-size:1rem;padding:2px 4px;cursor:pointer">✕</button>
           </div>
           <div class="hint" style="margin:6px 0 0">${kcal} kcal · ${kh} g Netto-KH</div>
-          ${!p.sicher ? `<div class="hint" style="margin:6px 0 0">⚠️ unsicher erkannt — bitte bestätigen:</div>` : ""}
+          ${!p.sicher ? `<div class="hint" style="margin:6px 0 0">${ikon("warnung", { groesse: 15 })} unsicher erkannt — bitte bestätigen:</div>` : ""}
           ${p.alternativen.length ? `
             <div class="klar-meal-segments" style="margin-top:6px">
               ${p.alternativen.map(a => `

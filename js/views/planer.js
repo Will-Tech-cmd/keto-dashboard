@@ -8,6 +8,7 @@
 // es ändern. Alle Zahlen stammen aus dem Plan, nicht aus einer zweiten Rechnung.
 
 import { Store, dateKeyOf, shiftDateKey } from "../store.js";
+import { ikon } from "../ikonen.js";
 import { getTargetsForDate } from "../profiles.js";
 import { dateLabel, mealShort } from "../consumption.js";
 import { hasApiKey, verfeinerePlan, describeAiError } from "../ai.js";
@@ -125,7 +126,7 @@ function render(body, goToTab) {
         <button type="button" class="btn" id="planBauen">${plan ? "Neu würfeln" : "Plan erstellen"}</button>
       </div>
       ${hasApiKey() && plan ? `
-        <button type="button" class="btn ghost" id="planKi" style="margin-top:8px">✨ Mit KI verfeinern</button>
+        <button type="button" class="btn ghost" id="planKi" style="margin-top:8px">${ikon("ki", { groesse: 17 })} Mit KI verfeinern</button>
       ` : ""}
     </div>
 
@@ -239,7 +240,7 @@ function tagKarteHtml(tag, index) {
             <div class="meta">${mengeText(z)} · ${Math.round(z.kcal ?? 0)} kcal · ${round1(z.netCarbs ?? 0)} g KH</div>
           </div>
           <button type="button" class="icon-btn" data-tausch="${index}|${slot}|${idx}"
-            title="Anderes Gericht vorschlagen" aria-label="Tauschen">🔄</button>
+            title="Anderes Gericht vorschlagen" aria-label="Tauschen">${ikon("wuerfeln", { groesse: 17 })}</button>
         </div>
       `).join("")}
     `;
@@ -305,7 +306,7 @@ function zeichneFuss(body, profile, goToTab, neu) {
       </div>
     ` : ""}
     <div class="btn-row" style="margin-top:16px">
-      <button type="button" class="btn secondary" id="planEinkauf">🛒 Zutaten</button>
+      <button type="button" class="btn secondary" id="planEinkauf">${ikon("einkauf", { groesse: 17 })} Zutaten</button>
       <button type="button" class="btn" id="planUebernehmen">Plan übernehmen</button>
     </div>
   `;

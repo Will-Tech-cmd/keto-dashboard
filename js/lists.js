@@ -13,6 +13,7 @@ import { openAnalysisModal } from "./analysis.js";
 import { showToast, nutriTilesHtml, gradeDotHtml } from "./ui.js";
 import { gewichtsBericht, trendSatz, zielAbgleichSatz, tagesnummer, kgProWoche } from "./gewicht.js";
 import { openGewichtModal } from "./gewicht-eingabe.js";
+import { ikon } from "./ikonen.js";
 
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
@@ -86,7 +87,7 @@ function renderProductList(body, listName) {
   const all = Store.get()[listName];
   if (all.length === 0) {
     body.innerHTML = emptyState(
-      listName === "favorites" ? "⭐" : "🚫",
+      listName === "favorites" ? "stern" : "verboten",
       listName === "favorites"
         ? "Noch keine Favoriten. Scanne ein Produkt und speichere es hier."
         : "Noch keine No-Go-Produkte."
@@ -95,8 +96,8 @@ function renderProductList(body, listName) {
   }
 
   body.innerHTML = `
-    <input type="text" id="listSearch" placeholder="🔎 Suchen …" autocomplete="off"
-      value="${esc(listFilter)}" style="margin-bottom:12px">
+    <div class="such-feld" style="margin-bottom:12px">${ikon("suche", { groesse: 17 })}
+      <input type="text" id="listSearch" placeholder="Suchen …" autocomplete="off" value="${esc(listFilter)}"></div>
     <div id="listRows"></div>
   `;
   const search = body.querySelector("#listSearch");
@@ -115,7 +116,7 @@ function renderProductRows(body, listName) {
   );
 
   if (items.length === 0) {
-    rowsEl.innerHTML = emptyState("🔎", `Kein Eintrag passt zu „${listFilter}".`);
+    rowsEl.innerHTML = emptyState("suche", `Kein Eintrag passt zu „${listFilter}".`);
     return;
   }
 
@@ -131,7 +132,7 @@ function renderProductRows(body, listName) {
             <div class="name">${esc(item.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
-          ${isNoGo ? "" : `<button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>`}
+          ${isNoGo ? "" : `<button class="icon-btn" data-action="cart" title="Auf Einkaufsliste" aria-label="Auf Einkaufsliste">${ikon("einkauf", { groesse: 19 })}</button>`}
         </div>
         ${isNoGo ? noGoDetailHtml(item, nutri) : detailHtml(nutri)}
       </div>
@@ -202,8 +203,8 @@ function noGoDetailHtml(item, nutri) {
       ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor.</p>`}
       ${portionHint}
       <div class="btn-row" style="margin-top:10px">
-        <button class="icon-btn" data-action="edit" title="Werte korrigieren">✎</button>
-        <button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>
+        <button class="icon-btn" data-action="edit" title="Werte korrigieren" aria-label="Werte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
+        <button class="icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
         <button class="btn" data-action="toFavorites" style="flex:2">☆ Zu Favoriten</button>
       </div>
     </div>
@@ -267,8 +268,8 @@ function detailHtml(nutri, extraHint = "", { showRemove = true } = {}) {
       ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
       ${extraHint}
       <div class="btn-row" style="margin-top:10px">
-        <button class="icon-btn" data-action="edit" title="Werte korrigieren">✎</button>
-        ${showRemove ? `<button class="icon-btn warm" data-action="remove" title="Entfernen">🗑️</button>` : ""}
+        <button class="icon-btn" data-action="edit" title="Werte korrigieren" aria-label="Werte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
+        ${showRemove ? `<button class="icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>` : ""}
         <button class="btn" data-action="eat" style="flex:2">Eintragen</button>
       </div>
     </div>
@@ -317,13 +318,13 @@ function renderShopping(body) {
           <input type="checkbox" ${item.checked ? "checked" : ""} hidden>
           <span class="klar-check ${item.checked ? "on" : ""}">${item.checked ? "✓" : ""}</span>
           <span class="name">${esc(item.text)}</span>
-          <button class="icon-btn" data-action="remove" title="Entfernen">🗑️</button>
+          <button class="icon-btn" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
         </label>
       `).join("")}
     </div>
   `;
   const listHtml = items.length === 0
-    ? `<div class="klar-empty-row" style="margin-top:4px"><span class="plus">🛒</span>Einkaufsliste ist leer</div>`
+    ? `<div class="klar-empty-row" style="margin-top:4px"><span class="plus">${ikon("einkauf", { groesse: 17 })}</span>Einkaufsliste ist leer</div>`
     : group("Offen", open) + (done.length ? `<div style="margin-top:20px">${group("Erledigt", done)}</div>` : "");
 
   body.innerHTML = `
@@ -385,11 +386,11 @@ function renderHistory(body) {
       ${periodBtn(null, "Alle")}
     </div>
     ${periodItems.length > 0 ? `
-      <input type="text" id="historySearch" placeholder="🔎 Suchen …" autocomplete="off" value="${esc(historyFilter)}" style="margin-bottom:14px">
+      <div class="such-feld" style="margin-bottom:14px">${ikon("suche", { groesse: 17 })}<input type="text" id="historySearch" placeholder="Suchen …" autocomplete="off" value="${esc(historyFilter)}"></div>
       <div class="grid-2" style="margin-bottom:14px">
-        <div class="stat"><div class="val">🟢 ${counts.green}</div><div class="lbl">Keto-tauglich</div></div>
-        <div class="stat"><div class="val">🟡 ${counts.yellow}</div><div class="lbl">In Maßen</div></div>
-        <div class="stat"><div class="val">🔴 ${counts.red}</div><div class="lbl">Nicht keto</div></div>
+        <div class="stat"><div class="val"><span class="klar-dot green"></span> ${counts.green}</div><div class="lbl">Keto-tauglich</div></div>
+        <div class="stat"><div class="val"><span class="klar-dot yellow"></span> ${counts.yellow}</div><div class="lbl">In Maßen</div></div>
+        <div class="stat"><div class="val"><span class="klar-dot red"></span> ${counts.red}</div><div class="lbl">Nicht keto</div></div>
         <div class="stat"><div class="val">${periodItems.length}</div><div class="lbl">Gesamt geprüft</div></div>
       </div>
     ` : ""}
@@ -431,8 +432,8 @@ function filterHistoryItems(items) {
 function renderHistoryList(el, items) {
   if (items.length === 0) {
     el.innerHTML = historyFilter.trim()
-      ? emptyState("🔎", `Kein Eintrag passt zu „${historyFilter}".`)
-      : emptyState("🕘", "Noch nichts im gewählten Zeitraum gescannt oder gesucht.");
+      ? emptyState("suche", `Kein Eintrag passt zu „${historyFilter}".`)
+      : emptyState("uhr", "Noch nichts im gewählten Zeitraum gescannt oder gesucht.");
     return;
   }
 
@@ -465,7 +466,7 @@ function renderHistoryList(el, items) {
             <div class="name">${esc(entry.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
-          <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste">🛒</button>
+          <button class="icon-btn" data-action="cart" title="Auf Einkaufsliste" aria-label="Auf Einkaufsliste">${ikon("einkauf", { groesse: 19 })}</button>
           <button class="icon-btn star ${isFav ? "on" : ""}" data-action="fav"
             title="${isFav ? "Favorit entfernen" : "Als Favorit merken"}"
             aria-pressed="${isFav}">${isFav ? "★" : "☆"}</button>
@@ -616,7 +617,7 @@ function renderEvaluation(body, goToTab) {
     </div>
     ${trendChartHtml(days)}
     ${gewichtKarteHtml(profile)}
-    <button class="klar-pill-btn" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
+    <button class="klar-pill-btn" id="analyzeBtn" style="margin-bottom:14px">${ikon("ki", { groesse: 17 })} Mit Claude analysieren</button>
     <div class="klar-eyebrow" style="margin:0 2px 8px">Tage einzeln</div>
     <div id="evalDays"></div>
   `;
@@ -661,7 +662,7 @@ function gewichtKarteHtml(profile) {
   const kopf = `
     <div class="klar-card-head">
       <span class="klar-eyebrow">${TAGE} Tage · Gewicht</span>
-      <button type="button" class="klar-pill-btn" id="gewichtEintragenBtn">⚖️ Eintragen</button>
+      <button type="button" class="klar-pill-btn" id="gewichtEintragenBtn">${ikon("wiegen", { groesse: 17 })} Eintragen</button>
     </div>`;
 
   if (punkte.length === 0) {
@@ -835,8 +836,10 @@ function dayLabel(ts) {
   return new Date(ts).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" });
 }
 
-function emptyState(emoji, text) {
-  return `<div class="empty-state"><span class="emoji">${emoji}</span>${esc(text)}</div>`;
+/** Leerer Zustand. `name` ist ein Ikonenname aus ikonen.js — größer gezeichnet als sonst,
+ * weil hier nichts anderes auf der Fläche steht. */
+function emptyState(name, text) {
+  return `<div class="empty-state"><span class="emoji">${ikon(name, { groesse: 34 })}</span>${esc(text)}</div>`;
 }
 
 function esc(s) {
