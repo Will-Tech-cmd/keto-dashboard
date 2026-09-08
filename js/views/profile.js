@@ -1,5 +1,6 @@
 // views/profile.js — Profil-Tab: Körperdaten, Zielwert-Konfiguration, Export/Import.
 import { Store, istZeilenModus, wechsleModus, dateKeyOf } from "../store.js";
+import { ikon } from "../ikonen.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
@@ -37,8 +38,8 @@ export function renderProfile(container, onProfileChanged) {
     <div class="klar-card">
       <p class="hint" style="margin-top:0">Beim Einspielen zeigt die App erst, was dazukommt — und fragt, ob zusammengeführt oder ersetzt wird.</p>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn" id="shareBtn">📤 Alles teilen</button>
-        <button class="btn secondary" id="importBtn">⬇️ Einspielen</button>
+        <button class="btn" id="shareBtn">${ikon("teilen", { groesse: 17 })} Alles teilen</button>
+        <button class="btn secondary" id="importBtn">${ikon("laden", { groesse: 17 })} Einspielen</button>
       </div>
       <!-- application/octet-stream muss mit rein: über WhatsApp & Co. weitergereichte Backups
            kommen häufig mit diesem Typ an und wären sonst im Dateidialog ausgegraut. Der
@@ -260,7 +261,7 @@ function openExtraSheet(key, neuZeichnen) {
     sync: `
       <p class="hint" style="margin-top:0">Mit dem Kochbuch-Zugangswort gleicht die App alle Daten automatisch zwischen euren Geräten ab — wie das manuelle Einspielen, nur automatisch über das Netz statt per Datei. Ohne Aktivierung bleibt hier alles ausschließlich auf diesem Gerät.</p>
       ${syncOn && !syncReauth ? `
-        <p class="hint">Status: ✅ aktiv · zuletzt synchronisiert: ${esc(syncLastAt ? new Date(syncLastAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie")}</p>
+        <p class="hint">Status: aktiv · zuletzt synchronisiert: ${esc(syncLastAt ? new Date(syncLastAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie")}</p>
         <p class="hint" id="syncStatus" style="margin-top:0;min-height:1.2em"></p>
         <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
           <button class="btn secondary" id="syncNowBtn">Jetzt synchronisieren</button>
@@ -281,7 +282,7 @@ function openExtraSheet(key, neuZeichnen) {
       <p class="hint" style="margin-top:0">Der neue Weg legt jede Mahlzeit, jedes Rezept und jeden Listeneintrag einzeln ab statt alles zusammen in einem Block, und gleicht auch einzeln ab. Damit kann eine Änderung auf einem Gerät keine auf dem anderen mehr überschreiben — genau das war die Ursache der bisherigen Datenverluste.</p>
       <p class="hint">Rezepte wandern samt Zutatenliste — auch Veränderungen aus dem Kochbuch kommen damit hier an, was auf dem bisherigen Weg nie der Fall war.</p>
       <p class="hint">Umschalten geht in beide Richtungen und nimmt den aktuellen Stand jeweils mit; auf dem Gerät selbst geht dabei nichts verloren. <strong>Der Schalter gehört auf alle Geräte:</strong> solange ein Gerät noch den alten Weg benutzt, sehen die beiden voneinander nichts Neues mehr.</p>
-      <p class="hint">Status: ${zeilenAn ? "✅ neuer Speicher aktiv" : "bisheriger Speicher"}</p>
+      <p class="hint">Status: ${zeilenAn ? "neuer Speicher aktiv" : "bisheriger Speicher"}</p>
       <p class="hint" id="zeilenStatus" style="margin-top:0;min-height:1.2em"></p>
       <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
         <button class="btn secondary" id="zeilenBtn">${zeilenAn ? "Zurück auf den bisherigen Speicher" : "Neuen Speicher einschalten"}</button>
@@ -463,8 +464,8 @@ function wireAiKey(wurzel) {
     status.textContent = "Prüfe Verbindung …";
     const result = await testApiKey(key);
     status.textContent = result.ok
-      ? "✅ Verbindung erfolgreich" + (result.message ? ` — ${result.message}` : "")
-      : `❌ ${result.message}`;
+      ? "Verbindung erfolgreich" + (result.message ? ` — ${result.message}` : "")
+      : result.message;
   });
 
   wurzel.querySelector("#aiKeyClearBtn").addEventListener("click", () => {
@@ -809,7 +810,7 @@ function openMergeDialog(container, json, fileInfo = {}) {
       </div>
       ${p.recipesUpdated > 0 ? `<p class="hint">${p.recipesUpdated} Rezept(e) werden aktualisiert.</p>` : ""}
       ${p.recipeNameClashes.length ? `
-        <p class="hint" style="color:var(--warm)">⚠️ Gleicher Name, getrennt angelegt — kommt zusätzlich in die Liste:
+        <p class="hint" style="color:var(--warm)">${ikon("warnung", { groesse: 15 })} Gleicher Name, getrennt angelegt — kommt zusätzlich in die Liste:
         ${esc(p.recipeNameClashes.join(", "))}</p>` : ""}
 
       <div class="divider"></div>
@@ -1000,9 +1001,9 @@ function openRecipesOnlySheet() {
       <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Nur Rezepte</h2>
       <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
       <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" id="importRecipesBtn">⬇️ Import</button>
-        <button class="btn secondary" id="exportRecipesBtn">⬆️ Export</button>
-        <button class="btn secondary" id="shareRecipesBtn">📤 Teilen</button>
+        <button class="btn secondary" id="importRecipesBtn">${ikon("laden", { groesse: 17 })} Import</button>
+        <button class="btn secondary" id="exportRecipesBtn">${ikon("teilen", { groesse: 17 })} Export</button>
+        <button class="btn secondary" id="shareRecipesBtn">${ikon("teilen", { groesse: 17 })} Teilen</button>
       </div>
       <!-- Gleicher Filter wie bei #importFile, siehe Begründung dort. -->
       <input type="file" id="importRecipesFile" accept=".txt,.json,text/plain,application/json,application/octet-stream" style="display:none">

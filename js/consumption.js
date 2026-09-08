@@ -2,23 +2,33 @@
 // Trägt außerdem die aktuell auf der Startseite angezeigte Datumsnavigation (für die
 // Essensplanung), damit Einträge aus Scan/Listen/Rezepten immer auf dem gewählten Tag landen.
 import { Store, dateKeyOf, shiftDateKey } from "./store.js";
+import { ikon } from "./ikonen.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
 import { esc, showToast, showSnackbar, bindBackClose, selectOnFocus } from "./ui.js";
 import { zutatenFuerRezept, aufEinkaufsliste } from "./planer.js";
 
+/**
+ * Die vier Mahlzeiten, in der Reihenfolge des Tages.
+ *
+ * Standen hier bis eben mit einem Emoji davor („🌅 Frühstück") — das aber an JEDER
+ * Anzeigestelle wieder abgeschnitten wurde (`replace(/^\S+\s/, "")`), weil es nirgends
+ * hinpasste. Dazu lag dieselbe Liste ohne Emoji ein zweites Mal in mealShort(). Zwei
+ * Fassungen derselben vier Wörter, von denen eine nur existierte, um weggeschnitten zu
+ * werden: jetzt eine.
+ */
 export const MEAL_LABELS = {
-  breakfast: "🌅 Frühstück",
-  lunch: "☀️ Mittag",
-  dinner: "🌙 Abend",
-  snack: "🍎 Snack",
+  breakfast: "Frühstück",
+  lunch: "Mittag",
+  dinner: "Abend",
+  snack: "Snack",
 };
 
 /** Mahlzeitenname ohne Emoji — für Fließtext und knappe Knopfbeschriftungen. Fällt auf
  * "Mahlzeit" zurück statt eine bestimmte vorzutäuschen, wenn keine gewählt ist (z.B. ältere
  * Einträge ohne Zuordnung) — sonst stünde überall "Snack", ohne dass je Snack gewählt wurde. */
 export function mealShort(key) {
-  return { breakfast: "Frühstück", lunch: "Mittag", dinner: "Abend", snack: "Snack" }[key] || "Mahlzeit";
+  return MEAL_LABELS[key] || "Mahlzeit";
 }
 
 function round1(v) {
@@ -606,7 +616,7 @@ function teilenKnopfHtml() {
 
 /** Und der Einkaufskorb eine Zeile tiefer, neben der Menge in Gramm. */
 function einkaufKnopfHtml() {
-  return `<button type="button" class="klar-chip klar-chip-aktion" id="editEinkauf" title="Auf die Einkaufsliste">🛒 Einkauf</button>`;
+  return `<button type="button" class="klar-chip klar-chip-aktion" id="editEinkauf" title="Auf die Einkaufsliste">${ikon("einkauf", { groesse: 16 })} Einkauf</button>`;
 }
 
 /**
@@ -685,7 +695,7 @@ export function openEditConsumptionModal(entry, onDone) {
       </div>
 
       <div class="btn-row" style="margin-top:18px">
-        <button type="button" class="btn secondary" id="editDelete" style="color:var(--warm)">🗑️ Löschen</button>
+        <button type="button" class="btn secondary" id="editDelete" style="color:var(--warm)">${ikon("loeschen", { groesse: 17 })} Löschen</button>
         <button type="button" class="btn" id="editSave">Speichern</button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 // analysis.js — erzeugt einen kompakten Textbericht über das Ernährungsverhalten samt
 // Analyse-Auftrag, den man in die Claude-App einfügen (oder direkt teilen) kann.
 import { Store, dateKeyOf, shiftDateKey } from "./store.js";
+import { ikon } from "./ikonen.js";
 import { getTargetsForDate, Goals } from "./profiles.js";
 import { getConsumptionForDate, sumConsumption, MEAL_LABELS, dateLabel } from "./consumption.js";
 import { esc, showToast, bindBackClose } from "./ui.js";
@@ -162,7 +163,7 @@ export function buildAnalysisReport(profile, days) {
   }
   lines.push("## Verteilung über die Mahlzeiten");
   for (const [key, v] of byMeal) {
-    const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key].replace(/^\S+\s/, "");
+    const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key];
     lines.push(`- ${label}: ${v.count} Einträge, Ø ${Math.round(v.kcal / withData.length)} kcal/Tag`);
   }
   lines.push("");
@@ -230,7 +231,7 @@ export function buildTodayReport(profile, dateKey = dateKeyOf(Date.now())) {
     for (const key of Object.keys(MEAL_LABELS)) {
       const items = entries.filter(e => e.meal === key);
       if (items.length === 0) continue;
-      lines.push(`**${MEAL_LABELS[key].replace(/^\S+\s/, "")}**`);
+      lines.push(`**${MEAL_LABELS[key]}**`);
       for (const e of items) {
         const amount = e.servings != null ? `${round1(e.servings)} Portion(en)` : `${e.grams} g`;
         lines.push(`- ${e.name} — ${amount}: ${Math.round(e.kcal || 0)} kcal · ${round1(e.netCarbs || 0)} g Netto-KH · ${round1(e.fat || 0)} g Fett · ${round1(e.protein || 0)} g Eiweiß${e.planned ? " _(geplant)_" : ""}`);
@@ -295,9 +296,9 @@ export function openAnalysisModal() {
       <p class="hint" id="analysisPreview" style="margin-top:10px"></p>
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="analysisCancel">Abbrechen</button>
-        <button type="button" class="btn" id="analysisCopy">📋 Kopieren</button>
+        <button type="button" class="btn" id="analysisCopy">${ikon("text", { groesse: 17 })} Kopieren</button>
       </div>
-      <button type="button" class="btn ghost" id="analysisShare" style="margin-top:8px;display:none">📤 Teilen</button>
+      <button type="button" class="btn ghost" id="analysisShare" style="margin-top:8px;display:none">${ikon("teilen", { groesse: 17 })} Teilen</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -374,9 +375,9 @@ export function openTodayQuestionModal(dateKey = dateKeyOf(Date.now())) {
       </div>
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="todayCancel">Abbrechen</button>
-        <button type="button" class="btn" id="todayCopy">📋 Kopieren</button>
+        <button type="button" class="btn" id="todayCopy">${ikon("text", { groesse: 17 })} Kopieren</button>
       </div>
-      <button type="button" class="btn ghost" id="todayShare" style="margin-top:8px;display:none">📤 Teilen</button>
+      <button type="button" class="btn ghost" id="todayShare" style="margin-top:8px;display:none">${ikon("teilen", { groesse: 17 })} Teilen</button>
     </div>
   `;
   document.body.appendChild(overlay);

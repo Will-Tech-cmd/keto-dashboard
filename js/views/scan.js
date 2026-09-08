@@ -1,5 +1,6 @@
 // views/scan.js — Scan-Tab: Kamera, Ergebniskarte, manuelle Eingabe, "Produkt selbst anlegen".
 import { Store } from "../store.js";
+import { ikon } from "../ikonen.js";
 import { getTargetsForDate } from "../profiles.js";
 import { lookupProduct, searchProductsByName, searchOwnProducts, newOwnBarcode, nutriSnapshot } from "../off.js";
 import { hatZugang, pruefeBeitrag, vorschau, sendeBeitrag, produktUrl, REGISTRIER_URL } from "../off-beitrag.js";
@@ -34,8 +35,8 @@ export function renderScan(container) {
     <h1 class="section-title">Scannen</h1>
     <div id="scanArea"></div>
     <div id="scanToggles">
-      <button class="btn secondary" id="manualToggle">🔢 Barcode manuell eingeben</button>
-      <button class="btn secondary" id="searchToggle" style="margin-top:8px">🔎 Lebensmittel ohne Barcode suchen</button>
+      <button class="btn secondary" id="manualToggle">Barcode manuell eingeben</button>
+      <button class="btn secondary" id="searchToggle" style="margin-top:8px">${ikon("suche", { groesse: 17 })} Lebensmittel ohne Barcode suchen</button>
     </div>
     <div id="manualFormWrap" style="display:none;margin-top:12px"></div>
     <div id="searchFormWrap" style="display:none;margin-top:12px"></div>
@@ -123,7 +124,7 @@ function manualOnlyMarkup(message) {
     <h1 class="section-title">Scannen</h1>
     <div class="card"><p>${esc(message)}</p></div>
     <div id="manualFormWrap">${manualFormHtml()}</div>
-    <button class="btn secondary" id="searchToggle">🔎 Lebensmittel ohne Barcode suchen</button>
+    <button class="btn secondary" id="searchToggle">${ikon("suche", { groesse: 17 })} Lebensmittel ohne Barcode suchen</button>
     <div id="searchFormWrap" style="display:none;margin-top:12px"></div>
     <div id="resultWrap"></div>
   `;
@@ -202,7 +203,8 @@ function wireSearchForm(container) {
   });
 }
 
-const SOURCE_ICON = { local: "🥑", own: "📝" };
+// Woher ein Treffer stammt: eigene Tabelle, selbst angelegt, sonst Open Food Facts.
+const QUELLE_IKON = { local: "zutat", own: "notiz" };
 const SOURCE_LABEL = { local: "Grundnahrungsmittel", own: "Eigenes Produkt" };
 
 function renderSearchResults(container, resultsEl, items, isFinal, term, fehler = null) {
@@ -217,7 +219,7 @@ function renderSearchResults(container, resultsEl, items, isFinal, term, fehler 
       ? `
         ${fehlerZeile}
         <p class="hint">Keine Treffer für „${esc(term)}".</p>
-        <button class="btn secondary" id="addOwnFromSearchBtn" style="margin-top:6px">➕ „${esc(term)}" als eigenes Produkt anlegen</button>
+        <button class="btn secondary" id="addOwnFromSearchBtn" style="margin-top:6px">${ikon("neu", { groesse: 17 })} „${esc(term)}" als eigenes Produkt anlegen</button>
       `
       : `<p class="hint">Suche …</p>`;
     resultsEl.querySelector("#addOwnFromSearchBtn")?.addEventListener("click", () => {
@@ -231,7 +233,7 @@ function renderSearchResults(container, resultsEl, items, isFinal, term, fehler 
   // Wiedererkennen nicht — der Name und die Marke tun es.
   resultsEl.innerHTML = fehlerZeile + items.map((p, i) => `
     <div class="list-item" data-idx="${i}" style="cursor:pointer">
-      <span style="flex-shrink:0">${SOURCE_ICON[p.source] || "🏷️"}</span>
+      <span style="flex-shrink:0;color:var(--text-muted)">${ikon(QUELLE_IKON[p.source] || "welt", { groesse: 17 })}</span>
       <div class="info">
         <div class="name">${esc(p.name)}</div>
         <div class="meta">${p.brand ? esc(p.brand) : SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
@@ -340,9 +342,9 @@ async function handleBarcode(container, barcode) {
     if (err.notFound) {
       renderNotFound(container, barcode);
     } else if (err.offline) {
-      resultWrap.innerHTML = `<div class="card"><p>📡 Offline und kein gecachtes Produkt für diesen Barcode vorhanden.</p></div>`;
+      resultWrap.innerHTML = `<div class="card"><p>${ikon("funk", { groesse: 17 })} Offline und kein gecachtes Produkt für diesen Barcode vorhanden.</p></div>`;
     } else {
-      resultWrap.innerHTML = `<div class="card"><p>⚠️ ${esc(err.message)}</p></div>`;
+      resultWrap.innerHTML = `<div class="card"><p>${ikon("warnung", { groesse: 17 })} ${esc(err.message)}</p></div>`;
     }
   }
   scrollToResult(container);
@@ -385,7 +387,7 @@ function renderResult(container, product) {
   const hints = [];
   if (evalResult.plausibility) {
     hints.push({ warn: true, title: "kcal-Angabe unplausibel",
-      body: `Aus KH, Fett und Eiweiß errechnen sich ca. ${evalResult.plausibility.calculatedKcal} kcal statt ${fmt(product.per100.kcal)} (${evalResult.plausibility.deviationPct}% Abweichung). Mit „✎" anpassen.` });
+      body: `Aus KH, Fett und Eiweiß errechnen sich ca. ${evalResult.plausibility.calculatedKcal} kcal statt ${fmt(product.per100.kcal)} (${evalResult.plausibility.deviationPct}% Abweichung). Über „Werte korrigieren" anpassen.` });
   }
   evalResult.warnings.forEach(w => hints.push({ warn: true, title: w, body: "" }));
   if (evalResult.sugarAlcohols) {
@@ -424,7 +426,7 @@ function renderResult(container, product) {
     <div class="klar-card" style="margin-top:14px">
       <div class="klar-card-head" style="align-items:center">
         <span class="klar-scan-grade">${gradeDotHtml(evalResult.grade)}${esc(GRADE_LABEL[evalResult.grade])}</span>
-        <button type="button" class="klar-icon-btn" id="correctBtn" title="Werte korrigieren">✎</button>
+        <button type="button" class="klar-icon-btn" id="correctBtn" title="Werte korrigieren" aria-label="Werte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
       </div>
       <div class="klar-product-name">${esc(product.name)}</div>
       <div class="klar-product-meta">${esc(product.brand || "")}${product.quantity ? " · " + esc(product.quantity) : ""}</div>
@@ -440,9 +442,9 @@ function renderResult(container, product) {
       <button class="klar-primary-btn" id="eatBtn" style="margin-top:16px">Eintragen · ${esc(mealShort(suggestMeal()))}</button>
       ${beitragsKnopfHtml(product)}
       <div class="klar-action-row">
-        <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">⭐ Favorit</button>
-        <button class="klar-action-btn" id="cartBtn">🛒 Einkauf</button>
-        <button class="klar-action-btn ${isNoGo ? "danger" : ""}" id="noGoBtn">🚫 No-Go</button>
+        <button class="klar-action-btn ${isFav ? "on" : ""}" id="favBtn">${ikon("stern", { groesse: 17 })} Favorit</button>
+        <button class="klar-action-btn" id="cartBtn">${ikon("einkauf", { groesse: 17 })} Einkauf</button>
+        <button class="klar-action-btn ${isNoGo ? "danger" : ""}" id="noGoBtn">${ikon("verboten", { groesse: 17 })} No-Go</button>
       </div>
     </div>
   `;
@@ -510,8 +512,8 @@ function renderNotFound(container, barcode) {
   const resultWrap = container.querySelector("#resultWrap");
   resultWrap.innerHTML = `
     <div class="card">
-      <p>🔍 Barcode <strong>${esc(barcode)}</strong> wurde bei Open Food Facts nicht gefunden.</p>
-      <button class="btn secondary" id="addOwnBtn">➕ Produkt selbst anlegen</button>
+      <p>${ikon("suche", { groesse: 17 })} Barcode <strong>${esc(barcode)}</strong> wurde bei Open Food Facts nicht gefunden.</p>
+      <button class="btn secondary" id="addOwnBtn">${ikon("neu", { groesse: 17 })} Produkt selbst anlegen</button>
     </div>
   `;
   resultWrap.querySelector("#addOwnBtn").addEventListener("click", () => {
@@ -545,7 +547,7 @@ function beitragsKnopfHtml(product) {
   if (!pruefeBeitrag(product).moeglich) return "";
   return `
     <button type="button" class="klar-action-btn" id="beitragBtn" style="width:100%;margin-top:8px">
-      🌍 Zu Open Food Facts beitragen
+      ${ikon("welt", { groesse: 17 })} Zu Open Food Facts beitragen
     </button>
   `;
 }

@@ -10,6 +10,7 @@ import {
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
 import { openTodayQuestionModal } from "../analysis.js";
 import { gewichtsBericht, trendSatz } from "../gewicht.js";
+import { ikon } from "../ikonen.js";
 import { openGewichtModal } from "../gewicht-eingabe.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
@@ -93,9 +94,9 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
     </div>
     <div id="klarMeals"></div>
     <div class="klar-day-actions">
-      <button type="button" class="klar-pill-btn" id="planBtn">🗓️ Planen</button>
-      <button type="button" class="klar-pill-btn" id="saveImageBtn">📸 Screenshot</button>
-      <button type="button" class="klar-pill-btn" id="todayQuestionBtn">🤖 Was geht noch?</button>
+      <button type="button" class="klar-pill-btn" id="planBtn">${ikon("planen", { groesse: 17 })} Planen</button>
+      <button type="button" class="klar-pill-btn" id="saveImageBtn">${ikon("bild", { groesse: 17 })} Screenshot</button>
+      <button type="button" class="klar-pill-btn" id="todayQuestionBtn">${ikon("ki", { groesse: 17 })} Was geht noch?</button>
     </div>
   `;
 
@@ -223,10 +224,7 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
   el.innerHTML = `
     <div class="klar-card-head">
       <span class="klar-eyebrow">Nährwerte ${esc(dateLabel(getActiveDateKey()).toLowerCase())}${planHint ? " · geplant" : ""}</span>
-      <div class="klar-head-actions">
-        <button type="button" class="klar-pill-btn icon-only" id="klarScanBtn" title="Produkt scannen" aria-label="Produkt scannen">📷</button>
-        <button type="button" class="klar-pill-btn" id="klarEvalBtn">📊 Auswertung</button>
-      </div>
+      <button type="button" class="klar-pill-btn" id="klarEvalBtn">${ikon("auswertung", { groesse: 17 })} Auswertung</button>
     </div>
     ${ringDiagramHtml(rings, profile.ringStyle)}
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
@@ -235,7 +233,6 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
   `;
 
   el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
-  el.querySelector("#klarScanBtn").addEventListener("click", () => goToTab("scan"));
 
   // Über der Nährwertkarte tageweise blättern — dieselbe Geste wie im Wochenstreifen, nur
   // eine Schrittweite feiner.
@@ -396,7 +393,7 @@ function renderKlarWeight(container, profile, dateKey, refresh) {
         </div>
         <div class="klar-weight-trend">${esc(trendSatz(bericht))}</div>
       </div>
-      ${zukunft ? "" : `<button type="button" class="klar-weight-btn" id="klarWeightBtn">${amTag ? "Ändern" : "⚖️ Wiegen"}</button>`}
+      ${zukunft ? "" : `<button type="button" class="klar-weight-btn" id="klarWeightBtn">${amTag ? "Ändern" : `${ikon("wiegen", { groesse: 17 })} Wiegen`}</button>`}
     </div>
   `;
 
@@ -408,6 +405,13 @@ function renderKlarWeight(container, profile, dateKey, refresh) {
   zeile?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); oeffnen(); }
   });
+}
+
+/** Netto-KH einer Zeile — aber nur, wenn welche drin sind. „0 g KH" an Fleisch, Fisch und
+ * Käse ist die häufigste Angabe der ganzen Liste und sagt nie etwas. */
+function khLabel(e) {
+  if (e.netCarbs == null) return " · – g KH";
+  return e.netCarbs > 0 ? ` · ${e.netCarbs} g KH` : "";
 }
 
 function renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey) {
@@ -429,25 +433,28 @@ function renderKlarMeals(container, entries, refresh, openEntrySheet, profile, d
     const items = groups.get(key);
     if (items.length === 0) continue;
     const sum = (f) => items.reduce((s, e) => s + (e[f] || 0), 0);
-    const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key].replace(/^\S+\s/, "");
+    const label = key === "none" ? "Ohne Zuordnung" : MEAL_LABELS[key];
     // Steht die ganze Mahlzeit noch als Plan da, ist "alles gegessen" ein Tipp statt drei.
     // Das ist der Regelfall: man kocht und isst eine Mahlzeit, nicht eine halbe.
     const offen = items.filter(e => e.planned).length;
+    // Kalorien und Netto-KH stehen neben dem Namen: das sind die zwei Zahlen, die den Tag
+    // steuern. Fett und Eiweiß kommen beim Antippen der Zeile — vorher standen vor dem
+    // ersten Lebensmittel sechzehn Zahlen (vier je Mahlzeit), und die Karte las sich als
+    // Tabelle statt als Liste dessen, was man gegessen hat.
     blocks.push(`
-      <div class="klar-meal-group-title">
-        ${esc(label)}
+      <div class="klar-meal-group-title" data-gruppe="${key}">
+        <span class="gruppe-name">${esc(label)}</span>
+        <span class="gruppe-werte"><b>${Math.round(sum("kcal"))}</b> kcal · <b>${round1(sum("netCarbs"))}</b> g KH</span>
         ${offen > 0 ? `<button type="button" class="klar-inline-chip" data-bestaetige-mahlzeit="${key}">✓ gegessen</button>` : ""}
       </div>
-      <div class="klar-meal-group-macros">
-        <span><b>${Math.round(sum("kcal"))}</b> kcal</span>
-        <span><b>${round1(sum("netCarbs"))}</b> g KH</span>
+      <div class="klar-meal-group-macros" hidden>
         <span><b>${round1(sum("fat"))}</b> g Fett</span>
         <span><b>${round1(sum("protein"))}</b> g Eiweiß</span>
       </div>
       ${items.map(e => `
         <div class="klar-meal-row ${e.planned ? "ist-geplant" : ""}" data-id="${e.id}">
           <span class="name">${esc(e.name)}</span>
-          <span class="meta">${entryAmountLabel(e)} · ${e.kcal == null ? "–" : Math.round(e.kcal)} kcal · ${e.netCarbs ?? "–"} g KH</span>
+          <span class="meta">${entryAmountLabel(e)} · ${e.kcal == null ? "–" : Math.round(e.kcal)} kcal${khLabel(e)}</span>
           ${e.planned
             ? `<button type="button" class="icon-btn klar-bestaetigen" data-bestaetige="${e.id}"
                  title="Als gegessen bestätigen" aria-label="Als gegessen bestätigen">✓</button>`
@@ -457,6 +464,20 @@ function renderKlarMeals(container, entries, refresh, openEntrySheet, profile, d
     `);
   }
   el.innerHTML = `<div class="klar-meals-card">${blocks.join("")}</div>`;
+
+  // Ein Tipp auf die Gruppenzeile zeigt Fett und Eiweiß dieser Mahlzeit — und versteckt sie
+  // wieder. Bewusst kein Pfeil daneben: die Zeile ist keine Navigation, sondern zwei Zahlen,
+  // die man selten braucht und dann sofort hat.
+  el.querySelectorAll(".klar-meal-group-title").forEach(kopf => {
+    kopf.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-bestaetige-mahlzeit]")) return;
+      const makros = kopf.nextElementSibling;
+      if (makros?.classList.contains("klar-meal-group-macros")) {
+        makros.hidden = !makros.hidden;
+        kopf.classList.toggle("offen", !makros.hidden);
+      }
+    });
+  });
 
   el.querySelectorAll(".klar-meal-row").forEach(row => {
     row.addEventListener("click", () => {
