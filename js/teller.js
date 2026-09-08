@@ -197,7 +197,7 @@ function zeigePruefung(overlay, schliessen, ergebnis, file, onLogged) {
           <div style="display:flex;align-items:center;gap:8px">
             <input type="text" value="${esc(p.name)}" data-feld="name"
                    style="flex:1;min-width:0;font-weight:700" aria-label="Bezeichnung">
-            <input type="number" value="${Number(p.grams) || 0}" data-feld="grams" inputmode="numeric"
+            <input type="text" inputmode="decimal" value="${Number(p.grams) || 0}" data-feld="grams"
                    style="width:72px;text-align:right" aria-label="Gramm">
             <span class="hint" style="margin:0">g</span>
             <button type="button" data-weg="1" title="Posten entfernen"

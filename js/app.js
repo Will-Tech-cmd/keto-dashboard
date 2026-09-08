@@ -14,7 +14,7 @@ import {
 import { logRecipeConsumption, calcPerServing } from "./recipes.js";
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { getTargetsForDate } from "./profiles.js";
-import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme } from "./ui.js";
+import { showToast, showSnackbar, bindBackClose, esc, applyDesignTheme, kommaAlsPunkt } from "./ui.js";
 import { isSyncEnabled, syncNow, onSyncApplied } from "./sync.js";
 import { openTellerFoto } from "./teller.js";
 import { hasApiKey } from "./ai.js";
@@ -418,6 +418,11 @@ bitteUmDauerhaftenSpeicher();
 // Vom Kochbuch (kochbuch/) auf die Einkaufsliste übernommene Zutaten abholen — bewusst vor dem
 // ersten Rendern, damit die Einkaufsliste beim allerersten Blick schon vollständig ist.
 const drainedFromKochbuch = Store.drainKochbuchInbox();
+
+// Ein getipptes Komma wird in jedem Zahlenfeld sofort zum Punkt (siehe ui.js). Einmal
+// zentral angemeldet, weil die Felder in Dialogen entstehen, die es beim Start noch nicht
+// gibt — ein Aufruf je Ansicht wäre eine Stelle, die man vergessen kann.
+kommaAlsPunkt();
 
 // Init
 if (Store.isOnboarded()) {

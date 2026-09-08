@@ -437,8 +437,8 @@ export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], ch
   const zeile = (feld, knoepfe) => (knoepfe
     ? `<div class="klar-feld-zeile">${feld}${knoepfe}</div>`
     : feld);
-  const portionsFeld = `<input type="number" id="qtyPortionsInput" value="${portions}" min="0.1" step="0.25" inputmode="decimal">`;
-  const grammFeld = `<input type="number" id="qtyGramsInput" value="${grams}" min="1" inputmode="numeric">`;
+  const portionsFeld = `<input type="text" inputmode="decimal" id="qtyPortionsInput" value="${portions}">`;
+  const grammFeld = `<input type="text" inputmode="decimal" id="qtyGramsInput" value="${grams}">`;
   return `
     ${servingG ? `
       <div class="klar-chip-row" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
@@ -705,7 +705,7 @@ export function openEditConsumptionModal(entry, onDone) {
         : `
         <label for="qtyGramsInput">Portionen</label>
         <div class="klar-feld-zeile">
-          <input type="number" id="qtyGramsInput" value="${currentAmount}" min="0.1" step="0.25" inputmode="decimal">
+          <input type="text" inputmode="decimal" id="qtyGramsInput" value="${currentAmount}">
           ${teilenKnopfHtml()}${einkaufKnopfHtml()}
         </div>
       `}

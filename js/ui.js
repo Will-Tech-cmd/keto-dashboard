@@ -151,6 +151,52 @@ export function keepActionsInView(overlay) {
 }
 
 /**
+ * Zahl aus einem Eingabefeld — nimmt Komma wie Punkt.
+ *
+ * Gebraucht überall dort, wo eine Menge oder ein Nährwert von Hand kommt. `parseFloat`
+ * allein liest „82,4" als 82.
+ */
+export function zahlAus(rohwert) {
+  const n = Number.parseFloat(String(rohwert ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Macht aus einem getippten Komma sofort einen Punkt — in ALLEN Zahlenfeldern der App.
+ *
+ * Vorgeschichte: die Felder waren `type="number"`. Dessen `value` ist laut Norm eine Zahl
+ * mit Punkt; tippt jemand ein Komma, liefert der Browser eine leere Zeichenkette. Gemessen
+ * in Chromium: aus „78,5" wird "". Auf einer deutschen Tastatur liegt die Kommataste unter
+ * dem Daumen, und das Ergebnis war eine Fehlermeldung „bitte eine Zahl eingeben" ohne
+ * jeden Hinweis, woran es lag — oder, schlimmer, eine stumme 0.
+ *
+ * Deshalb stehen die Felder jetzt als `type="text"` mit `inputmode="decimal"` im Markup:
+ * dieselbe Zifferntastatur, aber der Wert wird nicht beschnitten. Und weil hier beim
+ * Tippen normalisiert wird, liest jede bestehende `parseFloat(feld.value)`-Stelle
+ * weiterhin genau das, was sie immer gelesen hat — es musste keine einzige Auswertung
+ * angefasst werden.
+ *
+ * Der Preis: wer ein Komma tippt, sieht einen Punkt erscheinen. Die Alternative wäre, das
+ * Komma stehen zu lassen und jede der gut zwei Dutzend Lesestellen einzeln umzustellen —
+ * mehr Angriffsfläche für genau den Fehler, der hier behoben wird.
+ *
+ * Barcodes (`inputmode="numeric"`) bleiben außen vor: dort ist ein Trennzeichen kein
+ * Dezimalpunkt, sondern ein Tippfehler.
+ */
+export function kommaAlsPunkt() {
+  document.addEventListener("input", (e) => {
+    const el = e.target;
+    if (!el || el.tagName !== "INPUT" || el.getAttribute("inputmode") !== "decimal") return;
+    if (!el.value.includes(",")) return;
+    // Gleiche Länge, also bleibt die Schreibmarke, wo sie war — sonst spränge sie bei
+    // jedem Komma ans Ende und die nächste Ziffer landete an der falschen Stelle.
+    const pos = el.selectionStart;
+    el.value = el.value.replace(/,/g, ".");
+    try { el.setSelectionRange(pos, pos); } catch { /* Feldtyp ohne Auswahlbereich */ }
+  });
+}
+
+/**
  * Markiert den Inhalt eines Zahlen-/Textfeldes, sobald es den Fokus bekommt. Springt man mit
  * Enter/Tab durch ein Formular (Zutat bearbeiten hat zehn Felder), landet der Cursor sonst
  * irgendwo im bestehenden Wert und man muss ihn erst löschen, bevor man den neuen tippen kann.

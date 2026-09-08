@@ -84,9 +84,17 @@ Die App rechnet ein Kaloriendefizit aus und friert die Zielwerte jedes Tages ein
 lange fehlte, war die Gegenprobe: kommt davon etwas auf der Waage an? Dafür gibt es eine
 eigene Datenart — **ein Wert je Person und Tag**, optional mit Körperfettanteil.
 
-- Eingetragen wird von der Startseite („⚖️ Wiegen") oder aus der Auswertung heraus. Zweimal
-  am selben Tag gewogen heißt: der zweite Wert ersetzt den ersten. Es gibt keine zwei
-  Gewichte für einen Morgen, auch nicht nach einem Abgleich zwischen zwei Geräten.
+- Eingetragen wird von der Startseite (die ganze Gewichtszeile ist der Knopf) oder aus der
+  Auswertung heraus. Zweimal am selben Tag gewogen heißt: der zweite Wert ersetzt den
+  ersten. Es gibt keine zwei Gewichte für einen Morgen, auch nicht nach einem Abgleich
+  zwischen zwei Geräten.
+- **Der Dialog kann alles an einem Ort: eintragen, nachtragen, ändern, löschen.** Oben ein
+  Datumsfeld (nichts in der Zukunft — die Waage kann das nicht wissen), darunter Gewicht
+  und optional Körperfett, darunter die letzten acht Messungen. Ein Tipp auf eine Zeile
+  lädt sie ins Formular, das ✕ daneben löscht sie — mit „Rückgängig" in der Snackbar
+  statt einer Sicherheitsfrage, die bei acht Zeilen achtmal im Weg stünde. Wer sich Werte
+  notiert hat, trägt sie hier der Reihe nach nach; bei einem nachgetragenen Tag bleibt das
+  Gewichtsfeld leer statt einen Vorschlag zu raten.
 - Der Trend ist eine **Ausgleichsgerade durch alle Messungen der letzten 28 Tage** (30 in
   der Auswertung), keine Differenz zwischen zwei Tagen. Wasser, Glykogen und Salz bewegen
   den angezeigten Wert um ein bis zwei Kilo — zwei Messungen voneinander abzuziehen misst
@@ -341,6 +349,22 @@ Reines HTML, CSS und ES-Module. **Kein Build-Schritt, keine npm-Abhängigkeiten*
 Repository liegt, ist genau das, was ausgeliefert wird. Alle Fremdbibliotheken sind unter
 `vendor/` eingecheckt, damit die App vollständig offline funktioniert.
 
+### Zahlenfelder nehmen Komma und Punkt
+
+Alle Mengen-, Nährwert- und Körperdatenfelder stehen als `type="text"` mit
+`inputmode="decimal"` im Markup, nicht als `type="number"`. Grund: bei `type="number"` ist
+der `value` laut Norm eine Zahl mit **Punkt** — tippt jemand ein Komma, liefert der Browser
+eine leere Zeichenkette zurück (gemessen in Chromium: aus „78,5" wird `""`). Auf einer
+deutschen Tastatur liegt die Kommataste unter dem Daumen, und das Ergebnis war eine
+Meldung „bitte eine Zahl eingeben", ohne dass irgendwo stand, woran es lag.
+
+Ein Zuhörer in `js/ui.js` (`kommaAlsPunkt`, einmal in `app.js` angemeldet) macht aus einem
+getippten Komma sofort einen Punkt — mit gleicher Zeichenlänge, damit die Schreibmarke
+bleibt, wo sie war. Dadurch liest jede bestehende Auswertung weiterhin genau das, was sie
+immer gelesen hat; es musste keine einzige Lesestelle angefasst werden. Der sichtbare Preis:
+wer ein Komma tippt, sieht einen Punkt erscheinen. Barcodefelder (`inputmode="numeric"`)
+bleiben außen vor — dort ist ein Trennzeichen kein Dezimalpunkt, sondern ein Tippfehler.
+
 ### Aktualisierung und Offline-Betrieb
 
 Der Service Worker holt HTML, CSS und JS **network-first** (mit `cache: "no-cache"`, damit
@@ -374,7 +398,7 @@ js/
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
   gewicht.js            Gewichtsverlauf: Trend, erwartete Rate, Formulierungen (ohne DOM)
-  gewicht-eingabe.js    Dialog zum Eintragen und Korrigieren eines Tagesgewichts
+  gewicht-eingabe.js    Dialog: Gewicht eintragen, nachtragen, ändern, löschen
   analysis.js           Textbericht für die KI-Analyse
   planer.js             Essensplan: Katalog aus Rezepten/Verlauf, Motor, Übernahme, Einkauf
   ai.js                 optionale Gemini-Anbindung (Zutatenerkennung, Plan verfeinern)

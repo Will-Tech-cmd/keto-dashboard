@@ -429,7 +429,7 @@ function renderKlarWeight(container, profile, dateKey, refresh) {
 
   el.innerHTML = `
     <hr class="klar-divider">
-    <div class="klar-weight-row">
+    <div class="klar-weight-row${zukunft ? "" : " tippbar"}"${zukunft ? "" : ` role="button" tabindex="0"`}>
       <div class="klar-weight-text">
         <div class="klar-weight-head">
           <span class="klar-weight-title">Gewicht</span>
@@ -442,8 +442,13 @@ function renderKlarWeight(container, profile, dateKey, refresh) {
     </div>
   `;
 
-  el.querySelector("#klarWeightBtn")?.addEventListener("click", () => {
-    openGewichtModal(dateKey, refresh);
+  // Ein Handler auf der ganzen Zeile statt nur auf dem Knopf — der Knopf bleibt als
+  // sichtbarer Hinweis stehen, dass hier etwas passiert.
+  const zeile = el.querySelector(".klar-weight-row.tippbar");
+  const oeffnen = () => openGewichtModal(dateKey, refresh);
+  zeile?.addEventListener("click", oeffnen);
+  zeile?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); oeffnen(); }
   });
 }
 

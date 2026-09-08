@@ -575,14 +575,14 @@ function openGroupSheet(key, onChanged) {
             <option value="male" ${profile.sex === "male" ? "selected" : ""}>männlich</option>
           </select>
         </div>
-        <div><label>Alter</label><input type="number" id="fAge" value="${profile.age}"></div>
+        <div><label>Alter</label><input type="text" inputmode="decimal" id="fAge" value="${profile.age}"></div>
       </div>
       <div class="field-row">
-        <div><label>Größe (cm)</label><input type="number" id="fHeight" value="${profile.heightCm}"></div>
-        <div><label>Gewicht (kg)</label><input type="number" step="0.1" id="fWeight" value="${profile.weightKg}"></div>
+        <div><label>Größe (cm)</label><input type="text" inputmode="decimal" id="fHeight" value="${profile.heightCm}"></div>
+        <div><label>Gewicht (kg)</label><input type="text" inputmode="decimal" id="fWeight" value="${profile.weightKg}"></div>
       </div>
       <label>Körperfettanteil % (optional, für genauere Berechnung)</label>
-      <input type="number" step="0.1" id="fBodyFat" value="${profile.bodyFatPct ?? ""}" placeholder="unbekannt">
+      <input type="text" inputmode="decimal" id="fBodyFat" value="${profile.bodyFatPct ?? ""}" placeholder="unbekannt">
     `,
     goal: `
       <label>Ziel</label>
@@ -607,8 +607,8 @@ function openGroupSheet(key, onChanged) {
       </select>
       <p class="hint" style="margin-top:-2px">Bestimmt die Vorschlagswerte für die Ampel (frei anpassbar).</p>
       <div class="field-row">
-        <div><label>Ampel grün bis (g Netto-KH/100g)</label><input type="number" step="0.5" id="fGradeGreen" value="${profile.gradeThresholds.green}"></div>
-        <div><label>Ampel gelb bis (g Netto-KH/100g)</label><input type="number" step="0.5" id="fGradeYellow" value="${profile.gradeThresholds.yellow}"></div>
+        <div><label>Ampel grün bis (g Netto-KH/100g)</label><input type="text" inputmode="decimal" id="fGradeGreen" value="${profile.gradeThresholds.green}"></div>
+        <div><label>Ampel gelb bis (g Netto-KH/100g)</label><input type="text" inputmode="decimal" id="fGradeYellow" value="${profile.gradeThresholds.yellow}"></div>
       </div>
       <p class="hint" style="margin-top:-8px">Darüber gilt ein Produkt als rot/nicht empfohlen.</p>
     `,
@@ -619,10 +619,10 @@ function openGroupSheet(key, onChanged) {
             ${[20, 30, 50, 75, 100, 130].map(v => `<option value="${v}" ${v === profile.netCarbLimitG ? "selected" : ""}>${v} g</option>`).join("")}
           </select>
         </div>
-        <div><label>Eiweiß g/kg (fettfreie Masse)</label><input type="number" step="0.1" id="fProteinFactor" value="${profile.proteinFactor}"></div>
+        <div><label>Eiweiß g/kg (fettfreie Masse)</label><input type="text" inputmode="decimal" id="fProteinFactor" value="${profile.proteinFactor}"></div>
       </div>
       <label>Trinkziel /Tag (ml)</label>
-      <input type="number" step="100" min="0" id="fWaterTarget" value="${profile.waterTargetMl ?? 2500}">
+      <input type="text" inputmode="decimal" id="fWaterTarget" value="${profile.waterTargetMl ?? 2500}">
     `,
   }[key];
 

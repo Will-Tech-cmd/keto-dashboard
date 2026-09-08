@@ -153,7 +153,7 @@ function openServingsModal(recipe) {
 
       ${gramsPer ? amountFieldsHtml(gramsPer, currentGrams) : `
         <label for="qtyGramsInput">Portionen</label>
-        <input type="number" id="qtyGramsInput" value="1" min="0.25" step="0.25" inputmode="decimal">
+        <input type="text" inputmode="decimal" id="qtyGramsInput" value="1">
       `}
 
       <div class="klar-portion-panel gray" id="servingsPreview" style="margin-top:16px"></div>
@@ -413,7 +413,7 @@ function openRecipeMetaSheet(recipeId, onSaved) {
       <label for="recName">Name</label>
       <input type="text" id="recName" value="${esc(recipe.name)}">
       <label for="recServings">Portionen</label>
-      <input type="number" id="recServings" value="${recipe.servings}" min="1" step="1">
+      <input type="text" inputmode="decimal" id="recServings" value="${recipe.servings}">
       <button type="button" class="btn" id="metaDone" style="margin-top:16px">Fertig</button>
     </div>
   `;
@@ -491,7 +491,7 @@ function renderIngredientList(container, recipeId) {
               <div class="klar-ing-stepper-compact">
                 <button type="button" class="klar-stepper-btn-sm" data-action="minus" aria-label="10 g weniger">−</button>
                 <div class="klar-ing-amount-compact">
-                  <input type="number" class="ing-grams-input" value="${ing.grams}" min="0" inputmode="numeric">
+                  <input type="text" inputmode="decimal" class="ing-grams-input" value="${ing.grams}">
                   <span>g</span>
                 </div>
                 <button type="button" class="klar-stepper-btn-sm" data-action="plus" aria-label="10 g mehr">+</button>
@@ -591,23 +591,23 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
       <label for="ieName">Name</label>
       <input type="text" id="ieName" value="${esc(ing.name)}">
       <label for="ieGrams">Menge im Rezept (g)</label>
-      <input type="number" id="ieGrams" value="${ing.grams ?? ""}" min="0" step="1">
+      <input type="text" inputmode="decimal" id="ieGrams" value="${ing.grams ?? ""}">
       <label for="ieKcal">Energie (kcal)</label>
-      <input type="number" step="1" id="ieKcal" value="${p.kcal ?? ""}">
+      <input type="text" inputmode="decimal" id="ieKcal" value="${p.kcal ?? ""}">
       <div class="field-row">
-        <div><label for="ieFat">Fett (g)</label><input type="number" step="0.1" id="ieFat" value="${p.fat ?? ""}"></div>
-        <div><label for="ieSatFat">davon gesättigte Fettsäuren (g)</label><input type="number" step="0.1" id="ieSatFat" value="${p.saturatedFat ?? ""}"></div>
+        <div><label for="ieFat">Fett (g)</label><input type="text" inputmode="decimal" id="ieFat" value="${p.fat ?? ""}"></div>
+        <div><label for="ieSatFat">davon gesättigte Fettsäuren (g)</label><input type="text" inputmode="decimal" id="ieSatFat" value="${p.saturatedFat ?? ""}"></div>
       </div>
       <div class="field-row">
-        <div><label for="ieCarbs">Kohlenhydrate (g)</label><input type="number" step="0.1" id="ieCarbs" value="${p.carbs ?? ""}"></div>
-        <div><label for="ieSugars">davon Zucker (g)</label><input type="number" step="0.1" id="ieSugars" value="${p.sugars ?? ""}"></div>
+        <div><label for="ieCarbs">Kohlenhydrate (g)</label><input type="text" inputmode="decimal" id="ieCarbs" value="${p.carbs ?? ""}"></div>
+        <div><label for="ieSugars">davon Zucker (g)</label><input type="text" inputmode="decimal" id="ieSugars" value="${p.sugars ?? ""}"></div>
       </div>
       <div class="field-row">
-        <div><label for="ieFiber">Ballaststoffe (g)</label><input type="number" step="0.1" id="ieFiber" value="${p.fiber ?? ""}"></div>
-        <div><label for="ieProtein">Eiweiß (g)</label><input type="number" step="0.1" id="ieProtein" value="${p.protein ?? ""}"></div>
+        <div><label for="ieFiber">Ballaststoffe (g)</label><input type="text" inputmode="decimal" id="ieFiber" value="${p.fiber ?? ""}"></div>
+        <div><label for="ieProtein">Eiweiß (g)</label><input type="text" inputmode="decimal" id="ieProtein" value="${p.protein ?? ""}"></div>
       </div>
       <label for="ieSalt">Salz (g)</label>
-      <input type="number" step="0.01" id="ieSalt" value="${p.salt ?? ""}">
+      <input type="text" inputmode="decimal" id="ieSalt" value="${p.salt ?? ""}">
       <div class="btn-row" style="margin-top:16px">
         <button type="button" class="btn secondary" id="ieCancel">Abbrechen</button>
         <button type="button" class="btn" id="ieSave">Speichern</button>
@@ -818,22 +818,22 @@ function wireManualIngredient(container, recipeId) {
     if (!show) return;
     wrap.innerHTML = `
       <label>Name</label><input type="text" id="miName">
-      <label>Menge im Rezept (g)</label><input type="number" id="miGrams" value="100">
+      <label>Menge im Rezept (g)</label><input type="text" inputmode="decimal" id="miGrams" value="100">
       <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
-      <label>Energie (kcal)</label><input type="number" id="miKcal">
+      <label>Energie (kcal)</label><input type="text" inputmode="decimal" id="miKcal">
       <div class="field-row">
-        <div><label>Fett (g)</label><input type="number" step="0.1" id="miFat"></div>
-        <div><label>davon gesättigte Fettsäuren (g)</label><input type="number" step="0.1" id="miSatFat"></div>
+        <div><label>Fett (g)</label><input type="text" inputmode="decimal" id="miFat"></div>
+        <div><label>davon gesättigte Fettsäuren (g)</label><input type="text" inputmode="decimal" id="miSatFat"></div>
       </div>
       <div class="field-row">
-        <div><label>Kohlenhydrate (g)</label><input type="number" step="0.1" id="miCarbs"></div>
-        <div><label>davon Zucker (g)</label><input type="number" step="0.1" id="miSugars"></div>
+        <div><label>Kohlenhydrate (g)</label><input type="text" inputmode="decimal" id="miCarbs"></div>
+        <div><label>davon Zucker (g)</label><input type="text" inputmode="decimal" id="miSugars"></div>
       </div>
       <div class="field-row">
-        <div><label>Ballaststoffe (g)</label><input type="number" step="0.1" id="miFiber"></div>
-        <div><label>Eiweiß (g)</label><input type="number" step="0.1" id="miProtein"></div>
+        <div><label>Ballaststoffe (g)</label><input type="text" inputmode="decimal" id="miFiber"></div>
+        <div><label>Eiweiß (g)</label><input type="text" inputmode="decimal" id="miProtein"></div>
       </div>
-      <label>Salz (g)</label><input type="number" step="0.01" id="miSalt">
+      <label>Salz (g)</label><input type="text" inputmode="decimal" id="miSalt">
       <button class="btn" id="miSave" style="margin-top:12px">Zutat hinzufügen</button>
     `;
     wrap.querySelector("#miSave").addEventListener("click", () => {
@@ -1033,7 +1033,7 @@ function renderReview(container, recipeId) {
       <p class="hint" style="margin-top:0;margin-bottom:6px">„${esc(r.raw)}"</p>
       <div class="field-row">
         <div><label>Name</label><input type="text" class="rv-name" value="${esc(r.name)}"></div>
-        <div><label>Menge (g)</label><input type="number" class="rv-grams" value="${r.grams ?? ""}"></div>
+        <div><label>Menge (g)</label><input type="text" inputmode="decimal" class="rv-grams" value="${r.grams ?? ""}"></div>
       </div>
       <p class="hint rv-match-label" style="margin-top:6px;${matchLabelStyle(r)}">${matchLabelText(r)}</p>
       <div class="btn-row" style="margin-top:6px">
