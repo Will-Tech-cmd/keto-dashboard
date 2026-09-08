@@ -1251,6 +1251,45 @@ body[data-design="klar"] .klar-dot.green { background: var(--accent); }
 body[data-design="klar"] .klar-dot.yellow { background: var(--warm); }
 body[data-design="klar"] .klar-dot.red { background: var(--red-fg); }
 
+/* Bilanz über dem Verlauf: eine Zeile statt vier Kacheln. Bricht auf sehr schmalen
+   Geräten um, statt die Wörter zu stauchen. */
+body[data-design="klar"] .verlauf-bilanz {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+body[data-design="klar"] .verlauf-bilanz span {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+}
+body[data-design="klar"] .verlauf-bilanz b { font-size: 14px; font-weight: 800; color: var(--text); }
+body[data-design="klar"] .verlauf-bilanz .gesamt { margin-left: auto; color: var(--text-faint); }
+body[data-design="klar"] .verlauf-bilanz .gesamt b { color: var(--text-muted); }
+
+/* Die Kacheln einer aufgeklappten Zeile: dieselben vier Werte, aber flacher als auf der
+   Produktkarte im Scan-Tab. Dort sind sie das Hauptereignis, hier hängen sie an einer
+   Listenzeile — und sie tragen seit dieser Änderung ALLE Nährwerte, weil die Zeile
+   darüber keine mehr zeigt. */
+body[data-design="klar"] .kachel-kompakt .klar-tile-grid { gap: 5px; margin-top: 10px; }
+body[data-design="klar"] .kachel-kompakt .klar-tile { padding: 6px 3px; border-radius: 10px; }
+body[data-design="klar"] .kachel-kompakt .klar-tile .val { font-size: 14px; }
+body[data-design="klar"] .kachel-kompakt .klar-tile .lbl { font-size: 9px; }
+body[data-design="klar"] .kachel-kompakt .klar-tile-unit { margin-top: 4px; }
+
+/* Drei gleich breite Knöpfe. Vorher war „Eintragen" so breit wie die halbe Karte und
+   Bearbeiten/Entfernen 19 Pixel breite Bildchen daneben — unbeschriftet und für einen
+   Daumen kaum zu treffen, das Entfernen ohne jeden Abstand zum Rest. Die Führung
+   übernimmt jetzt die Farbe, nicht die Fläche. */
+body[data-design="klar"] .zeilen-aktionen {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px;
+}
+body[data-design="klar"] .zeilen-aktionen.ohne-entfernen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body[data-design="klar"] .zeilen-aktionen .btn {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 42px; padding: 0 6px; font-size: 12px; width: auto;
+}
+body[data-design="klar"] .zeilen-aktionen .btn.warm { color: var(--warm); border-color: var(--warm-border); }
+
 body[data-design="klar"] .klar-tile-unit {
   margin-top: 6px; text-align: center;
   font-size: 9.5px; font-weight: 700; letter-spacing: .06em;

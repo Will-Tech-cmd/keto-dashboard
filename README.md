@@ -169,8 +169,17 @@ nur zur Auswertung verschickt und nicht gespeichert.
 
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
-- Jede Zeile klappt auf vier Nährwertkacheln je 100 g auf, mit „Eintragen" und „Werte korrigieren"
-- 🛒 setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie im Verlauf
+- Eine Listenzeile zeigt Name und Marke, sonst nichts. **Die Nährwerte stehen in den vier
+  Kacheln, die ein Tipp aufklappt** — je 100 g, dazu drei gleich breite Knöpfe: Eintragen,
+  Werte, Entfernen. Vorher standen kcal und Netto-KH doppelt (in der Zeile *und* in den
+  Kacheln), und „Eintragen" war so breit wie die halbe Karte, während Bearbeiten und
+  Entfernen unbeschriftete 19-Pixel-Ziele daneben waren
+- Der Einkaufswagen setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie
+  im Verlauf
+- Der Verlauf fasst den Zeitraum in **einer Zeile** zusammen statt in einem 2×2-Raster aus
+  Kacheln: vier einstellige Zahlen brauchten mehr Platz als der Verlauf darunter. Seine
+  Zeilen zeigen Uhrzeit und Marke; die bekannten Netto-KH stehen aufgeklappt in den
+  Kacheln, wo vorher gar nichts stand
 - Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm,
   Gewichtskurve mit Trend
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
