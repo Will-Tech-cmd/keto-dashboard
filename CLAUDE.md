@@ -18,13 +18,14 @@ von `origin/main` aufsetzen statt darauf weiterzubauen.
 ## Tests
 
 ```bash
-cd test && npm install        # einmal je frischem Arbeitsverzeichnis, siehe unten
-cd test && node lauf.mjs      # 15 Dateien, ohne Browser und ohne Netz, wenige Sekunden
+cd test && node lauf.mjs      # 16 Dateien, ohne Browser, wenige Sekunden
 ```
 
-Ohne das `npm install` scheitern fünf Dateien mit `Cannot find package 'fake-indexeddb'` —
-`node_modules/` ist nicht eingecheckt, und das ist die einzige Abhängigkeit im ganzen Repo.
-Kein Grund, ein eigenes Testskript danebenzustellen.
+`node_modules/` ist nicht eingecheckt. Fehlt `fake-indexeddb` — die einzige Abhängigkeit im
+ganzen Repo —, installiert `lauf.mjs` sie beim ersten Lauf selbst nach. Geht das nicht (kein
+Netz), überspringt es die fünf Dateien, die IndexedDB brauchen, mit einer Zeile Begründung
+und lässt die übrigen zehn laufen. Ein Stapelabzug ist also nie der Anlass, an der Suite zu
+zweifeln oder ein eigenes Skript danebenzustellen.
 
 Diese Suite ist der erste Griff — **keine eigenen Testskripte danebenbauen, ohne vorher
 hier hineingesehen zu haben.** Sie deckt Store, Zeilenmodus, Abgleich, Parser und Planer ab.

@@ -15,12 +15,12 @@ import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
  * Anordnung wie auf der Verpackung, damit man beim Abtippen nur noch Zeile für Zeile
  * vergleichen muss. `sub` rückt die „davon …"-Zeilen ein, wie im Etikett.
  */
-function nutriRow(label, id, value, { unit = "g", step = 0.1, sub = false } = {}) {
+function nutriRow(label, id, value, { unit = "g", sub = false } = {}) {
   return `
     <div class="klar-nutri-row${sub ? " sub" : ""}">
       <label for="${id}">${label}</label>
       <div class="klar-nutri-field">
-        <input type="number" step="${step}" id="${id}" value="${value ?? ""}" inputmode="decimal">
+        <input type="text" inputmode="decimal" id="${id}" value="${value ?? ""}">
         <span>${unit}</span>
       </div>
     </div>
@@ -39,14 +39,14 @@ export function ownProductFormHtml(barcode, existing = null, prefillName = "", {
     </div>
     <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
     <div class="klar-nutri-table">
-      ${nutriRow("Brennwert", "opKcal", p.kcal, { unit: "kcal", step: 1 })}
+      ${nutriRow("Brennwert", "opKcal", p.kcal, { unit: "kcal" })}
       ${nutriRow("Fett", "opFat", p.fat)}
       ${nutriRow("davon gesättigte Fettsäuren", "opSatFat", p.saturatedFat, { sub: true })}
       ${nutriRow("Kohlenhydrate", "opCarbs", p.carbs)}
       ${nutriRow("davon Zucker", "opSugars", p.sugars, { sub: true })}
       ${nutriRow("Ballaststoffe", "opFiber", p.fiber)}
       ${nutriRow("Eiweiß", "opProtein", p.protein)}
-      ${nutriRow("Salz", "opSalt", p.salt, { step: 0.01 })}
+      ${nutriRow("Salz", "opSalt", p.salt)}
     </div>
     <label>Zutaten (optional, für Warnhinweise)</label>
     <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">

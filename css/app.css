@@ -598,7 +598,11 @@ body[data-design="klar"] .fab-btn {
 
 /* Gewicht — eine Zeile unter dem Wasser. Der Knopf bleibt rechts stehen, der Text davor
    darf schrumpfen und umbrechen: der Trendsatz ist auf schmalen Displays zweizeilig. */
+/* Die ganze Zeile ist der Knopf, nicht nur die Schaltfläche rechts: am Handy trifft der
+   Daumen die Fläche, nicht das 40 Pixel breite Ziel am Rand. */
 .klar-weight-row { display: flex; align-items: center; gap: 12px; }
+.klar-weight-row.tippbar { cursor: pointer; margin: 0 -6px; padding: 0 6px; border-radius: 14px; }
+.klar-weight-row.tippbar:active { background: var(--divider); }
 .klar-weight-text { flex: 1; min-width: 0; }
 .klar-weight-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .klar-weight-title { font-size: 14px; font-weight: 800; color: var(--sage, var(--text)); }
@@ -611,11 +615,31 @@ body[data-design="klar"] .fab-btn {
 .klar-weight-btn { flex: none; min-height: 40px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--text); font-weight: 700; font-size: 13px; }
 .klar-weight-btn:active { opacity: .7; }
 
-/* Zwei Felder im Gewichtsdialog nebeneinander — auf schmalen Displays untereinander. */
+/* Felder im Gewichtsdialog: Datum über die volle Breite, kg und Körperfett nebeneinander —
+   auf schmalen Displays untereinander. */
 .gewicht-felder { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .gewicht-felder label { flex: 1 1 130px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--text-muted); }
 .gewicht-felder label em { font-style: normal; font-weight: 600; color: var(--text-faint); margin-left: 5px; }
 .gewicht-felder input { width: 100%; }
+/* Safari/iOS zentriert den Text in einem Datumsfeld und lässt es schrumpfen — beides
+   sieht neben den anderen Feldern aus wie ein Fehler. */
+.gewicht-felder input[type="date"] { text-align: left; min-height: 44px; }
+
+/* Die letzten Messungen im Dialog: eine Zeile zum Laden, ein ✕ zum Löschen. */
+.gewicht-liste { margin-top: 18px; border-top: 1px solid var(--divider); padding-top: 12px; }
+.gewicht-liste-zeile { display: flex; align-items: center; gap: 6px; }
+.gewicht-liste-zeile.aktiv .gewicht-liste-waehlen { background: var(--accent-soft, var(--divider)); border-radius: 12px; }
+.gewicht-liste-waehlen {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px;
+  background: none; border: none; text-align: left; padding: 9px 10px; min-height: 40px;
+  color: var(--text); font-size: 13.5px; cursor: pointer;
+}
+.gewicht-liste-waehlen:active { opacity: .6; }
+.gewicht-liste-waehlen .tag { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text-muted); }
+.gewicht-liste-waehlen .kg { font-weight: 800; flex: none; }
+.gewicht-liste-waehlen .kf { font-size: 11.5px; font-weight: 600; color: var(--text-faint); flex: none; }
+.gewicht-liste-weg { flex: none; width: 36px; min-height: 36px; border: none; background: none; color: var(--text-faint); font-size: 14px; cursor: pointer; }
+.gewicht-liste-weg:active { color: var(--warm); }
 
 /* Gewichtsverlauf in der Auswertung: Punkte plus Ausgleichsgerade. */
 .gewicht-chart-line { fill: none; stroke: var(--text-faint); stroke-width: 1.5; stroke-linejoin: round; }
