@@ -123,7 +123,9 @@ function renderProductRows(body, listName) {
   const isNoGo = listName === "noGo";
   rowsEl.innerHTML = `<div class="klar-list-card">${items.map(item => {
     const nutri = nutriOf(item, listName);
-    const meta = [item.brand || "", metaLine(nutri)].filter(Boolean).join(" · ");
+    // Nur die Marke. Die Nährwerte stehen aufgeklappt in den Kacheln — sie doppelt zu
+    // führen machte die Zeile lang, ohne dass die Kacheln dadurch entbehrlich wurden.
+    const meta = item.brand || "";
     return `
       <div class="list-entry" data-barcode="${esc(item.barcode)}">
         <div class="list-item" style="cursor:pointer">
@@ -199,13 +201,13 @@ function noGoDetailHtml(item, nutri) {
   }
   return `
     <div class="list-detail" hidden>
-      ${nutriTilesHtml(nutri)}
+      <div class="kachel-kompakt">${nutriTilesHtml(nutri)}</div>
       ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor.</p>`}
       ${portionHint}
-      <div class="btn-row" style="margin-top:10px">
-        <button class="icon-btn" data-action="edit" title="Werte korrigieren" aria-label="Werte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
-        <button class="icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
-        <button class="btn" data-action="toFavorites" style="flex:2">☆ Zu Favoriten</button>
+      <div class="zeilen-aktionen">
+        <button class="btn" data-action="toFavorites">${ikon("stern", { groesse: 17 })} Favorit</button>
+        <button class="btn secondary" data-action="edit">${ikon("bearbeiten", { groesse: 17 })} Werte</button>
+        <button class="btn secondary warm" data-action="remove">${ikon("loeschen", { groesse: 17 })} Entfernen</button>
       </div>
     </div>
   `;
@@ -251,26 +253,17 @@ function nutriOf(item, listName) {
   return snapshot;
 }
 
-/** Kurze Fassung für die Zeile — bewusst nur zwei Werte, damit sie einzeilig lesbar bleibt. */
-function metaLine(nutri) {
-  if (!nutri) return "";
-  return [
-    nutri.kcal != null ? `${Math.round(nutri.kcal)} kcal` : null,
-    nutri.netCarbs != null ? `${round1(nutri.netCarbs)} g KH` : null,
-  ].filter(Boolean).join(" · ");
-}
-
 /** Aufklappbereich einer Listenzeile: Kacheln, optionale Zusatzzeile, Aktionen. */
 function detailHtml(nutri, extraHint = "", { showRemove = true } = {}) {
   return `
     <div class="list-detail" hidden>
-      ${nutriTilesHtml(nutri)}
+      <div class="kachel-kompakt">${nutriTilesHtml(nutri)}</div>
       ${nutri ? "" : `<p class="hint">Zu diesem Produkt liegen auf diesem Gerät keine Werte vor — sie kommen beim nächsten Scan dazu.</p>`}
       ${extraHint}
-      <div class="btn-row" style="margin-top:10px">
-        <button class="icon-btn" data-action="edit" title="Werte korrigieren" aria-label="Werte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
-        ${showRemove ? `<button class="icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>` : ""}
-        <button class="btn" data-action="eat" style="flex:2">Eintragen</button>
+      <div class="zeilen-aktionen${showRemove ? "" : " ohne-entfernen"}">
+        <button class="btn" data-action="eat">${ikon("essen", { groesse: 17 })} Eintragen</button>
+        <button class="btn secondary" data-action="edit">${ikon("bearbeiten", { groesse: 17 })} Werte</button>
+        ${showRemove ? `<button class="btn secondary warm" data-action="remove">${ikon("loeschen", { groesse: 17 })} Entfernen</button>` : ""}
       </div>
     </div>
   `;
@@ -387,11 +380,14 @@ function renderHistory(body) {
     </div>
     ${periodItems.length > 0 ? `
       <div class="such-feld" style="margin-bottom:14px">${ikon("suche", { groesse: 17 })}<input type="text" id="historySearch" placeholder="Suchen …" autocomplete="off" value="${esc(historyFilter)}"></div>
-      <div class="grid-2" style="margin-bottom:14px">
-        <div class="stat"><div class="val"><span class="klar-dot green"></span> ${counts.green}</div><div class="lbl">Keto-tauglich</div></div>
-        <div class="stat"><div class="val"><span class="klar-dot yellow"></span> ${counts.yellow}</div><div class="lbl">In Maßen</div></div>
-        <div class="stat"><div class="val"><span class="klar-dot red"></span> ${counts.red}</div><div class="lbl">Nicht keto</div></div>
-        <div class="stat"><div class="val">${periodItems.length}</div><div class="lbl">Gesamt geprüft</div></div>
+      <!-- Vier einstellige Zahlen brauchen kein 2x2-Raster aus Kacheln: das nahm über
+           dem ersten Eintrag mehr Platz ein als der Verlauf selbst. Eine Zeile sagt
+           dasselbe, und die Ampelfarbe steht jetzt direkt beim Wort. -->
+      <div class="verlauf-bilanz">
+        <span><span class="klar-dot green"></span><b>${counts.green}</b> keto</span>
+        <span><span class="klar-dot yellow"></span><b>${counts.yellow}</b> in Maßen</span>
+        <span><span class="klar-dot red"></span><b>${counts.red}</b> nicht keto</span>
+        <span class="gesamt">von <b>${periodItems.length}</b></span>
       </div>
     ` : ""}
     <div id="historyList"></div>
@@ -455,8 +451,13 @@ function renderHistoryList(el, items) {
     }
     const time = new Date(entry.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     // Verlaufseinträge werden nicht nachträglich befüllt (es sind viele) — nur angezeigt.
-    const nutri = nutriOf(entry, null);
-    const meta = [time, metaLine(nutri)].filter(Boolean).join(" · ");
+    // Verlaufseinträge tragen selbst nur die Netto-KH je 100 g; ein voller Schnappschuss
+    // entsteht nur, wenn das Produkt noch im Cache liegt. Der Teilwert ist besser als
+    // leere Kacheln — die Zeile zeigte bisher gar keine Nährwerte, und in genau dieser
+    // Liste ist „war das keto?" die Frage.
+    const nutri = nutriOf(entry, null)
+      || (entry.netCarbs100 != null ? { netCarbs: entry.netCarbs100 } : null);
+    const meta = [time, entry.brand || ""].filter(Boolean).join(" · ");
     const isFav = Store.isInList("favorites", entry.barcode);
     rows.push(`
       <div class="list-entry" data-barcode="${esc(entry.barcode)}">
