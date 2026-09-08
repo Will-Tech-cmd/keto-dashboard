@@ -166,7 +166,7 @@ export function openEntrySheet() {
 
         <div class="klar-meal-select-head">
           <span class="klar-eyebrow">Mahlzeit</span>
-          <span class="klar-water-value">${nowLabel()} vorgeschlagen</span>
+          <span class="klar-card-meta">${nowLabel()} vorgeschlagen</span>
         </div>
         <div class="klar-meal-segments">
           ${Object.keys(MEAL_LABELS).map(key => `

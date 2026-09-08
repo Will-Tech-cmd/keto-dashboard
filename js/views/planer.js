@@ -249,7 +249,7 @@ function tagKarteHtml(tag, index) {
     <div class="klar-card" style="margin-top:14px">
       <div class="klar-card-head">
         <span class="klar-eyebrow">${esc(dateLabel(tag.dateKey))}</span>
-        <span class="klar-water-value">${Math.round(tag.summe.kcal)} / ${tag.ziele.kcal} kcal</span>
+        <span class="klar-card-meta">${Math.round(tag.summe.kcal)} / ${tag.ziele.kcal} kcal</span>
       </div>
       ${tag.ueberLimit ? `
         <div class="klar-hint" style="color:var(--warm)">

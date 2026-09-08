@@ -498,7 +498,7 @@ function renderProfileForm(container, onProfileChanged) {
       { key: "diet", title: "Ernährungsform",
         sub: `${DIET_TYPES[p.dietType]?.label || p.dietType} · Ampel grün bis ${p.gradeThresholds.green} g, gelb bis ${p.gradeThresholds.yellow} g` },
       { key: "limits", title: "Grenzwerte",
-        sub: `${p.netCarbLimitG} g KH · ${p.proteinFactor} g Eiweiß/kg · ${p.waterTargetMl ?? 2500} ml Wasser` },
+        sub: `${p.netCarbLimitG} g KH · ${p.proteinFactor} g Eiweiß/kg` },
     ];
   };
 
@@ -621,8 +621,6 @@ function openGroupSheet(key, onChanged) {
         </div>
         <div><label>Eiweiß g/kg (fettfreie Masse)</label><input type="text" inputmode="decimal" id="fProteinFactor" value="${profile.proteinFactor}"></div>
       </div>
-      <label>Trinkziel /Tag (ml)</label>
-      <input type="text" inputmode="decimal" id="fWaterTarget" value="${profile.waterTargetMl ?? 2500}">
     `,
   }[key];
 
@@ -692,7 +690,6 @@ function openGroupSheet(key, onChanged) {
   } else if (key === "limits") {
     overlay.querySelector("#fCarbLimit").addEventListener("change", () => save({ netCarbLimitG: num("#fCarbLimit", profile.netCarbLimitG) }));
     overlay.querySelector("#fProteinFactor").addEventListener("change", () => save({ proteinFactor: num("#fProteinFactor", profile.proteinFactor) }));
-    overlay.querySelector("#fWaterTarget").addEventListener("change", () => save({ waterTargetMl: num("#fWaterTarget", profile.waterTargetMl ?? 2500) }));
   }
 
   const close = bindBackClose(() => overlay.remove());
@@ -732,7 +729,7 @@ const PROFILE_FIELD_LABELS = {
   name: "Name", sex: "Geschlecht", age: "Alter", heightCm: "Größe", weightKg: "Gewicht",
   bodyFatPct: "Körperfett", activity: "Aktivität", goal: "Ziel", deficitPct: "Kaloriendefizit",
   proteinFactor: "Eiweißfaktor", netCarbLimitG: "Netto-KH-Limit", dietType: "Ernährungsform",
-  gradeThresholds: "Ampelgrenzen", waterTargetMl: "Trinkziel", appearance: "Erscheinungsbild",
+  gradeThresholds: "Ampelgrenzen", appearance: "Erscheinungsbild",
   ringStyle: "Nährwert-Diagramm",
 };
 const fieldLabel = (k) => PROFILE_FIELD_LABELS[k] || k;
@@ -757,7 +754,6 @@ function formatFieldValue(key, value) {
     case "deficitPct": return `${value}%`;
     case "proteinFactor": return `${value} g/kg`;
     case "netCarbLimitG": return `${value} g`;
-    case "waterTargetMl": return `${value} ml`;
     case "gradeThresholds": return `grün bis ${value.green}, gelb bis ${value.yellow} g`;
     default: return String(value);
   }

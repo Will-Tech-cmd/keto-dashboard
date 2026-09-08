@@ -19,7 +19,14 @@ import { gewichtspunkte } from "./gewicht.js";
  * einem Dialog, der eigentlich ein Formular ist — der Verlauf gehört in die Auswertung. */
 const LISTE_MAX = 8;
 
-const komma = (n) => (n == null ? "" : String(Math.round(n * 10) / 10).replace(".", ","));
+/**
+ * Anzeigeform einer Zahl. Punkt, nicht Komma — so schreibt die App JEDE Zahl, von den
+ * Zielringen bis zur Zutatenmenge. Zwei Trennzeichen nebeneinander auf einem Bildschirm
+ * sehen wie ein Fehler aus, und im großen Ergebniswert der Auswertung riss die Sperrschrift
+ * das Komma sichtbar aus der Zahl heraus („88, 1"). Eingetippt werden darf weiterhin
+ * beides (siehe ui.js).
+ */
+const zahl = (n) => (n == null ? "" : String(Math.round(n * 10) / 10));
 
 /**
  * Trägt das Gewicht ein. Ist der Tag der jüngste, den es gibt, wandert der Wert
@@ -67,8 +74,8 @@ function listeHtml(profileId, aktiverTag) {
         <div class="gewicht-liste-zeile${p.dateKey === aktiverTag ? " aktiv" : ""}" data-tag="${p.dateKey}">
           <button type="button" class="gewicht-liste-waehlen" data-waehlen="${p.dateKey}">
             <span class="tag">${esc(dateLabel(p.dateKey))}</span>
-            <span class="kg">${komma(p.kg)} kg</span>
-            ${p.bodyFatPct != null ? `<span class="kf">${komma(p.bodyFatPct)} %</span>` : ""}
+            <span class="kg">${zahl(p.kg)} kg</span>
+            ${p.bodyFatPct != null ? `<span class="kf">${zahl(p.bodyFatPct)} %</span>` : ""}
           </button>
           <button type="button" class="gewicht-liste-weg" data-weg="${p.dateKey}"
                   aria-label="Messung vom ${esc(dateLabel(p.dateKey))} löschen">✕</button>
@@ -138,8 +145,8 @@ export function openGewichtModal(startTag = dateKeyOf(Date.now()), onDone = () =
     // als eine leere Zeile zu füllen. Bei einem nachgetragenen Tag wäre dieser Vorschlag
     // allerdings geraten — dort bleibt das Feld leer.
     const vorschlag = vorhanden?.kg ?? (tag === heute ? profile.weightKg : null);
-    kgFeld.value = vorschlag != null ? komma(vorschlag) : "";
-    kfFeld.value = vorhanden?.bodyFatPct != null ? komma(vorhanden.bodyFatPct) : "";
+    kgFeld.value = vorschlag != null ? zahl(vorschlag) : "";
+    kfFeld.value = vorhanden?.bodyFatPct != null ? zahl(vorhanden.bodyFatPct) : "";
     speichernKnopf.textContent = vorhanden ? "Ändern" : "Speichern";
     zeigeVorschau();
     zeichneListe();
@@ -165,7 +172,7 @@ export function openGewichtModal(startTag = dateKeyOf(Date.now()), onDone = () =
         // Rückgängig statt Sicherheitsfrage: ein Tipp daneben darf keine Messung kosten,
         // und eine Nachfrage bei jedem Löschen wäre bei acht Zeilen achtmal im Weg.
         showSnackbar({
-          title: `${komma(gesichert.kg)} kg gelöscht`,
+          title: `${zahl(gesichert.kg)} kg gelöscht`,
           subtitle: dateLabel(weg),
           onUndo: () => {
             Store.setWeight(profile.id, weg, { kg: gesichert.kg, bodyFatPct: gesichert.bodyFatPct });
@@ -227,8 +234,8 @@ export function openGewichtModal(startTag = dateKeyOf(Date.now()), onDone = () =
     geaendert = true;
     const verschoben = Math.abs(ergebnis.kcalNachher - ergebnis.kcalVorher) >= 10;
     showToast(verschoben
-      ? `${komma(kg)} kg · Ziel jetzt ${ergebnis.kcalNachher} kcal`
-      : `${komma(kg)} kg · ${dateLabel(tag)}`);
+      ? `${zahl(kg)} kg · Ziel jetzt ${ergebnis.kcalNachher} kcal`
+      : `${zahl(kg)} kg · ${dateLabel(tag)}`);
     // Der Dialog bleibt offen und auf demselben Tag stehen: der Knopf heißt jetzt „Ändern",
     // die neue Zeile steht oben in der Liste. Automatisch auf den nächsten leeren Tag zu
     // springen wäre bequemer für eine Reihe notierter Werte — aber es verschiebt das Datum
