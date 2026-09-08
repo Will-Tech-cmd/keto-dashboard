@@ -1,11 +1,10 @@
-// views/start.js — Startseite: Wochenstreifen, Ziel-/Verbrauchsringe samt Wasser,
+// views/start.js — Startseite: Wochenstreifen, Ziel-/Verbrauchsringe, Gewicht,
 // Mahlzeiten des Tages.
 import { Store, dateKeyOf } from "../store.js";
 import { getTargetsForDate } from "../profiles.js";
 import {
   getConsumptionForDate, sumConsumption, openEditConsumptionModal,
   getActiveDateKey, shiftActiveDate, setActiveDateKey, dateLabel, MEAL_LABELS,
-  logWater, getWaterForDate, sumWater, undoLastWater,
   bestaetigeGeplant, bestaetigeMahlzeit,
 } from "../consumption.js";
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
@@ -66,14 +65,12 @@ export async function renderStart(container, goToTab, openEntrySheet) {
   return renderStartKlar(container, goToTab, Store.getActiveProfile(), openEntrySheet);
 }
 
-const WATER_STEPS = [200, 330, 500];
-
 function round1(v) {
   return Math.round(v * 10) / 10;
 }
 
 // ===========================================================================
-// Wochenstreifen zum Blättern, vier Zielringe plus Wasser in einer Karte,
+// Wochenstreifen zum Blättern, vier Zielringe und das Gewicht in einer Karte,
 // Mahlzeiten gruppiert darunter. Rückgängig läuft über die Snackbar.
 // ===========================================================================
 
@@ -108,7 +105,6 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
 
   renderKlarWeekStrip(container, dateKey, refresh);
   renderKlarMacros(container, totals, targets, goToTab, profile, refresh, entries);
-  renderKlarWater(container, profile, dateKey, refresh);
   renderKlarWeight(container, profile, dateKey, refresh);
   renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey);
 }
@@ -235,7 +231,6 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
     ${ringDiagramHtml(rings, profile.ringStyle)}
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
     ${planHint ? `<div class="klar-hint klar-plan-hint">${esc(planHint)}</div>` : ""}
-    <div id="klarWater"></div>
     <div id="klarWeight"></div>
   `;
 
@@ -369,43 +364,6 @@ function klarBarHtml(b) {
   `;
 }
 
-function renderKlarWater(container, profile, dateKey, refresh) {
-  const el = container.querySelector("#klarWater");
-  const consumedMl = sumWater(getWaterForDate(profile.id, dateKey));
-  const target = profile.waterTargetMl || 2500;
-  const pct = target > 0 ? Math.min((consumedMl / target) * 100, 100) : 0;
-
-  el.innerHTML = `
-    <hr class="klar-divider">
-    <div class="klar-water-head">
-      <span class="klar-water-title">Wasser</span>
-      <span class="klar-water-value">${consumedMl} / ${target} ml</span>
-    </div>
-    <div class="klar-water-track"><div class="klar-water-fill" style="width:${pct}%"></div></div>
-    <div class="klar-water-actions">
-      ${WATER_STEPS.map(ml => `<button type="button" class="klar-water-add" data-ml="${ml}">+${ml}</button>`).join("")}
-      <button type="button" class="klar-water-undo" title="Rückgängig" ${consumedMl > 0 ? "" : "disabled"}>↩</button>
-    </div>
-  `;
-
-  el.querySelectorAll(".klar-water-add").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const ml = Number(btn.dataset.ml);
-      const entry = logWater(ml);
-      refresh();
-      showSnackbar({
-        title: `${ml} ml Wasser`,
-        subtitle: `${consumedMl + ml} von ${target} ml`,
-        onUndo: () => { Store.removeWater(entry.id); refresh(); },
-      });
-    });
-  });
-  el.querySelector(".klar-water-undo")?.addEventListener("click", () => {
-    undoLastWater(profile.id, dateKey);
-    refresh();
-  });
-}
-
 /**
  * Eine Zeile Gewicht unter dem Wasser — die Gegenprobe zum Defizit, das die Ringe darüber
  * vorgeben. Bewusst schmal: gewogen wird einmal am Tag, nicht bei jedem Blick auf die App.
@@ -422,9 +380,9 @@ function renderKlarWeight(container, profile, dateKey, refresh) {
   const amTag = Store.getWeight(profile.id, dateKey);
   const zeigt = amTag || bericht.letzter;
 
-  const wert = zeigt ? `${round1(zeigt.kg).toString().replace(".", ",")} kg` : "–";
+  const wert = zeigt ? `${round1(zeigt.kg)} kg` : "–";
   const woher = amTag
-    ? (zeigt.bodyFatPct != null ? `${round1(zeigt.bodyFatPct).toString().replace(".", ",")} % KF` : "")
+    ? (zeigt.bodyFatPct != null ? `${round1(zeigt.bodyFatPct)} % KF` : "")
     : zeigt ? `zuletzt ${esc(dateLabel(zeigt.dateKey).toLowerCase())}` : "";
 
   el.innerHTML = `

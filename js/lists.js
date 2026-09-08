@@ -719,15 +719,14 @@ function gewichtKarteHtml(profile) {
   }
 
   const zielSatz = zielAbgleichSatz(profile, bericht);
-  // Komma statt Punkt: das hier ist die eine Karte, in der Zehntelkilos die Aussage tragen.
-  const komma = (v) => round1(v).toString().replace(".", ",");
-  const kf = letzter.bodyFatPct != null ? ` · ${komma(letzter.bodyFatPct)} % Körperfett` : "";
+  const zahl = (v) => round1(v);
+  const kf = letzter.bodyFatPct != null ? ` · ${zahl(letzter.bodyFatPct)} % Körperfett` : "";
 
   return `
     <div class="klar-card" style="margin-bottom:14px">
       ${kopf}
       <div class="klar-result-main" style="margin-top:2px">
-        <span class="klar-result-value">${komma(letzter.kg)}</span>
+        <span class="klar-result-value">${zahl(letzter.kg)}</span>
         <span class="klar-result-unit">kg${esc(kf)}</span>
       </div>
       <p class="hint" style="margin-top:2px">${esc(trendSatz(bericht))}${zielSatz ? ` ${esc(zielSatz)}` : ""}</p>
@@ -737,7 +736,7 @@ function gewichtKarteHtml(profile) {
         ${punkte.map(p => `<circle cx="${x(p.dateKey).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="3" class="gewicht-chart-dot"></circle>`).join("")}
       </svg>
       <div class="gewicht-chart-labels">
-        <span>Maßstab ${komma(unten)}–${komma(oben)} kg</span>
+        <span>Maßstab ${zahl(unten)}–${zahl(oben)} kg</span>
         <span>${punkte.length} ${punkte.length === 1 ? "Messung" : "Messungen"}</span>
       </div>
     </div>

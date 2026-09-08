@@ -74,7 +74,7 @@ body[data-design="klar"] {
   --accent-contrast: #ffffff;
   --accent-ink: #157347;
   --accent-soft: #e4f6ec; --accent-soft-border: #a9e4c4;
-  --water-fg: #1565c0; --water-soft: #f2f6fc;
+  --water-fg: #1565c0;
   --yellow-bg: #fff6df; --yellow-fg: #916500; --yellow-border: #f2dd9c;
   --red-bg: #fdeaea;  --red-fg: #b3261e;  --red-border: #f3b8b4;
   --shadow: 0 1px 2px rgba(16,24,20,.04), 0 8px 24px rgba(16,24,20,.05);
@@ -96,7 +96,7 @@ body[data-design="klar"] {
     --accent-contrast: #05140c;
     --accent-ink: #5fe0a4;
     --accent-soft: #103322; --accent-soft-border: #1f5c3d;
-    --water-fg: #5b9bf5; --water-soft: #15243a;
+    --water-fg: #5b9bf5;
     --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
     --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
@@ -116,7 +116,7 @@ body[data-design="klar"][data-theme="dark"] {
   --accent-contrast: #05140c;
   --accent-ink: #5fe0a4;
   --accent-soft: #103322; --accent-soft-border: #1f5c3d;
-  --water-fg: #5b9bf5; --water-soft: #15243a;
+  --water-fg: #5b9bf5;
   --yellow-bg: #332b0d; --yellow-fg: #f0cd5c; --yellow-border: #5c4e18;
   --red-bg: #3a1614;   --red-fg: #ff9a92;   --red-border: #66231f;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
@@ -422,9 +422,6 @@ input[type="text"], input[type="number"], input[type="search"], input[type="pass
 .ring-sub { font-size: .72rem; color: var(--text-muted); }
 
 /* ---------- Wasser (in dieselbe Karte wie die Nährwertringe integriert) ---------- */
-.water-section { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
-.card h2.water-label { color: var(--water-fg); }
-.progress-fill.water { background: var(--water-fg); }
 
 /* ---------- Trend-Diagramm (Auswertung: Netto-KH-Verlauf) ---------- */
 .trend-svg { display: block; overflow: visible; }
@@ -586,15 +583,7 @@ body[data-design="klar"] .fab-btn {
 .klar-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .2s; }
 .klar-bar-fill.over { background: var(--red-fg); }
 
-.klar-water-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 22px; padding: 16px 20px; margin-top: 14px; box-shadow: var(--shadow); }
-.klar-water-head { display: flex; align-items: center; justify-content: space-between; }
-.klar-water-title { font-size: 14px; font-weight: 800; color: var(--water-fg); }
-.klar-water-value { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-.klar-water-track { height: 8px; border-radius: 999px; background: var(--divider); overflow: hidden; margin-top: 10px; }
-.klar-water-fill { height: 100%; border-radius: 999px; background: var(--water-fg); }
-.klar-water-actions { display: flex; gap: 8px; margin-top: 12px; }
-.klar-water-add { flex: 1; min-height: 44px; border-radius: 14px; background: var(--water-soft); color: var(--water-fg); font-weight: 700; font-size: 14px; border: none; }
-.klar-water-undo { flex: none; width: 44px; min-height: 44px; border-radius: 14px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 15px; }
+.klar-card-meta { font-size: 13px; font-weight: 600; color: var(--text-muted); }
 
 /* Gewicht — eine Zeile unter dem Wasser. Der Knopf bleibt rechts stehen, der Text davor
    darf schrumpfen und umbrechen: der Trendsatz ist auf schmalen Displays zweizeilig. */
@@ -1125,12 +1114,10 @@ body[data-design="klar"] .view { padding: 12px 14px calc(var(--tabbar-h) + env(s
 
 /* ---- 3. Karten: kleinere Radien, weniger Polster, flacherer Schatten ---- */
 body[data-design="klar"] .klar-card,
-body[data-design="klar"] .klar-water-card,
 body[data-design="klar"] .klar-meals-card,
 body[data-design="klar"] .klar-shop-card,
 body[data-design="klar"] .klar-result-card { border-radius: 18px; }
 body[data-design="klar"] .klar-card { padding: 15px; }
-body[data-design="klar"] .klar-water-card { padding: 13px 15px; margin-top: 10px; }
 body[data-design="klar"] .klar-result-card { padding: 15px; }
 body[data-design="klar"] .klar-divider { margin: 15px 0 12px; }
 

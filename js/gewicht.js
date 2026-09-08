@@ -130,7 +130,7 @@ export function trendSatz(bericht) {
     return `Für einen Trend fehlen noch ${fehlt}.`;
   }
   const rate = bericht.kgProWoche;
-  const betrag = Math.abs(rate).toFixed(1).replace(".", ",");
+  const betrag = Math.abs(rate).toFixed(1);
   if (Math.abs(rate) < 0.05) return `Gewicht hält sich über die letzten ${bericht.tage} Tage.`;
   const richtung = rate < 0 ? "abwärts" : "aufwärts";
   return `Trend über ${bericht.tage} Tage: ${betrag} kg pro Woche ${richtung}.`;
@@ -148,7 +148,7 @@ export function zielAbgleichSatz(profile, bericht) {
   if (!bericht.genugDaten || profile.goal !== "lose") return "";
   const erwartet = bericht.erwarteteKgProWoche;
   if (erwartet >= -0.05) return "";
-  const soll = Math.abs(erwartet).toFixed(1).replace(".", ",");
+  const soll = Math.abs(erwartet).toFixed(1);
   const ist = bericht.kgProWoche;
   if (ist > -0.05) {
     return `Gerechnet war mit ${soll} kg pro Woche — gemessen geht gerade nichts runter.`;

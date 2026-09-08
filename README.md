@@ -1,7 +1,7 @@
 # Keto-Dashboard
 
 Eine deutschsprachige PWA für den Alltag einer ketogenen Ernährung: Barcode scannen,
-Nährwerte prüfen, Mahlzeiten und Wasser eintragen, Rezepte pflegen — offline nutzbar und
+Nährwerte prüfen, Mahlzeiten eintragen, Gewicht verfolgen, Rezepte pflegen — offline nutzbar und
 ohne Konto. Alle Daten bleiben auf dem Gerät.
 
 **→ [will-tech-cmd.github.io/keto-dashboard](https://will-tech-cmd.github.io/keto-dashboard/)**
@@ -16,7 +16,6 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
 ### Start
 - Wochenstreifen zum Blättern; auch der morgige Tag lässt sich schon befüllen (Essensplanung)
 - Vier Zielringe — Kalorien, Netto-Kohlenhydrate, Fett, Eiweiß — mit Restbudget
-- Wasserzähler mit +200/+330/+500 ml und Rückgängig
 - Mahlzeiten nach Frühstück/Mittag/Abend/Snack gruppiert, jede Zeile bearbeitbar
 - **Portion ans zweite Profil weiterreichen:** Der Eintragen-Knopf ist geteilt — links „+ Name"
   trägt bei beiden ein, rechts wie gewohnt nur bei dir. „Rückgängig" nimmt beide zurück. Ein
@@ -26,7 +25,7 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   nachträglich weiter) und eine Zeile tiefer neben der Menge in Gramm **🛒 Einkauf** — bei
   einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen. Die Reihe
   der Vielfachen darüber bleibt davon unberührt
-- Eine Zeile **Gewicht** unter dem Wasserzähler: der Wert des Tages, der Trend in einem Satz
+- Eine Zeile **Gewicht** unter den Ringen: der Wert des Tages, der Trend in einem Satz
   und ein Knopf zum Wiegen. Für einen Tag ohne Messung steht der letzte bekannte Wert
   zurückgenommen da („zuletzt Do., 04.09."), damit niemand ihn für die heutige Zahl hält
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
@@ -349,6 +348,24 @@ Reines HTML, CSS und ES-Module. **Kein Build-Schritt, keine npm-Abhängigkeiten*
 Repository liegt, ist genau das, was ausgeliefert wird. Alle Fremdbibliotheken sind unter
 `vendor/` eingecheckt, damit die App vollständig offline funktioniert.
 
+### Wasser wird nicht mehr erfasst
+
+Der Trinkzähler auf der Startseite und das Trinkziel im Profil sind entfernt — er wurde nicht
+gepflegt, und eine Zeile, die immer auf null steht, ist schlechter als keine.
+
+**Die gespeicherten Wassereinträge bleiben.** `state.water`, die Grabsteine, die Datenart
+`wasser` in der zeilenweisen Ablage und die Tabelle auf dem Server sind unangetastet: sie
+werden weiterhin abgeglichen, nur schreibt die App nichts mehr hinein und zeigt nichts mehr
+an. Damit kostet die Entscheidung keine Daten und lässt sich zurücknehmen, ohne dass etwas
+fehlt. Wer sie endgültig loswerden will, braucht dafür einen eigenen Schritt samt Migration.
+
+### Zahlen: Komma tippen, Punkt lesen
+
+Eingetippt werden darf beides (siehe unten). **Angezeigt** wird jede Zahl der App mit Punkt —
+die Zielringe, die Mengen, das Gewicht. Zwei Trennzeichen nebeneinander auf einem Bildschirm
+sehen wie ein Fehler aus, und im großen Ergebniswert der Auswertung riss die Sperrschrift das
+Komma sichtbar aus der Zahl heraus („88, 1").
+
 ### Zahlenfelder nehmen Komma und Punkt
 
 Alle Mengen-, Nährwert- und Körperdatenfelder stehen als `type="text"` mit
@@ -393,7 +410,7 @@ js/
   off.js                Open Food Facts: Suche, Normalisierung, Cache, eigene Produkte
   off-beitrag.js        eigene Produkte an Open Food Facts zurückgeben (optional)
   foods-db.js           eingebaute Nährwerttabelle mit Fuzzy-Suche (offline)
-  consumption.js        Mahlzeiten eintragen/bearbeiten, Wasser, Mengen-Dialoge
+  consumption.js        Mahlzeiten eintragen/bearbeiten, Mengen-Dialoge
   recipes.js            Rezeptrechnung, Zutatenerkennung, Texterkennung
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
