@@ -26,6 +26,9 @@ Die App ist für zwei Personen ausgelegt (zwei Profile mit eigenen Zielwerten, u
   nachträglich weiter) und eine Zeile tiefer neben der Menge in Gramm **🛒 Einkauf** — bei
   einem Rezept dessen Zutaten, heruntergerechnet auf die eingetragenen Portionen. Die Reihe
   der Vielfachen darüber bleibt davon unberührt
+- Eine Zeile **Gewicht** unter dem Wasserzähler: der Wert des Tages, der Trend in einem Satz
+  und ein Knopf zum Wiegen. Für einen Tag ohne Messung steht der letzte bekannte Wert
+  zurückgenommen da („zuletzt Do., 04.09."), damit niemand ihn für die heutige Zahl hält
 - „Screenshot": rendert die gesamte Seite als Bild (auch die Teile außerhalb des Bildschirms)
 
 #### Essen für die nächsten Tage planen
@@ -75,6 +78,38 @@ Ringen. Beim Essen bestätigt man ihn mit einem Tipp (je Zeile oder „✓ geges
 Mahlzeit); danach ist es ein Eintrag wie jeder andere. Solange er unbestätigt ist, steht das
 auch in der Auswertung und im KI-Bericht dabei.
 
+#### Gewicht — und ob das Defizit wirkt
+
+Die App rechnet ein Kaloriendefizit aus und friert die Zielwerte jedes Tages ein. Was
+lange fehlte, war die Gegenprobe: kommt davon etwas auf der Waage an? Dafür gibt es eine
+eigene Datenart — **ein Wert je Person und Tag**, optional mit Körperfettanteil.
+
+- Eingetragen wird von der Startseite („⚖️ Wiegen") oder aus der Auswertung heraus. Zweimal
+  am selben Tag gewogen heißt: der zweite Wert ersetzt den ersten. Es gibt keine zwei
+  Gewichte für einen Morgen, auch nicht nach einem Abgleich zwischen zwei Geräten.
+- Der Trend ist eine **Ausgleichsgerade durch alle Messungen der letzten 28 Tage** (30 in
+  der Auswertung), keine Differenz zwischen zwei Tagen. Wasser, Glykogen und Salz bewegen
+  den angezeigten Wert um ein bis zwei Kilo — zwei Messungen voneinander abzuziehen misst
+  vor allem das.
+- **Genannt wird eine Rate erst ab drei Messungen über mindestens zwei Wochen.** Darunter
+  steht da, was noch fehlt. Aus „gestern 88,9, heute 88,4" ließe sich rechnerisch
+  „−3,5 kg pro Woche" machen; das wäre eine Zahl ohne Deckung.
+- Daneben steht, **was das eingestellte Defizit rechnerisch bringen müsste** (Faustzahl
+  7700 kcal je Kilo) und ob der gemessene Verlauf dazu passt. Weicht beides deutlich
+  voneinander ab, stimmt eine der Annahmen nicht — meist die geschätzten Portionsgrößen
+  oder der Aktivitätsgrad.
+- Die Auswertung zeigt den Verlauf als Diagramm: die Messpunkte samt Verbindungslinie und
+  die Ausgleichsgerade gestrichelt darüber. Eine Lücke von mehr als einer Woche wird nicht
+  überbrückt — eine gerade Linie über drei ungewogene Wochen behauptet einen Verlauf, den
+  niemand gemessen hat.
+- Der Wert wandert in das Profil, wenn er der jüngste ist: **daraus rechnet die App ab dann
+  ihre Zielwerte.** Der Dialog sagt vorher, was sich dadurch am Kalorienziel ändert. Ein
+  nachgetragener Tag von letzter Woche tut das nicht — er beschreibt die Vergangenheit.
+  Umgekehrt gilt dasselbe: wer das Gewicht im Profil ändert, trägt damit die Messung von
+  heute ein, sonst liefen Rechnung und Kurve auseinander.
+- Der Gewichtsverlauf steht auch im Textbericht für die KI-Analyse, samt der Frage, ob
+  Rechnung und Waage zueinander passen.
+
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
@@ -122,7 +157,8 @@ nur zur Auswertung verschickt und nicht gespeichert.
 - Favoriten, No-Go, Verlauf und Einkaufsliste
 - Jede Zeile klappt auf vier Nährwertkacheln je 100 g auf, mit „Eintragen" und „Werte korrigieren"
 - 🛒 setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie im Verlauf
-- Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm
+- Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm,
+  Gewichtskurve mit Trend
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
 
 ### Rezepte
@@ -136,7 +172,8 @@ nur zur Auswertung verschickt und nicht gespeichert.
 
 ### Profil
 - Körperdaten, Aktivitätsgrad, Ziel und Defizit; Zielwerte nach Mifflin-St Jeor bzw.
-  Katch-McArdle (bei angegebenem Körperfettanteil)
+  Katch-McArdle (bei angegebenem Körperfettanteil). Das Gewicht hier zu ändern trägt
+  zugleich die Messung von heute in den Verlauf ein
 - Ernährungsform steuert die Ampel-Standardwerte, alles bleibt frei editierbar
 - Erscheinungsbild je Profil (System/hell/dunkel)
 - Export, Import und Teilen der Daten — siehe unten
@@ -216,7 +253,7 @@ abschaltbare Ausnahme davon, genau wie das Kochbuch.
 - **Import führt zusammen statt zu ersetzen.** Vor dem Einspielen zeigt ein Dialog mit
   echten Zahlen, was dazukommt und was ein Ersetzen kosten würde. Vereinigt wird über die
   IDs (Zufalls-UUIDs, deshalb verlustfrei). Löschungen (Mahlzeit, Wasser, Rezept,
-  Einkaufslisten-Eintrag, Favorit/No-Go) werden dabei als solche vermerkt (`tombstones` im
+  Einkaufslisten-Eintrag, Favorit/No-Go, Gewicht) werden dabei als solche vermerkt (`tombstones` im
   Zustand) — sonst würde ein Merge sie aus der jeweils anderen, noch ahnungslosen Seite immer
   wieder aufleben lassen, was bei der automatischen Online-Synchronisierung sofort auffiele.
   Bei allem, was sich nachträglich bearbeiten lässt (Menge/Zeitpunkt einer Mahlzeit, Haken auf
@@ -336,6 +373,8 @@ js/
   recipes.js            Rezeptrechnung, Zutatenerkennung, Texterkennung
   ingredient-parser.js  deutscher Zutaten-Text-Parser (auch vom Kochbuch genutzt)
   lists.js              Listen-Tab und Auswertungsseite
+  gewicht.js            Gewichtsverlauf: Trend, erwartete Rate, Formulierungen (ohne DOM)
+  gewicht-eingabe.js    Dialog zum Eintragen und Korrigieren eines Tagesgewichts
   analysis.js           Textbericht für die KI-Analyse
   planer.js             Essensplan: Katalog aus Rezepten/Verlauf, Motor, Übernahme, Einkauf
   ai.js                 optionale Gemini-Anbindung (Zutatenerkennung, Plan verfeinern)

@@ -11,6 +11,8 @@ import {
 } from "./consumption.js";
 import { openAnalysisModal } from "./analysis.js";
 import { showToast, nutriTilesHtml, gradeDotHtml } from "./ui.js";
+import { gewichtsBericht, trendSatz, zielAbgleichSatz, tagesnummer, kgProWoche } from "./gewicht.js";
+import { openGewichtModal } from "./gewicht-eingabe.js";
 
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
@@ -613,12 +615,16 @@ function renderEvaluation(body, goToTab) {
       ` : `<p class="hint" style="text-align:center;margin:14px 0 0">Noch keine Einträge in den letzten 30 Tagen.</p>`}
     </div>
     ${trendChartHtml(days)}
+    ${gewichtKarteHtml(profile)}
     <button class="klar-pill-btn" id="analyzeBtn" style="margin-bottom:14px">🤖 Mit Claude analysieren</button>
     <div class="klar-eyebrow" style="margin:0 2px 8px">Tage einzeln</div>
     <div id="evalDays"></div>
   `;
 
   body.querySelector("#analyzeBtn").addEventListener("click", openAnalysisModal);
+  body.querySelector("#gewichtEintragenBtn")?.addEventListener("click", () => {
+    openGewichtModal(dateKeyOf(Date.now()), () => renderEvaluation(body, goToTab));
+  });
 
   const daysEl = body.querySelector("#evalDays");
   daysEl.innerHTML = `<div class="klar-list-card">${[...days].reverse().map(evalDayRowHtml).join("")}</div>`;
@@ -637,6 +643,107 @@ function renderEvaluation(body, goToTab) {
  * gegessen" wie "perfekt eingehalten" aus). Referenzlinie zeigt das HEUTIGE Ziel — frühere
  * Tage können (durch die Zielwert-Einfrierung) ein anderes gehabt haben, siehe Punktfarbe.
  */
+/**
+ * Gewichtsverlauf über denselben Zeitraum wie der Rest der Auswertung.
+ *
+ * Gezeigt werden die Messpunkte UND die Ausgleichsgerade. Nur die Punkte zu verbinden wäre
+ * irreführend — zwischen zwei Morgen liegen ein bis zwei Kilo Wasser, und die Zacken sehen
+ * nach Auf und Ab aus, wo in Wirklichkeit eine ruhige Linie liegt. Nur die Gerade zu zeigen
+ * wäre die andere Hälfte derselben Lüge: dann sähe niemand mehr, wie dünn die Datenlage ist.
+ *
+ * Die Gerade wird erst gezeichnet, wenn sie etwas heißt (siehe gewicht.js).
+ */
+function gewichtKarteHtml(profile) {
+  const TAGE = 30;
+  const bericht = gewichtsBericht(profile, { tage: TAGE });
+  const punkte = bericht.fenster;
+
+  const kopf = `
+    <div class="klar-card-head">
+      <span class="klar-eyebrow">${TAGE} Tage · Gewicht</span>
+      <button type="button" class="klar-pill-btn" id="gewichtEintragenBtn">⚖️ Eintragen</button>
+    </div>`;
+
+  if (punkte.length === 0) {
+    return `
+      <div class="klar-card" style="margin-bottom:14px">
+        ${kopf}
+        <p class="hint" style="text-align:center;margin:14px 0 0">
+          Noch kein Gewicht eingetragen. Ohne Messungen lässt sich nicht sagen, ob das
+          eingestellte Defizit wirkt — die Ringe zeigen nur, was gerechnet wurde.
+        </p>
+      </div>`;
+  }
+
+  const letzter = punkte.at(-1);
+  const W = 640, H = 140, PAD = 12;
+  const heuteNr = tagesnummer(dateKeyOf(Date.now()));
+  const startNr = heuteNr - (TAGE - 1);
+
+  // Mindestens ein Kilo Spannweite, sonst bläst der Maßstab ein paar hundert Gramm
+  // Tagesrauschen zu einem dramatischen Gebirge auf.
+  const werte = punkte.map(p => p.kg);
+  const mitte = (Math.max(...werte) + Math.min(...werte)) / 2;
+  const spanne = Math.max(Math.max(...werte) - Math.min(...werte), 1);
+  const oben = mitte + spanne * 0.75;
+  const unten = mitte - spanne * 0.75;
+
+  const x = (dateKey) => PAD + ((tagesnummer(dateKey) - startNr) / (TAGE - 1)) * (W - PAD * 2);
+  const y = (kg) => H - PAD - ((kg - unten) / (oben - unten)) * (H - PAD * 2);
+
+  // Eine Lücke von mehr als einer Woche wird nicht überbrückt: eine gerade Linie über drei
+  // wochenlose Wochen behauptet einen Verlauf, den niemand gemessen hat.
+  const abschnitte = [];
+  let laufend = [];
+  punkte.forEach((p, i) => {
+    const vorher = punkte[i - 1];
+    if (vorher && tagesnummer(p.dateKey) - tagesnummer(vorher.dateKey) > 7) {
+      abschnitte.push(laufend);
+      laufend = [];
+    }
+    laufend.push(`${x(p.dateKey).toFixed(1)},${y(p.kg).toFixed(1)}`);
+  });
+  if (laufend.length) abschnitte.push(laufend);
+
+  let gerade = "";
+  if (bericht.genugDaten) {
+    const steigungProTag = kgProWoche(punkte) / 7;
+    const mx = punkte.reduce((sum, p) => sum + tagesnummer(p.dateKey), 0) / punkte.length;
+    const my = werte.reduce((sum, v) => sum + v, 0) / punkte.length;
+    const bei = (nr) => my + steigungProTag * (nr - mx);
+    const vonNr = tagesnummer(punkte[0].dateKey);
+    const bisNr = tagesnummer(letzter.dateKey);
+    gerade = `<line x1="${x(punkte[0].dateKey).toFixed(1)}" y1="${y(bei(vonNr)).toFixed(1)}"
+                    x2="${x(letzter.dateKey).toFixed(1)}" y2="${y(bei(bisNr)).toFixed(1)}"
+                    class="gewicht-chart-trend"></line>`;
+  }
+
+  const zielSatz = zielAbgleichSatz(profile, bericht);
+  // Komma statt Punkt: das hier ist die eine Karte, in der Zehntelkilos die Aussage tragen.
+  const komma = (v) => round1(v).toString().replace(".", ",");
+  const kf = letzter.bodyFatPct != null ? ` · ${komma(letzter.bodyFatPct)} % Körperfett` : "";
+
+  return `
+    <div class="klar-card" style="margin-bottom:14px">
+      ${kopf}
+      <div class="klar-result-main" style="margin-top:2px">
+        <span class="klar-result-value">${komma(letzter.kg)}</span>
+        <span class="klar-result-unit">kg${esc(kf)}</span>
+      </div>
+      <p class="hint" style="margin-top:2px">${esc(trendSatz(bericht))}${zielSatz ? ` ${esc(zielSatz)}` : ""}</p>
+      <svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="none" style="width:100%;height:120px">
+        ${gerade}
+        ${abschnitte.filter(a => a.length > 1).map(a => `<polyline points="${a.join(" ")}" class="gewicht-chart-line"></polyline>`).join("")}
+        ${punkte.map(p => `<circle cx="${x(p.dateKey).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="3" class="gewicht-chart-dot"></circle>`).join("")}
+      </svg>
+      <div class="gewicht-chart-labels">
+        <span>Maßstab ${komma(unten)}–${komma(oben)} kg</span>
+        <span>${punkte.length} ${punkte.length === 1 ? "Messung" : "Messungen"}</span>
+      </div>
+    </div>
+  `;
+}
+
 function trendChartHtml(days) {
   const withData = days.filter(d => d.hasEntries);
   if (withData.length < 2) return "";

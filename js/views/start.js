@@ -10,6 +10,8 @@ import {
 } from "../consumption.js";
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
 import { openTodayQuestionModal } from "../analysis.js";
+import { gewichtsBericht, trendSatz } from "../gewicht.js";
+import { openGewichtModal } from "../gewicht-eingabe.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -107,6 +109,7 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
   renderKlarWeekStrip(container, dateKey, refresh);
   renderKlarMacros(container, totals, targets, goToTab, profile, refresh, entries);
   renderKlarWater(container, profile, dateKey, refresh);
+  renderKlarWeight(container, profile, dateKey, refresh);
   renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey);
 }
 
@@ -233,6 +236,7 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
     ${planHint ? `<div class="klar-hint klar-plan-hint">${esc(planHint)}</div>` : ""}
     <div id="klarWater"></div>
+    <div id="klarWeight"></div>
   `;
 
   el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
@@ -399,6 +403,47 @@ function renderKlarWater(container, profile, dateKey, refresh) {
   el.querySelector(".klar-water-undo")?.addEventListener("click", () => {
     undoLastWater(profile.id, dateKey);
     refresh();
+  });
+}
+
+/**
+ * Eine Zeile Gewicht unter dem Wasser — die Gegenprobe zum Defizit, das die Ringe darüber
+ * vorgeben. Bewusst schmal: gewogen wird einmal am Tag, nicht bei jedem Blick auf die App.
+ *
+ * Für zukünftige Tage gibt es nichts einzutragen (die Waage kann nicht vorausschauen), aber
+ * der letzte bekannte Wert steht trotzdem da — sonst sähe der geplante Donnerstag aus, als
+ * wäre nie jemand auf die Waage gestiegen.
+ */
+function renderKlarWeight(container, profile, dateKey, refresh) {
+  const el = container.querySelector("#klarWeight");
+  const heute = dateKeyOf(Date.now());
+  const zukunft = dateKey > heute;
+  const bericht = gewichtsBericht(profile, { heute: zukunft ? heute : dateKey });
+  const amTag = Store.getWeight(profile.id, dateKey);
+  const zeigt = amTag || bericht.letzter;
+
+  const wert = zeigt ? `${round1(zeigt.kg).toString().replace(".", ",")} kg` : "–";
+  const woher = amTag
+    ? (zeigt.bodyFatPct != null ? `${round1(zeigt.bodyFatPct).toString().replace(".", ",")} % KF` : "")
+    : zeigt ? `zuletzt ${esc(dateLabel(zeigt.dateKey).toLowerCase())}` : "";
+
+  el.innerHTML = `
+    <hr class="klar-divider">
+    <div class="klar-weight-row">
+      <div class="klar-weight-text">
+        <div class="klar-weight-head">
+          <span class="klar-weight-title">Gewicht</span>
+          <span class="klar-weight-value ${amTag ? "" : "stale"}">${wert}</span>
+          ${woher ? `<span class="klar-weight-meta">${woher}</span>` : ""}
+        </div>
+        <div class="klar-weight-trend">${esc(trendSatz(bericht))}</div>
+      </div>
+      ${zukunft ? "" : `<button type="button" class="klar-weight-btn" id="klarWeightBtn">${amTag ? "Ändern" : "⚖️ Wiegen"}</button>`}
+    </div>
+  `;
+
+  el.querySelector("#klarWeightBtn")?.addEventListener("click", () => {
+    openGewichtModal(dateKey, refresh);
   });
 }
 

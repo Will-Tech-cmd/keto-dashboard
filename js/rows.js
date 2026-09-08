@@ -185,6 +185,42 @@ const wasser = {
 };
 
 // ---------------------------------------------------------------------------
+// gewicht — ein Wert je Profil und Tag, deshalb (profil_id, datum) als Schlüssel und
+// keine eigene id. Zwei Geräte, die denselben Morgen wiegen, meinen dieselbe Zeile; mit
+// je einer zufälligen id stünden am Ende zwei Gewichte für einen Tag da, und keines
+// gewönne. Dieselbe Überlegung wie bei tagesziel.
+//
+// `koerperfett_pct` bleibt null, wenn niemand misst — eine 0 sähe aus wie eine Messung.
+// ---------------------------------------------------------------------------
+const gewicht = {
+  tabelle: "gewicht",
+  konflikt: "profil_id,datum",
+  filter: (k) => {
+    const [profilId, datum] = String(k).split("|");
+    return `profil_id=eq.${q(profilId)}&datum=eq.${q(datum)}`;
+  },
+  schluessel: (w) => `${w.profileId}|${w.dateKey}`,
+  zeit: (w) => stempel(w.updatedAt, w.at),
+  zuZeile: (w, ctx) => ({
+    haushalt_id: ctx.haushaltId,
+    profil_id: w.profileId,
+    datum: w.dateKey,
+    kg: zahl(w.kg),
+    koerperfett_pct: zahl(w.bodyFatPct),
+    erfasst_am: iso(stempel(w.at, w.updatedAt)),
+    geaendert_am: iso(stempel(w.updatedAt, w.at)),
+  }),
+  ausZeile: (z) => ({
+    profileId: z.profil_id,
+    dateKey: z.datum,
+    kg: Number(z.kg),
+    bodyFatPct: z.koerperfett_pct == null ? null : Number(z.koerperfett_pct),
+    at: millis(z.erfasst_am),
+    updatedAt: millis(z.geaendert_am),
+  }),
+};
+
+// ---------------------------------------------------------------------------
 // tagesziel — in der App eine verschachtelte Karte profileId -> dateKey -> Werte, auf
 // dem Server eine flache Tabelle mit (profil_id, datum) als Primärschlüssel. Keine id.
 // ---------------------------------------------------------------------------
@@ -401,7 +437,7 @@ export function zutatenAusZeilen(zeilen) {
 }
 
 export const ENTITAETEN = {
-  profil, mahlzeit, wasser, tagesziel, listen_eintrag, einkauf, produkt_korrektur, rezept,
+  profil, mahlzeit, wasser, gewicht, tagesziel, listen_eintrag, einkauf, produkt_korrektur, rezept,
 };
 
 /**
@@ -410,7 +446,7 @@ export const ENTITAETEN = {
  * ab. Rezepte davor, weil eine Mahlzeit auf ein Rezept zeigen kann.
  */
 export const REIHENFOLGE = [
-  "profil", "rezept", "tagesziel", "mahlzeit", "wasser",
+  "profil", "rezept", "tagesziel", "mahlzeit", "wasser", "gewicht",
   "listen_eintrag", "einkauf", "produkt_korrektur",
 ];
 

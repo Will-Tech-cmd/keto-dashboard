@@ -33,9 +33,11 @@ dahinter. So wurde diese Migration gegen das echte Schema geprüft.
 - **Haushalt statt gemeinsamem Konto.** `haushalt` + `haushalt_mitglied`, dazu
   `haushalt_anlegen()` / `haushalt_beitreten(code)` als Funktionen. Jede Datenzeile
   hängt an einem Haushalt, jeder Zugriff am angemeldeten Nutzer.
-- **Zeilen statt einem JSON-Blob.** `profil`, `mahlzeit`, `wasser`, `tagesziel`,
-  `listen_eintrag`, `einkauf`, `produkt_korrektur`. Rezepte bleiben in
+- **Zeilen statt einem JSON-Blob.** `profil`, `mahlzeit`, `wasser`, `gewicht`,
+  `tagesziel`, `listen_eintrag`, `einkauf`, `produkt_korrektur`. Rezepte bleiben in
   `kochbuch_rezepte` — das ist ab jetzt die eine Rezept-Tabelle für beide Apps.
+  (`gewicht` kam später dazu, siehe Migration `20260908120000_gewicht.sql`: ein Wert
+  je Profil und Tag, deshalb `(profil_id, datum)` als Primärschlüssel statt einer id.)
 - **Zwei Zeitstempel je Zeile, mit zwei Aufgaben:**
   - `updated_at` setzt der Server. Nur dafür da, dass ein Gerät „gib mir alles seit
     X" fragen kann. Unterschiedlich gehende Handy-Uhren dürfen diesen Zeiger nicht

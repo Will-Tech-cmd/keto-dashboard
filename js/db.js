@@ -18,11 +18,13 @@
 // und für Öffnen, Lesen, Schreiben und Löschen ist die rohe API überschaubar genug.
 
 const DB_NAME = "keto-dashboard";
-const DB_VERSION = 1;
+// 2: Speicher `gewicht` dazugekommen. onupgradeneeded legt nur an, was fehlt — eine
+// bestehende Datenbank behält ihre Zeilen, es gibt nichts umzuziehen.
+const DB_VERSION = 2;
 
 /** Datenspeicher — Schlüssel ist der fachliche Schlüssel aus rows.js. */
 export const DATEN_SPEICHER = [
-  "profil", "mahlzeit", "wasser", "tagesziel",
+  "profil", "mahlzeit", "wasser", "gewicht", "tagesziel",
   "listen_eintrag", "einkauf", "produkt_korrektur", "rezept",
 ];
 

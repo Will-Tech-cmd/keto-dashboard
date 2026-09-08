@@ -1,5 +1,5 @@
 // views/profile.js — Profil-Tab: Körperdaten, Zielwert-Konfiguration, Export/Import.
-import { Store, istZeilenModus, wechsleModus } from "../store.js";
+import { Store, istZeilenModus, wechsleModus, dateKeyOf } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
@@ -644,10 +644,28 @@ function openGroupSheet(key, onChanged) {
     overlay.querySelector("#fSex").addEventListener("change", () => save({ sex: val("#fSex") }));
     overlay.querySelector("#fAge").addEventListener("change", () => save({ age: num("#fAge", profile.age) }));
     overlay.querySelector("#fHeight").addEventListener("change", () => save({ heightCm: num("#fHeight", profile.heightCm) }));
-    overlay.querySelector("#fWeight").addEventListener("change", () => save({ weightKg: num("#fWeight", profile.weightKg) }));
+    // Das Gewicht im Profil ist der Wert, aus dem gerechnet wird — und zugleich die Messung
+    // von heute. Es nur ins Profil zu schreiben hieße: der Verlauf (siehe gewicht.js) bekommt
+    // von der Änderung nichts mit, und die Kurve in der Auswertung endet dort, wo zuletzt
+    // bewusst gewogen wurde, während die Ringe längst mit einem anderen Wert rechnen.
+    // Beides auseinanderlaufen zu lassen wäre die schlechtere von zwei Unsauberkeiten.
+    overlay.querySelector("#fWeight").addEventListener("change", () => {
+      const kg = num("#fWeight", profile.weightKg);
+      // Frisch aus dem Speicher: `profile` ist der Stand beim Öffnen des Dialogs, und wer
+      // zuerst den Körperfettanteil und dann das Gewicht ändert, schriebe sonst den alten
+      // Prozentwert in die Messung.
+      const jetzt = Store.get().profiles.find(p => p.id === profile.id) || profile;
+      Store.setWeight(profile.id, dateKeyOf(Date.now()), { kg, bodyFatPct: jetzt.bodyFatPct });
+      save({ weightKg: kg });
+    });
     overlay.querySelector("#fBodyFat").addEventListener("change", () => {
       const raw = val("#fBodyFat").trim();
-      save({ bodyFatPct: raw ? parseFloat(raw) : null });
+      const kf = raw ? parseFloat(raw) : null;
+      // Nur an eine Messung von heute anheften, keine neue Zeile dafür anlegen: ein
+      // Körperfettwert ohne Gewicht daneben ist kein Punkt auf der Kurve.
+      const heute = Store.getWeight(profile.id, dateKeyOf(Date.now()));
+      if (heute) Store.setWeight(profile.id, heute.dateKey, { kg: heute.kg, bodyFatPct: kf });
+      save({ bodyFatPct: kf });
     });
   } else if (key === "goal") {
     overlay.querySelector("#fGoal").addEventListener("change", () => {

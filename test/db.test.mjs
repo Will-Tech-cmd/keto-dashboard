@@ -10,7 +10,7 @@ ok("IndexedDB verfuegbar", DB.istVerfuegbar());
 const db = await DB.oeffne();
 const namen = [...db.objectStoreNames].sort();
 ok("alle Speicher da", namen.join() ===
-   ["einkauf","listen_eintrag","lokal","mahlzeit","meta","outbox","produkt_korrektur","profil","rezept","tagesziel","wasser"].sort().join(),
+   ["einkauf","gewicht","listen_eintrag","lokal","mahlzeit","meta","outbox","produkt_korrektur","profil","rezept","tagesziel","wasser"].sort().join(),
    namen.join());
 ok("zweites Oeffnen liefert dieselbe Verbindung", (await DB.oeffne()) === db);
 

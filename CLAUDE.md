@@ -18,8 +18,13 @@ von `origin/main` aufsetzen statt darauf weiterzubauen.
 ## Tests
 
 ```bash
-cd test && node lauf.mjs      # 14 Dateien, ohne Browser und ohne Netz, wenige Sekunden
+cd test && npm install        # einmal je frischem Arbeitsverzeichnis, siehe unten
+cd test && node lauf.mjs      # 15 Dateien, ohne Browser und ohne Netz, wenige Sekunden
 ```
+
+Ohne das `npm install` scheitern fünf Dateien mit `Cannot find package 'fake-indexeddb'` —
+`node_modules/` ist nicht eingecheckt, und das ist die einzige Abhängigkeit im ganzen Repo.
+Kein Grund, ein eigenes Testskript danebenzustellen.
 
 Diese Suite ist der erste Griff — **keine eigenen Testskripte danebenbauen, ohne vorher
 hier hineingesehen zu haben.** Sie deckt Store, Zeilenmodus, Abgleich, Parser und Planer ab.
