@@ -23,6 +23,7 @@ const SCHLUESSEL = {
   mahlzeit: (z) => z.id,
   wasser: (z) => z.id,
   einkauf: (z) => z.id,
+  gewicht: (z) => `${z.profil_id}|${z.datum}`,
   tagesziel: (z) => `${z.profil_id}|${z.datum}`,
   listen_eintrag: (z) => `${z.haushalt_id}|${z.barcode}`,
   produkt_korrektur: (z) => `${z.haushalt_id}|${z.barcode}`,

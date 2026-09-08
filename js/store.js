@@ -63,6 +63,11 @@ function defaultState() {
     // Das Feld fehlt an gegessenen Einträgen, statt dort false zu stehen — siehe rows.js.
     consumption: [],    // { id, profileId, barcode, name, grams|servings, servingG, meal, dateKey, kcal, netCarbs, fat, protein, at, planned? }
     water: [],          // { id, profileId, dateKey, ml, at }
+    // Ein Wert je Profil und Tag — kein eigener Schlüssel, sondern (profileId, dateKey).
+    // Zweimal am selben Tag gewogen heißt: der zweite Wert ersetzt den ersten. Eine id je
+    // Wägung hätte zwei Zeilen für dieselbe Frage ergeben ("was wog ich am 8.9.?"), und beim
+    // Abgleich zweier Geräte stünden dann beide nebeneinander, ohne dass eine gewinnt.
+    weights: [],        // { profileId, dateKey, kg, bodyFatPct, at, updatedAt }
     recipes: [],         // { id, name, servings, ingredients: [{id,name,grams,per100,likelyUsLabel}], createdAt, updatedAt }
     fiberOverrides: {},  // barcode -> true|false|null (null = bewusst zurückgesetzt), überschreibt die EU/US-Erkennung
     // Zeitpunkt der letzten Änderung je Schalter — ohne ihn kann ein Abgleich nicht
@@ -75,7 +80,7 @@ function defaultState() {
     // Einzel-Einträge, weil clearHistory() ohnehin alles auf einmal leert.
     tombstones: {
       consumption: {}, water: {}, shoppingList: {}, recipes: {}, favorites: {}, noGo: {},
-      profiles: {},
+      profiles: {}, weights: {},
       historyClearedAt: 0,
     },
   };
@@ -120,6 +125,9 @@ const CACHE_LIMIT = 400;
 const TOMBSTONED = [
   { name: "consumption", keyOf: e => e.id, timeOf: e => e.updatedAt || e.at || 0 },
   { name: "water", keyOf: e => e.id, timeOf: e => e.at || 0 },
+  // Schlüssel ist Profil + Tag, nicht eine id: siehe defaultState(). Ein gelöschter Tag darf
+  // deshalb später wieder befüllt werden — der Grabstein zählt nur, solange er der neuere ist.
+  { name: "weights", keyOf: w => `${w.profileId}|${w.dateKey}`, timeOf: w => w.updatedAt || w.at || 0 },
   { name: "shoppingList", keyOf: e => e.id, timeOf: e => e.updatedAt || 0 },
   { name: "recipes", keyOf: e => e.id, timeOf: e => e.updatedAt || e.createdAt || 0 },
   { name: "favorites", keyOf: e => e.barcode, timeOf: e => e.updatedAt || e.addedAt || 0 },
@@ -504,6 +512,7 @@ function applyMerge(incoming, profileChoice) {
   const incomingTomb = incoming.tombstones || {};
   tomb.consumption = mergeTombstoneMap(tomb.consumption, incomingTomb.consumption);
   tomb.water = mergeTombstoneMap(tomb.water, incomingTomb.water);
+  tomb.weights = mergeTombstoneMap(tomb.weights, incomingTomb.weights);
   tomb.shoppingList = mergeTombstoneMap(tomb.shoppingList, incomingTomb.shoppingList);
   tomb.recipes = mergeTombstoneMap(tomb.recipes, incomingTomb.recipes);
   tomb.favorites = mergeTombstoneMap(tomb.favorites, incomingTomb.favorites);
@@ -534,6 +543,9 @@ function applyMerge(incoming, profileChoice) {
 
   state.consumption = mergeList("consumption").sort(byTimeDesc).slice(0, CONSUMPTION_LIMIT);
   state.water = mergeList("water").sort(byTimeDesc);
+  // Absteigend nach Tag, nicht nach Erfassungszeit: ein nachgetragenes Gewicht von letzter
+  // Woche gehört in der Liste dorthin, wo sein Tag steht, nicht ans obere Ende.
+  state.weights = mergeList("weights").sort((a, b) => (a.dateKey < b.dateKey ? 1 : a.dateKey > b.dateKey ? -1 : 0));
   state.shoppingList = mergeList("shoppingList");
   state.recipes = mergeList("recipes").sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   state.favorites = mergeList("favorites");
@@ -808,6 +820,40 @@ export const Store = {
     persist();
   },
 
+  // --- Gewicht (ein Wert je Profil und Tag, siehe defaultState) ---
+
+  /**
+   * Trägt das Gewicht eines Tages ein oder überschreibt es. `at` bleibt beim Überschreiben
+   * stehen — es sagt, wann dieser Tag ZUERST gewogen wurde, und nur `updatedAt` entscheidet
+   * beim Abgleich, welche Fassung die neuere ist.
+   */
+  setWeight(profileId, dateKey, { kg, bodyFatPct = null }) {
+    const jetzt = Date.now();
+    const i = state.weights.findIndex(w => w.profileId === profileId && w.dateKey === dateKey);
+    const eintrag = {
+      profileId, dateKey,
+      kg: Math.round(Number(kg) * 10) / 10,
+      bodyFatPct: bodyFatPct == null || bodyFatPct === "" ? null : Math.round(Number(bodyFatPct) * 10) / 10,
+      at: i >= 0 ? (state.weights[i].at || jetzt) : jetzt,
+      updatedAt: jetzt,
+    };
+    if (i >= 0) state.weights[i] = eintrag;
+    else state.weights = [eintrag, ...state.weights].sort((a, b) => (a.dateKey < b.dateKey ? 1 : a.dateKey > b.dateKey ? -1 : 0));
+    persist();
+    return eintrag;
+  },
+  getWeights() {
+    return state.weights;
+  },
+  getWeight(profileId, dateKey) {
+    return state.weights.find(w => w.profileId === profileId && w.dateKey === dateKey) || null;
+  },
+  removeWeight(profileId, dateKey) {
+    state.weights = state.weights.filter(w => !(w.profileId === profileId && w.dateKey === dateKey));
+    state.tombstones.weights[`${profileId}|${dateKey}`] = Date.now();
+    persist();
+  },
+
   // --- Rezepte ---
   saveRecipe(recipe) {
     const i = state.recipes.findIndex(r => r.id === recipe.id);
@@ -957,6 +1003,7 @@ export const Store = {
     return {
       consumption: countNew(state.consumption, incoming.consumption, byId),
       water: countNew(state.water, incoming.water, byId),
+      weights: countNew(state.weights, incoming.weights, w => `${w.profileId}|${w.dateKey}`),
       history: countNew(state.history, incoming.history, byId),
       recipes: countNew(state.recipes, incoming.recipes, byId),
       favorites: countNew(state.favorites, incoming.favorites, f => f.barcode),

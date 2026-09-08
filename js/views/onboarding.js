@@ -2,7 +2,7 @@
 // 1 Name(n), 2 Körperdaten (mit live berechneten Zielen), 3 Ziel & Ernährungsform.
 // Jeder Schritt passt ohne Scrollen aufs Handy und hat genau eine Frage — so landet niemand
 // direkt nach der Installation auf einem Dashboard mit fremden Standardwerten.
-import { Store } from "../store.js";
+import { Store, dateKeyOf } from "../store.js";
 import { calcTargets, Goals, ActivityLevels } from "../profiles.js";
 import { DIET_TYPES } from "../keto.js";
 import { esc, showToast } from "../ui.js";
@@ -29,6 +29,9 @@ export function renderOnboarding(container, onComplete) {
       proteinFactor: data.proteinFactor, netCarbLimitG: data.netCarbLimitG, dietType: data.dietType,
       gradeThresholds: DIET_TYPES[data.dietType]?.defaultThresholds || profiles[0].gradeThresholds,
     });
+    // Das eingegebene Gewicht ist zugleich der erste Punkt des Verlaufs (siehe gewicht.js).
+    // Ohne ihn stünde die Kurve am Tag eins leer da, obwohl die Zahl gerade getippt wurde.
+    Store.setWeight(profiles[0].id, dateKeyOf(Date.now()), { kg: data.weightKg, bodyFatPct: null });
     Store.updateProfile(profiles[1].id, { name: data.shared && data.name2 ? data.name2 : "Profil 2" });
     Store.setActiveProfile(profiles[0].id);
     Store.setOnboarded();

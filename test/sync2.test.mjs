@@ -156,7 +156,45 @@ const nachGet = fake.verlauf.filter(v => v.methode === "GET" && v.name === "wass
 ok("beim zweiten Mal wird abgefragt, aber nichts geliefert", nachGet > vorGet);
 ok("lokal weiterhin fuenf", (await db.alle("wasser")).length === 5);
 
-console.log("\n12) Unterbrochener Durchlauf verliert nichts");
+console.log("\n12) Gewicht: zwei Geraete, ein Tag, ein Wert");
+// Der Fall, den ein Schluessel aus einer zufaelligen id nicht ueberleben wuerde: beide
+// Geraete tragen denselben Morgen ein. Mit (profil_id, datum) als Schluessel treffen sie
+// dieselbe Zeile, und die spaetere Fassung gewinnt — statt zwei Gewichten fuer einen Tag.
+await frisch();
+await lokalAnlegen("profil", P, { id: P, name: "Wilhelm", sex: "male", age: 37, updatedAt: 1000 });
+await lokalAnlegen("gewicht", `${P}|2026-09-01`, {
+  profileId: P, dateKey: "2026-09-01", kg: 82.4, bodyFatPct: null, at: 5000, updatedAt: 5000,
+});
+e = await sync.abgleichen();
+ok("Gewicht hochgeladen", serverZeilen("gewicht").length === 1, JSON.stringify(serverZeilen("gewicht")));
+ok("als kg uebersetzt", serverZeilen("gewicht")[0].kg === 82.4);
+ok("am richtigen Tag", serverZeilen("gewicht")[0].datum === "2026-09-01");
+
+// Das andere Geraet wiegt denselben Morgen spaeter noch einmal.
+fake.fremdesGeraetSchreibt("gewicht", {
+  haushalt_id: H, profil_id: P, datum: "2026-09-01", kg: 82.0, koerperfett_pct: 21.5,
+  erfasst_am: new Date(5000).toISOString(), geaendert_am: new Date(9000).toISOString(),
+});
+ok("weiterhin EINE Zeile fuer den Tag", serverZeilen("gewicht").length === 1,
+   JSON.stringify(serverZeilen("gewicht")));
+await sync.abgleichen();
+const gLokal = await db.alle("gewicht");
+ok("auch lokal nur eine Zeile", gLokal.length === 1, JSON.stringify(gLokal));
+ok("die spaetere Fassung gewinnt", gLokal[0].wert.kg === 82, JSON.stringify(gLokal[0].wert));
+ok("Koerperfett kam mit", gLokal[0].wert.bodyFatPct === 21.5, JSON.stringify(gLokal[0].wert));
+ok("Schluessel bleibt Profil und Tag", gLokal[0].schluessel === `${P}|2026-09-01`, gLokal[0].schluessel);
+
+// Und die Loeschung: ein Tag, den man versehentlich eingetragen hat, muss auch drueben weg.
+await lokalLoeschen("gewicht", `${P}|2026-09-01`);
+e = await sync.abgleichen();
+ok("Loeschung gesendet", e.geloescht === 1, JSON.stringify(e));
+ok("Server hat geloescht_am gesetzt", !!serverZeilen("gewicht")[0].geloescht_am);
+await db.meta.setze("stand:gewicht", "1970-01-01T00:00:00Z");   // wie ein frisches Geraet
+await sync.abgleichen();
+ok("ein zweites Geraet holt sie sich nicht zurueck", (await db.alle("gewicht")).length === 0,
+   JSON.stringify(await db.alle("gewicht")));
+
+console.log("\n13) Unterbrochener Durchlauf verliert nichts");
 await frisch();
 await lokalAnlegen("einkauf", "x1", { id: "x1", text: "Brot", checked: false, updatedAt: 1000 });
 const echtesRest = fake.rest;

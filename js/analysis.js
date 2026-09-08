@@ -4,6 +4,7 @@ import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { getTargetsForDate, Goals } from "./profiles.js";
 import { getConsumptionForDate, sumConsumption, MEAL_LABELS, dateLabel } from "./consumption.js";
 import { esc, showToast, bindBackClose } from "./ui.js";
+import { gewichtsBericht, trendSatz } from "./gewicht.js";
 
 function round1(v) {
   return Math.round(v * 10) / 10;
@@ -98,6 +99,27 @@ export function buildAnalysisReport(profile, days) {
   lines.push(`- Tage im Netto-KH-Ziel: ${daysInTarget} von ${withData.length}, längste Serie: ${maxStreak}`);
   lines.push("");
 
+  // --- Gewicht ---
+  //
+  // Der eine Abschnitt, den kein Ernährungsprotokoll aus sich selbst beantworten kann:
+  // ob die gerechneten Zahlen auf der Waage ankommen. Ohne Messungen bleibt er weg —
+  // eine Überschrift ohne Werte darunter lädt nur dazu ein, etwas zu vermuten.
+  const gw = gewichtsBericht(profile, { tage: days });
+  if (gw.fenster.length > 0) {
+    lines.push("## Gewichtsverlauf");
+    for (const p of gw.fenster) {
+      lines.push(`- ${p.dateKey}: ${round1(p.kg)} kg${p.bodyFatPct != null ? ` · ${round1(p.bodyFatPct)}% Körperfett` : ""}`);
+    }
+    lines.push(`- Messungen: ${gw.fenster.length} über ${gw.spanneTage} Tage`);
+    if (gw.genugDaten) {
+      lines.push(`- Trend (Ausgleichsgerade): ${round1(gw.kgProWoche)} kg/Woche`);
+      lines.push(`- Rechnerisch erwartet aus dem eingestellten Defizit: ${round1(gw.erwarteteKgProWoche)} kg/Woche (Faustzahl 7700 kcal je kg)`);
+    } else {
+      lines.push(`- ${trendSatz(gw)}`);
+    }
+    lines.push("");
+  }
+
   // --- Lebensmittel ---
   const byFood = new Map();
   for (const d of withData) {
@@ -154,6 +176,9 @@ export function buildAnalysisReport(profile, days) {
   lines.push("2. **Verwendete Lebensmittel**: Bewerte die Auswahl — Abwechslung, Qualität der Fett- und Eiweißquellen, versteckte Kohlenhydrate, verarbeitete Produkte.");
   lines.push("3. **Mögliche Lücken**: Worauf deutet die Auswahl hin in Bezug auf Ballaststoffe, Mikronährstoffe (Magnesium, Kalium, Natrium) und Gemüseanteil?");
   lines.push("4. **Empfehlungen**: Konkrete, alltagstaugliche Vorschläge für eine ausgewogenere Keto-Ernährung — mit Beispielen für Lebensmittel oder Mahlzeiten, die die gefundenen Lücken schließen.");
+  if (gw.genugDaten) {
+    lines.push("5. **Gewicht gegen Rechnung**: Passt der gemessene Verlauf zum eingestellten Defizit? Falls nicht, welche Erklärungen sind plausibel (Schätzfehler bei den Portionen, Wasserhaushalt, Aktivitätsgrad zu hoch angesetzt) — und woran ließe sich das unterscheiden?");
+  }
   lines.push("");
   lines.push("_Hinweis: Die Werte stammen aus einer Tracking-App; Netto-Kohlenhydrate sind nach EU-Konvention angegeben (Ballaststoffe nicht enthalten)._");
 
