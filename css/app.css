@@ -1139,9 +1139,14 @@ body[data-design="klar"] .tab-btn[data-tab="recipes"] { margin-left: 30px; }
 body[data-design="klar"] .view { padding: 12px 14px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px); }
 
 /* ---- 3. Karten: kleinere Radien, weniger Polster, flacherer Schatten ---- */
+/* `.card` steht noch an elf Stellen (Scan, Rezepte, Profil, Werte-Editor) und war dort mit
+   12er Radius und 16er Polster die einzige Karte, die anders aussah als der Rest der Seite.
+   Statt elf Fundstellen umzubenennen bekommt sie hier die Klar-Maße. */
+body[data-design="klar"] .card,
 body[data-design="klar"] .klar-card,
 body[data-design="klar"] .klar-meals-card,
 body[data-design="klar"] .klar-result-card { border-radius: 18px; }
+body[data-design="klar"] .card,
 body[data-design="klar"] .klar-card { padding: 15px; }
 body[data-design="klar"] .klar-result-card { padding: 15px; }
 body[data-design="klar"] .klar-divider { margin: 15px 0 12px; }
