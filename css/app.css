@@ -784,10 +784,14 @@ body[data-design="klar"] .fab-btn {
 .klar-ing-row-top { display: flex; align-items: center; gap: 8px; }
 .klar-ing-row-info { flex: 1; min-width: 0; cursor: pointer; }
 .klar-ing-row-info .name { font-weight: 700; font-size: 14px; }
+/* Grau wie jede andere Meta-Zeile der App. Vorher war sie in jeder Zutat warm-orange — die
+   Farbe, die sonst „in Maßen" heißt; damit sah eine Zutatenliste aus wie lauter Warnungen.
+   Warm bleibt allein die eine Zutat, die die Kohlenhydrate treibt. Und sie darf umbrechen,
+   statt abgeschnitten zu werden: neben dem Mengenfeld bleiben keine 190 px. */
 .klar-ing-row-info .meta {
-  font-size: 12px; color: var(--warm); margin-top: 2px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
 }
+.klar-ing-row-info .meta .kh-treiber { color: var(--warm); font-weight: 700; }
 .klar-ing-stepper-compact {
   flex: none; display: flex; align-items: center;
   height: 34px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
@@ -819,8 +823,6 @@ body[data-design="klar"] .klar-ing-amount-compact input {
 }
 .klar-ing-row.open .klar-ing-chevron { transform: rotate(90deg); }
 .klar-ing-row .list-detail { border: none; background: none; padding: 12px 0 0; margin-top: 0; }
-.klar-ing-detail-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.klar-ing-detail-actions .btn { flex: 1; min-height: 44px; }
 
 .klar-switch { position: relative; width: 46px; height: 28px; border-radius: 999px; background: var(--border); border: none; flex: none; cursor: pointer; }
 .klar-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
