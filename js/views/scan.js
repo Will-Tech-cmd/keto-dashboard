@@ -151,11 +151,10 @@ export function openScanSearch(container) {
 
 function searchFormHtml() {
   return `
-    <div class="card">
-      <label for="foodSearchInput">Lebensmittel suchen (ohne Barcode)</label>
-      <input type="text" id="foodSearchInput" placeholder="z.B. Eier, Gouda, Avocado …" autocomplete="off">
-      <div id="searchResults" style="margin-top:10px"></div>
-    </div>
+    <div class="such-feld">${ikon("suche", { groesse: 17 })}
+      <input type="text" id="foodSearchInput" placeholder="z.B. Eier, Gouda, Avocado …"
+        aria-label="Lebensmittel ohne Barcode suchen" autocomplete="off"></div>
+    <div id="searchResults" style="margin-top:10px"></div>
   `;
 }
 
@@ -231,7 +230,10 @@ function renderSearchResults(container, resultsEl, items, isFinal, term, fehler 
   // Name oben, Marke darunter. Bewusst keine Nährwerte in der Zeile: die Liste ist zum
   // Wiedererkennen da, und „Schlagsahne 292 kcal" neben „Schlagsahne 293 kcal" hilft beim
   // Wiedererkennen nicht — der Name und die Marke tun es.
-  resultsEl.innerHTML = fehlerZeile + items.map((p, i) => `
+  // Eine Karte mit Trennlinien, nicht eine Karte je Treffer — dieselbe Liste wie in
+  // Favoriten, No-Go, Verlauf und Einkauf. Zwanzig gerahmte Kästchen untereinander waren
+  // zwanzigmal Rand und Schatten für eine Liste, die man überfliegen will.
+  resultsEl.innerHTML = fehlerZeile + `<div class="klar-list-card">` + items.map((p, i) => `
     <div class="list-item" data-idx="${i}" style="cursor:pointer">
       <span style="flex-shrink:0;color:var(--text-muted)">${ikon(QUELLE_IKON[p.source] || "welt", { groesse: 17 })}</span>
       <div class="info">
@@ -239,7 +241,7 @@ function renderSearchResults(container, resultsEl, items, isFinal, term, fehler 
         <div class="meta">${p.brand ? esc(p.brand) : SOURCE_LABEL[p.source] || "Open Food Facts"}</div>
       </div>
     </div>
-  `).join("") + (!isFinal ? `<p class="hint">Suche weitere Online-Treffer …</p>` : "");
+  `).join("") + `</div>` + (!isFinal ? `<p class="hint" style="margin-top:8px">Suche weitere Online-Treffer …</p>` : "");
 
   resultsEl.querySelectorAll(".list-item").forEach(row => {
     row.addEventListener("click", () => {
@@ -305,12 +307,10 @@ function logHistory(product) {
 
 function manualFormHtml() {
   return `
-    <div class="card">
-      <label for="manualBarcode">Barcode (EAN)</label>
-      <div class="btn-row">
-        <input type="text" inputmode="numeric" id="manualBarcode" placeholder="z.B. 4008400290423">
-        <button class="btn" id="manualSubmit" style="width:auto;padding:0 18px">Suchen</button>
-      </div>
+    <div class="listen-eingabe" style="margin-bottom:0">
+      <input type="text" inputmode="numeric" id="manualBarcode" placeholder="Barcode (EAN), z.B. 4008400290423"
+        aria-label="Barcode von Hand eingeben">
+      <button class="btn" id="manualSubmit" title="Suchen" aria-label="Suchen">${ikon("suche", { groesse: 18 })}</button>
     </div>
   `;
 }

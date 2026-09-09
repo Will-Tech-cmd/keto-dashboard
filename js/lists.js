@@ -97,7 +97,7 @@ function renderProductList(body, listName) {
 
   body.innerHTML = `
     <div class="such-feld" style="margin-bottom:12px">${ikon("suche", { groesse: 17 })}
-      <input type="text" id="listSearch" placeholder="Suchen …" autocomplete="off" value="${esc(listFilter)}"></div>
+      <input type="text" id="listSearch" placeholder="Suchen …" aria-label="In dieser Liste suchen" autocomplete="off" value="${esc(listFilter)}"></div>
     <div id="listRows"></div>
   `;
   const search = body.querySelector("#listSearch");
@@ -329,7 +329,7 @@ function renderShopping(body) {
   body.innerHTML = `
     <form id="addItemForm" class="listen-eingabe">
       <div class="such-feld">${ikon("neu", { groesse: 17 })}
-        <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" autocomplete="off"></div>
+        <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" aria-label="Artikel auf die Einkaufsliste setzen" autocomplete="off"></div>
       <button class="btn" type="submit" title="Auf die Liste setzen" aria-label="Auf die Liste setzen">${ikon("einkauf", { groesse: 18 })}</button>
     </form>
     <div id="shopList">${listHtml}</div>
@@ -386,7 +386,7 @@ function renderHistory(body) {
       ${periodBtn(null, "Alle")}
     </div>
     ${periodItems.length > 0 ? `
-      <div class="such-feld" style="margin-bottom:14px">${ikon("suche", { groesse: 17 })}<input type="text" id="historySearch" placeholder="Suchen …" autocomplete="off" value="${esc(historyFilter)}"></div>
+      <div class="such-feld" style="margin-bottom:14px">${ikon("suche", { groesse: 17 })}<input type="text" id="historySearch" placeholder="Suchen …" aria-label="Im Verlauf suchen" autocomplete="off" value="${esc(historyFilter)}"></div>
       <!-- Vier einstellige Zahlen brauchen kein 2x2-Raster aus Kacheln: das nahm über
            dem ersten Eintrag mehr Platz ein als der Verlauf selbst. Eine Zeile sagt
            dasselbe, und die Ampelfarbe steht jetzt direkt beim Wort. -->
