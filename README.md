@@ -212,6 +212,14 @@ stellen — und das änderte auch die Ringe auf der Startseite.
 Karten haben überall dieselbe Form (18er Radius, 15er Polster). Die alte `.card` mit 12er
 Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite heraus.
 
+### Planen & Einstieg
+- Im Planer sind „Wie viele Tage" und „Ab wann" **dieselbe Form** (Segmentwahl) — beides ist
+  eine Wahl unter mehreren, stand aber in zwei verschiedenen Formen untereinander. Chips
+  bleiben den Mahlzeiten vorbehalten, wo man mehrere anhaken darf
+- Die Geschlechtswahl im Einstieg ist dieselbe Segmentwahl statt zweier 46-px-Knöpfe, die
+  als lautestes Element mehr Gewicht hatten als die Eingaben darunter
+- Einheiten mit Abstand: „170 cm", „70 kg" — wie überall sonst in der App
+
 ### Rezepte
 - Zutaten per Suche, Barcode-Scan oder von Hand; Nährwerte pro Portion und gesamt
 - Eine Zutatenzeile zeigt kcal und Netto-KH, sonst nichts. Der Gewichtsanteil („46% des

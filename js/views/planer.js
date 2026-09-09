@@ -91,9 +91,13 @@ function render(body, goToTab) {
   body.innerHTML = `
     <div class="klar-card">
       <div class="klar-eyebrow">Wie viele Tage</div>
-      <div class="klar-chip-row" style="margin-top:10px">
+      <!-- Segmente, nicht Chips: „Wie viele Tage" und „Ab wann" sind beide eine Wahl unter
+           mehreren, standen aber in zwei verschiedenen Formen untereinander. Chips bleiben
+           den Mahlzeiten vorbehalten — dort darf man mehrere anhaken, und das soll man
+           auch sehen. -->
+      <div class="klar-meal-segments" style="margin-top:8px">
         ${[1, 2, 3, 4].map(n => `
-          <button type="button" class="klar-chip ${n === anzahlTage ? "top" : ""}" data-tage="${n}">
+          <button type="button" class="klar-meal-segment ${n === anzahlTage ? "active" : ""}" data-tage="${n}">
             ${n} ${n === 1 ? "Tag" : "Tage"}
           </button>
         `).join("")}
