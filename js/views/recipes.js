@@ -52,7 +52,7 @@ function renderList(container) {
     <button class="btn" id="newRecipeBtn">${ikon("neu", { groesse: 17 })} Neues Rezept</button>
     ${recipes.length > 0 ? `
       <div class="such-feld" style="margin-top:12px">${ikon("suche", { groesse: 17 })}
-        <input type="text" id="recipeSearch" placeholder="Rezept oder Zutat suchen …"
+        <input type="text" id="recipeSearch" placeholder="Rezept oder Zutat suchen …" aria-label="Rezept oder Zutat suchen"
           autocomplete="off" value="${esc(recipeFilter)}"></div>
     ` : ""}
     <div id="recipeListBody" style="margin-top:12px"></div>
@@ -277,7 +277,7 @@ function renderEditor(container, recipeId) {
 
     <div class="card">
       <div class="such-feld">${ikon("suche", { groesse: 17 })}
-        <input type="text" id="ingSearchInput" placeholder="Zutat suchen und hinzufügen …" autocomplete="off"></div>
+        <input type="text" id="ingSearchInput" placeholder="Zutat suchen und hinzufügen …" aria-label="Zutat suchen und hinzufügen" autocomplete="off"></div>
       <div id="ingSearchResults" style="margin-top:8px"></div>
       ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">${ikon("kamera", { groesse: 17 })} Zutat scannen</button>` : ""}
       <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">${ikon("bearbeiten", { groesse: 17 })} Zutat manuell eintragen</button>

@@ -843,7 +843,8 @@ body[data-design="klar"] .subtab-btn.active {
    runder Knopf in derselben Höhe. Vorher waren Feld und Knopf 48 px hoch mit 16er Radius —
    zehn Pixel höher und eckiger als jedes andere Feld der App. */
 .listen-eingabe { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.listen-eingabe .such-feld { flex: 1; min-width: 0; }
+.listen-eingabe .such-feld,
+.listen-eingabe > input { flex: 1; min-width: 0; }
 .listen-eingabe .btn { flex: none; width: 44px; min-width: 44px; padding: 0; }
 
 /* Gruppenüberschrift über einer Listenkarte (Offen/Erledigt, Tage im Verlauf). Stand vorher

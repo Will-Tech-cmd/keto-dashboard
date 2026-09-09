@@ -127,6 +127,12 @@ eigene Datenart — **ein Wert je Person und Tag**, optional mit Körperfettante
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
+- Die Trefferliste ist **eine Karte mit Trennlinien** statt einer Karte je Treffer — zwanzig
+  gerahmte Kästchen untereinander waren zwanzigmal Rand und Schatten für eine Liste, die man
+  überfliegt
+- Suchfeld und Barcode-Feld haben die Form der Felder in den Listen (Pille, Ikon innen bzw.
+  runder Knopf daneben) und stehen frei statt in einer eigenen Karte. Die weggefallenen
+  Beschriftungen stehen als `aria-label` am Feld — sichtbar sagt es der Knopf darüber
   (offline) und die selbst angelegten Produkte. Die Trefferliste zeigt Bezeichnung und Marke;
   Einträge ohne jede Nährwertangabe bleiben draußen
 - Die Suche filtert auf in Deutschland erhältliche Produkte und wiederholt bei Serverfehlern
