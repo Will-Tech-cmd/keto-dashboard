@@ -837,25 +837,26 @@ body[data-design="klar"] .subtab-btn {
 body[data-design="klar"] .subtab-btn.active {
   background: var(--text); color: var(--bg-elevated); border-color: var(--text);
 }
-body[data-design="klar"] #newItemText {
-  min-height: 48px; border-radius: 16px; background: var(--bg-elevated);
-}
-body[data-design="klar"] #addItemForm .btn {
-  width: 48px; min-width: 48px; min-height: 48px; border-radius: 16px;
-  padding: 0; font-size: 20px; font-weight: 800;
-}
+/* Neuen Artikel eintragen: dieselbe Pille wie das Suchfeld der anderen Reiter, daneben ein
+   runder Knopf in derselben Höhe. Vorher waren Feld und Knopf 48 px hoch mit 16er Radius —
+   zehn Pixel höher und eckiger als jedes andere Feld der App. */
+.listen-eingabe { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.listen-eingabe .such-feld { flex: 1; min-width: 0; }
+.listen-eingabe .btn { flex: none; width: 44px; min-width: 44px; padding: 0; }
 
-.klar-shop-card {
-  background: var(--bg-elevated); border: 1px solid var(--border);
-  border-radius: 20px; overflow: hidden; box-shadow: var(--shadow);
-}
-.klar-shop-row {
-  display: flex; align-items: center; gap: 12px; padding: 15px 16px; cursor: pointer;
-  border-bottom: 1px solid var(--divider);
-}
-.klar-shop-row:last-child { border-bottom: none; }
-.klar-shop-row .name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; }
-.klar-shop-row.checked .name { color: var(--text-muted-2); text-decoration: line-through; }
+/* Gruppenüberschrift über einer Listenkarte (Offen/Erledigt, Tage im Verlauf). Stand vorher
+   an jeder Stelle als eigener inline-Abstand da und wich dabei voneinander ab. */
+.gruppen-titel { margin: 16px 2px 8px; }
+.gruppen-titel:first-child { margin-top: 0; }
+
+/* Einkaufszeile: eine `.list-item`-Zeile wie in den anderen Listen, nur mit Haken statt
+   Ampel. Das Durchstreichen kommt aus der allgemeinen `.checked .name`-Regel. */
+.einkauf-zeile { cursor: pointer; }
+/* Anders als in den anderen Listen kommt der Text hier vom Menschen und nicht aus einer
+   Produktdatenbank: „Brokkoli, Blumenkohl und was sonst grün ist" darf umbrechen. Dort hält
+   die einzeilige Zeile die Nährwertspalte in Reihe — die gibt es im Einkauf nicht. */
+.einkauf-zeile .name { white-space: normal; overflow-wrap: anywhere; }
+
 .klar-check {
   flex: none; width: 22px; height: 22px; border-radius: 7px;
   border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
@@ -1138,7 +1139,6 @@ body[data-design="klar"] .view { padding: 12px 14px calc(var(--tabbar-h) + env(s
 /* ---- 3. Karten: kleinere Radien, weniger Polster, flacherer Schatten ---- */
 body[data-design="klar"] .klar-card,
 body[data-design="klar"] .klar-meals-card,
-body[data-design="klar"] .klar-shop-card,
 body[data-design="klar"] .klar-result-card { border-radius: 18px; }
 body[data-design="klar"] .klar-card { padding: 15px; }
 body[data-design="klar"] .klar-result-card { padding: 15px; }
@@ -1176,8 +1176,6 @@ body[data-design="klar"] .list-item .meta { font-size: 11px; font-weight: 600; }
 body[data-design="klar"] .icon-btn { font-size: 15px; min-width: 44px; min-height: 44px; color: var(--text-muted); }
 body[data-design="klar"] .list-item .badge { padding: 4px 7px; font-size: 11.5px; }
 body[data-design="klar"] .list-detail { padding: 10px 14px 12px; }
-body[data-design="klar"] .klar-shop-row { padding: 11px 15px; }
-body[data-design="klar"] .klar-shop-row .name { font-size: 13.5px; }
 body[data-design="klar"] .klar-meal-row { padding: 10px 15px; }
 body[data-design="klar"] .klar-meal-row .name { font-size: 13.5px; }
 body[data-design="klar"] .klar-meal-row .meta { font-size: 11px; }
@@ -1201,6 +1199,10 @@ body[data-design="klar"] select {
    darüber setzt `padding: 0 14px` bei gleicher Spezifität und gewönne sonst allein durch
    ihre spätere Position. */
 body[data-design="klar"] .such-feld input[type="text"] { padding-left: 38px; }
+/* Der Knopf neben dem Feld nimmt dessen Höhe an — 48 px daneben sähe aus wie ein Fehler. */
+body[data-design="klar"] .listen-eingabe .btn {
+  width: 38px; min-width: 38px; min-height: 38px; border-radius: 999px;
+}
 
 body[data-design="klar"] .subtab-btn { padding: 7px 0; font-size: 11.5px; }
 body[data-design="klar"] .subtabs { gap: 5px; margin-bottom: 11px; }

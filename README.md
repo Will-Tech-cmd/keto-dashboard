@@ -176,6 +176,13 @@ nur zur Auswertung verschickt und nicht gespeichert.
   Entfernen unbeschriftete 19-Pixel-Ziele daneben waren
 - Der Einkaufswagen setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie
   im Verlauf
+- Der Einkauf hat **dasselbe Format wie die drei anderen Reiter**: eine Karte je Gruppe
+  (Offen, Erledigt) mit Zeilen darin, gleiche Polster, gleiche Schriftgröße, gleicher Radius.
+  Er hatte vorher eine eigene, zweite Fassung derselben Idee — höhere Zeilen, größere Schrift,
+  eckigere Karte. An der Stelle der Ampel steht hier der Haken, und weil der Text von Hand
+  eingetippt wird, darf er umbrechen statt abgeschnitten zu werden
+- Das Feld „Artikel hinzufügen" hat die Form des Suchfelds der anderen Reiter: dieselbe Pille
+  an derselben Stelle, mit Plus statt Lupe
 - Der Verlauf fasst den Zeitraum in **einer Zeile** zusammen statt in einem 2×2-Raster aus
   Kacheln: vier einstellige Zahlen brauchten mehr Platz als der Verlauf darunter. Seine
   Zeilen zeigen Uhrzeit und Marke; die bekannten Netto-KH stehen aufgeklappt in den
