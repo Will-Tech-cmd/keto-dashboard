@@ -193,6 +193,16 @@ nur zur Auswertung verschickt und nicht gespeichert.
 
 ### Rezepte
 - Zutaten per Suche, Barcode-Scan oder von Hand; Nährwerte pro Portion und gesamt
+- Eine Zutatenzeile zeigt kcal und Netto-KH, sonst nichts. Der Gewichtsanteil („46% des
+  Gewichts") stand vorher in jeder Zeile und wurde dabei regelmäßig abgeschnitten — er ist
+  aus Gramm und Gesamtgewicht ablesbar. **Warm eingefärbt ist nur noch die eine Zutat, die
+  die Kohlenhydrate treibt**; vorher war jede Zutatenzeile orange und die Liste sah aus wie
+  lauter Warnungen
+- Aufgeklappt hat eine Zutat dieselben drei Knöpfe wie eine Listenzeile: Menge, Werte,
+  Entfernen — statt zweier unbeschrifteter Bildchen neben einem breiten Knopf
+- Die Fußzeile eines Rezepts (Einkauf, Kochbuch, Löschen) liegt in einem Raster, das nicht
+  breiter werden kann als der Bildschirm. Vorher war die Rezeptseite auf einem 390-px-Gerät
+  467 px breit und ließ sich seitwärts schieben
 - Import aus Text oder Foto (Texterkennung mit Tesseract, optional zusätzlich per Gemini)
 - Portionsgewicht wird aus den Zutatenmengen abgeleitet („1 P. (240 g)")
 - Zutaten auf die Einkaufsliste übernehmen

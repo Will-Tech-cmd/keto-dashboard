@@ -252,6 +252,10 @@ function renderEditor(container, recipeId) {
   // kostet nur Platz. Zurückgesetzt in renderList() und bei jedem Tabwechsel (app.js).
   document.body.classList.add("chrome-hidden");
 
+  // Die Fußzeile benutzt das Raster .zeilen-aktionen statt .btn-row: dort schrumpfen die
+  // drei Knöpfe nicht unter ihre längste Silbe, und "Auf Einkaufsliste / Im Kochbuch öffnen /
+  // Löschen" nebeneinander machten die Seite 467 px breit — die ganze Rezeptseite ließ sich
+  // auf dem Handy seitwärts schieben. Das Raster mit minmax(0, 1fr) kann das nicht.
   container.innerHTML = `
     <div class="klar-recipe-head">
       <button class="klar-back-btn" id="backBtn" aria-label="Zurück">‹</button>
@@ -272,8 +276,8 @@ function renderEditor(container, recipeId) {
     <div id="ingredientList"></div>
 
     <div class="card">
-      <label for="ingSearchInput">Zutat suchen und hinzufügen</label>
-      <input type="text" id="ingSearchInput" placeholder="z.B. Rinderhackfleisch, Bacon …" autocomplete="off">
+      <div class="such-feld">${ikon("suche", { groesse: 17 })}
+        <input type="text" id="ingSearchInput" placeholder="Zutat suchen und hinzufügen …" autocomplete="off"></div>
       <div id="ingSearchResults" style="margin-top:8px"></div>
       ${isScannerSupported() ? `<button class="btn secondary" id="scanIngBtn" style="margin-top:10px">${ikon("kamera", { groesse: 17 })} Zutat scannen</button>` : ""}
       <button class="btn ghost" id="manualIngToggle" style="margin-top:10px">${ikon("bearbeiten", { groesse: 17 })} Zutat manuell eintragen</button>
@@ -282,7 +286,7 @@ function renderEditor(container, recipeId) {
       <hr class="klar-divider">
       <p class="hint" style="margin-top:0">Ganze Zutatenliste aus Foto oder Text übernehmen. Ergebnis kannst du danach prüfen und korrigieren.${hasApiKey() ? " Optional per KI (Gemini) erkennen lassen — genauer bei unbekannten Zutaten, braucht aber Internet." : ""}</p>
       <input type="file" id="recipeImageInput" accept="image/*" style="display:none">
-      <div class="btn-row">
+      <div class="zeilen-aktionen ohne-entfernen">
         <button class="btn secondary" id="importImageBtn">${ikon("bild", { groesse: 17 })} Bild wählen</button>
         <button class="btn secondary" id="importTextBtn">${ikon("text", { groesse: 17 })} Text einfügen</button>
       </div>
@@ -292,10 +296,10 @@ function renderEditor(container, recipeId) {
 
     <div id="reviewWrap"></div>
 
-    <div class="btn-row" style="margin-top:20px">
-      <button class="btn secondary" id="ingToShoppingBtn">${ikon("einkauf", { groesse: 17 })} Auf Einkaufsliste</button>
-      <button class="btn secondary" id="toKochbuchBtn">${ikon("kochbuch", { groesse: 17 })} Im Kochbuch öffnen</button>
-      <button class="btn secondary" id="deleteRecipeBtn" style="color:var(--warm)">${ikon("loeschen", { groesse: 17 })} Löschen</button>
+    <div class="zeilen-aktionen" style="margin-top:20px">
+      <button class="btn secondary" id="ingToShoppingBtn">${ikon("einkauf", { groesse: 17 })} Einkauf</button>
+      <button class="btn secondary" id="toKochbuchBtn">${ikon("kochbuch", { groesse: 17 })} Kochbuch</button>
+      <button class="btn secondary warm" id="deleteRecipeBtn">${ikon("loeschen", { groesse: 17 })} Löschen</button>
     </div>
   `;
 
@@ -479,16 +483,16 @@ function renderIngredientList(container, recipeId) {
     <div class="klar-list-card">
       ${withNc.map(({ ing, nc, netCarbs100 }) => {
         const kcal = ing.per100.kcal != null ? Math.round(ing.per100.kcal * (ing.grams || 0) / 100) : null;
-        const share = totalGrams > 0 ? Math.round((ing.grams || 0) / totalGrams * 100) : null;
-        const contribution = ing.id === topKcId && nc > 0
-          ? "größte KH-Quelle"
-          : share != null ? `${share}% des Gewichts` : "";
+        // Der Gewichtsanteil stand vorher in jeder Zeile („46% des Gewichts") und wurde dabei
+        // regelmäßig abgeschnitten — er ist aus Gramm und Gesamtgewicht ohnehin ablesbar.
+        // Übrig bleibt der Hinweis, der beim Anpassen zählt: welche Zutat treibt die KH.
+        const istKhTreiber = ing.id === topKcId && nc > 0;
         return `
           <div class="klar-ing-row" data-id="${ing.id}">
             <div class="klar-ing-row-top">
               <div class="klar-ing-row-info" data-action="toggle">
                 <div class="name">${esc(ing.name)}</div>
-                <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${contribution ? ` · ${esc(contribution)}` : ""}</div>
+                <div class="meta">${kcal ?? "–"} kcal · ${nc ?? "–"} g KH${istKhTreiber ? ` · <span class="kh-treiber">größte KH-Quelle</span>` : ""}</div>
               </div>
               <div class="klar-ing-stepper-compact">
                 <button type="button" class="klar-stepper-btn-sm" data-action="minus" aria-label="10 g weniger">−</button>
@@ -501,11 +505,11 @@ function renderIngredientList(container, recipeId) {
               <button type="button" class="klar-ing-chevron" data-action="toggle" aria-label="Details">›</button>
             </div>
             <div class="list-detail" hidden>
-              ${nutriTilesHtml({ kcal: ing.per100.kcal, netCarbs: netCarbs100, fat: ing.per100.fat, protein: ing.per100.protein })}
-              <div class="klar-ing-detail-actions">
-                <button class="klar-icon-btn" data-action="edit" title="Nährwerte korrigieren" aria-label="Nährwerte korrigieren">${ikon("bearbeiten", { groesse: 19 })}</button>
-                <button class="klar-icon-btn warm" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
-                <button class="btn secondary" data-action="focusAmount">Menge eingeben</button>
+              <div class="kachel-kompakt">${nutriTilesHtml({ kcal: ing.per100.kcal, netCarbs: netCarbs100, fat: ing.per100.fat, protein: ing.per100.protein })}</div>
+              <div class="zeilen-aktionen">
+                <button class="btn" data-action="focusAmount">${ikon("wiegen", { groesse: 17 })} Menge</button>
+                <button class="btn secondary" data-action="edit">${ikon("bearbeiten", { groesse: 17 })} Werte</button>
+                <button class="btn secondary warm" data-action="remove">${ikon("loeschen", { groesse: 17 })} Entfernen</button>
               </div>
             </div>
           </div>
