@@ -303,29 +303,36 @@ function renderShopping(body) {
   // Offen zuerst, Erledigtes gesammelt darunter — beim Einkaufen zählt, was noch fehlt.
   const open = items.filter(i => !i.checked);
   const done = items.filter(i => i.checked);
+  // Dieselbe Karte, dieselbe Zeile wie in Favoriten, No-Go und Verlauf: eine `.klar-list-card`
+  // mit `.list-item`-Zeilen darin. Vorher hatte der Einkauf mit `.klar-shop-card`/`.klar-shop-row`
+  // eine zweite, eigene Fassung derselben Idee — andere Polster, anderer Radius, andere
+  // Schriftgröße. Der Haken tritt hier nur an die Stelle, an der sonst die Ampel steht.
   const group = (title, list) => list.length === 0 ? "" : `
-    <div class="klar-eyebrow" style="margin:0 2px 10px">${title} · ${list.length}</div>
-    <div class="klar-shop-card">
+    <div class="klar-eyebrow gruppen-titel">${title} · ${list.length}</div>
+    <div class="klar-list-card">
       ${list.map(item => `
-        <label class="klar-shop-row ${item.checked ? "checked" : ""}" data-id="${item.id}">
+        <label class="list-item einkauf-zeile ${item.checked ? "checked" : ""}" data-id="${item.id}">
           <input type="checkbox" ${item.checked ? "checked" : ""} hidden>
           <span class="klar-check ${item.checked ? "on" : ""}">${item.checked ? "✓" : ""}</span>
-          <span class="name">${esc(item.text)}</span>
+          <div class="info"><div class="name">${esc(item.text)}</div></div>
           <button class="icon-btn" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
         </label>
       `).join("")}
     </div>
   `;
   const listHtml = items.length === 0
-    ? `<div class="klar-empty-row" style="margin-top:4px"><span class="plus">${ikon("einkauf", { groesse: 17 })}</span>Einkaufsliste ist leer</div>`
-    : group("Offen", open) + (done.length ? `<div style="margin-top:20px">${group("Erledigt", done)}</div>` : "");
+    ? emptyState("einkauf", "Einkaufsliste ist leer. Trag oben ein, was fehlt.")
+    : group("Offen", open) + group("Erledigt", done);
 
+  // Das Eingabefeld hat die Form des Suchfelds der anderen Reiter (Pille, Ikon innen) —
+  // es steht an derselben Stelle und tut das Gegenstück: dort suchen, hier hinzufügen.
   body.innerHTML = `
-    <form id="addItemForm" class="btn-row" style="margin-bottom:12px">
-      <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" autocomplete="off">
-      <button class="btn" type="submit" style="width:auto;padding:0 18px">+</button>
+    <form id="addItemForm" class="listen-eingabe">
+      <div class="such-feld">${ikon("neu", { groesse: 17 })}
+        <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" autocomplete="off"></div>
+      <button class="btn" type="submit" title="Auf die Liste setzen" aria-label="Auf die Liste setzen">${ikon("einkauf", { groesse: 18 })}</button>
     </form>
-    ${listHtml}
+    <div id="shopList">${listHtml}</div>
     ${items.some(i => i.checked) ? `<button class="btn ghost" id="clearChecked" style="margin-top:14px">Erledigte entfernen</button>` : ""}
   `;
 
@@ -338,7 +345,7 @@ function renderShopping(body) {
     renderShopping(body);
   });
 
-  body.querySelectorAll(".checkbox-row, .klar-shop-row").forEach(row => {
+  body.querySelectorAll(".einkauf-zeile").forEach(row => {
     const id = row.dataset.id;
     row.querySelector('input[type="checkbox"]').addEventListener("change", () => {
       Store.toggleShoppingItem(id);
@@ -446,7 +453,7 @@ function renderHistoryList(el, items) {
     const label = dayLabel(entry.at);
     if (label !== lastLabel) {
       flush();
-      blocks.push(`<div class="klar-eyebrow" style="margin:16px 2px 8px">${esc(label)}</div>`);
+      blocks.push(`<div class="klar-eyebrow gruppen-titel">${esc(label)}</div>`);
       lastLabel = label;
     }
     const time = new Date(entry.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
