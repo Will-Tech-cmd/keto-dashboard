@@ -98,21 +98,21 @@ export function renderOnboarding(container, onComplete) {
 
   function renderStep2() {
     shell("Daraus rechnet die App deine Tagesziele. Du kannst alles später im Profil ändern — oder überspringen und mit Richtwerten starten.", `
-      <div class="klar-ob-sex">
-        <button type="button" class="klar-ob-sex-btn ${data.sex === "female" ? "active" : ""}" data-sex="female">weiblich</button>
-        <button type="button" class="klar-ob-sex-btn ${data.sex === "male" ? "active" : ""}" data-sex="male">männlich</button>
+      <div class="klar-meal-segments klar-ob-sex">
+        <button type="button" class="klar-meal-segment ${data.sex === "female" ? "active" : ""}" data-sex="female">weiblich</button>
+        <button type="button" class="klar-meal-segment ${data.sex === "male" ? "active" : ""}" data-sex="male">männlich</button>
       </div>
       ${stepperRow("obAge", "Alter", data.age, "", 1, 10, 100)}
-      ${stepperRow("obHeight", "Größe", data.heightCm, "cm", 1, 100, 230)}
-      ${stepperRow("obWeight", "Gewicht", data.weightKg, "kg", 0.5, 30, 250)}
+      ${stepperRow("obHeight", "Größe", data.heightCm, " cm", 1, 100, 230)}
+      ${stepperRow("obWeight", "Gewicht", data.weightKg, " kg", 0.5, 30, 250)}
       <div class="klar-result-card" id="obTargetsCard" style="margin-top:16px"></div>
       <p class="hint" style="text-align:center;margin-top:8px">Ändert sich live mit deinen Angaben · Ziel und Ernährungsform kommen im nächsten Schritt</p>
     `, { showSkip: true });
 
-    container.querySelectorAll(".klar-ob-sex-btn").forEach(btn => {
+    container.querySelectorAll(".klar-ob-sex [data-sex]").forEach(btn => {
       btn.addEventListener("click", () => {
         data.sex = btn.dataset.sex;
-        container.querySelectorAll(".klar-ob-sex-btn").forEach(b => b.classList.toggle("active", b === btn));
+        container.querySelectorAll(".klar-ob-sex [data-sex]").forEach(b => b.classList.toggle("active", b === btn));
         updateTargetsPreview();
       });
     });
@@ -185,7 +185,7 @@ export function renderOnboarding(container, onComplete) {
   }
 
   function wireStepper(id, field, step_, min, max) {
-    const unit = field === "heightCm" ? "cm" : field === "weightKg" ? "kg" : "";
+    const unit = field === "heightCm" ? " cm" : field === "weightKg" ? " kg" : "";
     const valEl = container.querySelector(`#${id}Val`);
     const apply = (delta) => {
       const next = Math.round((data[field] + delta) * 10) / 10;

@@ -1345,11 +1345,11 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 .klar-ob-body label:first-child { margin-top: 0; }
 
 .klar-ob-sex { display: flex; gap: 8px; margin-bottom: 4px; }
-.klar-ob-sex-btn {
-  flex: 1; min-height: 46px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--bg-elevated); color: var(--text); font-weight: 700; font-size: .9rem; cursor: pointer;
-}
-.klar-ob-sex-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+/* Die Geschlechtswahl benutzt dasselbe Segment wie „Ab wann" im Planer und die
+   Diagrammwahl im Profil — vorher waren es zwei 46-px-Knöpfe, die als lautestes Element
+   des Bildschirms mehr Gewicht hatten als die Eingaben darunter. Nur die Höhe bleibt
+   fingerfreundlich, das hier ist der erste Bildschirm der App. */
+.klar-ob-sex .klar-meal-segment { padding: 12px 0; font-size: .85rem; }
 
 .klar-ob-stepper-row {
   display: flex; align-items: center; justify-content: space-between;
