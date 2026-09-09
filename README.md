@@ -173,6 +173,18 @@ benennt die Antwort als Hinweis, statt Genauigkeit vorzutäuschen. Die Werte sin
 gut genug für „passt das grob ins Budget", keine Etikett-Genauigkeit. Das Foto selbst wird
 nur zur Auswertung verschickt und nicht gespeichert.
 
+### Start
+- Tagesstreifen, Nährwert-Ringe, Gewichtszeile, die Mahlzeiten des Tages
+- **Zukünftige Tage sind anwählbar** (Planung für morgen) und sehen jetzt auch so aus. Sie
+  standen in der Linienfarbe `--text-faint` — 1,49:1 Kontrast, also wie ein abgeschalteter
+  Knopf, was die Planung praktisch versteckte
+- „Gewicht" stand als einzige Stelle der App in `--sage` (3,73:1). Jetzt normale Textfarbe
+
+Gemessene Kontraste (WCAG AA, 4,5:1 für Text unter 18,66 px fett): geprüft wurden alle
+Bildschirme in Hell und Dunkel. Was bleibt: **Grün auf Weiß liegt bei 4,32:1, grüner Text
+auf hellem Grund bei 3,91:1.** Das zu beheben hieße, `--accent` einen Hauch dunkler zu
+stellen — und das änderte auch die Ringe auf der Startseite.
+
 ### Listen
 - Favoriten, No-Go, Verlauf und Einkaufsliste
 - Eine Listenzeile zeigt Name und Marke, sonst nichts. **Die Nährwerte stehen in den vier
