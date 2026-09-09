@@ -191,6 +191,9 @@ nur zur Auswertung verschickt und nicht gespeichert.
   Gewichtskurve mit Trend
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
 
+Karten haben überall dieselbe Form (18er Radius, 15er Polster). Die alte `.card` mit 12er
+Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite heraus.
+
 ### Rezepte
 - Zutaten per Suche, Barcode-Scan oder von Hand; Nährwerte pro Portion und gesamt
 - Eine Zutatenzeile zeigt kcal und Netto-KH, sonst nichts. Der Gewichtsanteil („46% des
@@ -216,7 +219,15 @@ nur zur Auswertung verschickt und nicht gespeichert.
   zugleich die Messung von heute in den Verlauf ein
 - Ernährungsform steuert die Ampel-Standardwerte, alles bleibt frei editierbar
 - Erscheinungsbild je Profil (System/hell/dunkel)
-- Export, Import und Teilen der Daten — siehe unten
+- Export, Import und Teilen der Daten
+- **Alle fünf Abschnitte tragen dieselbe Überschrift**: kleine graue Versalien über der
+  Karte. „Erscheinungsbild" und „Nährwert-Diagramm" standen vorher als 16-px-Überschrift
+  *in* der Karte und waren damit lauter als die Abschnitte darüber
+- Die Blätter (Körperdaten, Ziel & Aktivität, …) benutzen die Überschriftenklasse aller
+  anderen Blätter der App statt einer viermal wiederholten Inline-Auszeichnung
+
+Eine zweite Person legt ihr Profil auf **ihrem eigenen Handy** an; über den Abgleich kommt
+es auf beide Geräte. Einen Knopf „Profil anlegen" gibt es bewusst nicht. — siehe unten
 - Optionaler Gemini-Schlüssel für die KI-gestützte Rezepterkennung
 - Optionales Open-Food-Facts-Konto, um eigene Produkte zurückzugeben
 - Synchronisierung, Speicherweg, KI-Erkennung und Open Food Facts liegen als vier Zeilen

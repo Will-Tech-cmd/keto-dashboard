@@ -34,7 +34,7 @@ export function renderProfile(container, onProfileChanged) {
     <div id="profileForm"></div>
 
     <div class="divider"></div>
-    <div class="klar-eyebrow" style="margin:0 2px 8px">Zwei Handys abgleichen</div>
+    <div class="klar-eyebrow gruppen-titel">Zwei Handys abgleichen</div>
     <div class="klar-card">
       <p class="hint" style="margin-top:0">Beim Einspielen zeigt die App erst, was dazukommt — und fragt, ob zusammengeführt oder ersetzt wird.</p>
       <div class="btn-row" style="margin-top:10px">
@@ -67,11 +67,11 @@ export function renderProfile(container, onProfileChanged) {
       ` : ""}
     </div>
 
-    <div class="klar-eyebrow" style="margin:16px 2px 8px">Gerät &amp; Zusatzfunktionen</div>
+    <div class="klar-eyebrow gruppen-titel">Gerät &amp; Zusatzfunktionen</div>
     <div class="klar-list-card" id="extraGroups"></div>
 
-    <div class="card">
-      <h2>Erscheinungsbild</h2>
+    <div class="klar-eyebrow gruppen-titel">Erscheinungsbild</div>
+    <div class="klar-card">
       <p class="hint" style="margin-top:0">Gilt nur für dieses Profil — ${esc(otherProfileName())} kann es anders einstellen.</p>
       <div class="klar-appearance-row" style="margin-top:4px;padding-top:0;border-top:none">
         <div>
@@ -82,8 +82,8 @@ export function renderProfile(container, onProfileChanged) {
       </div>
     </div>
 
-    <div class="card">
-      <h2>Nährwert-Diagramm</h2>
+    <div class="klar-eyebrow gruppen-titel">Nährwert-Diagramm</div>
+    <div class="klar-card">
       <p class="hint" style="margin-top:0">Wie die vier Tageswerte auf der Startseite dargestellt werden — gilt nur für dieses Profil.</p>
       <div class="klar-meal-segments" id="ringStyleSegments" style="margin-top:10px">
         ${RING_STYLES.map(rs => `
@@ -333,7 +333,7 @@ function openExtraSheet(key, neuZeichnen) {
 
   overlay.innerHTML = `
     <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:10px">${esc(titel)}</h2>
+      <h2 class="klar-sheet-title" style="margin:0 0 10px">${esc(titel)}</h2>
       ${inhalt}
       <button type="button" class="btn" id="extraDone" style="margin-top:16px">Fertig</button>
     </div>
@@ -511,7 +511,7 @@ function renderProfileForm(container, onProfileChanged) {
 
     <div class="klar-result-card" id="profileTargetsCard"></div>
 
-    <div class="klar-eyebrow" style="margin:16px 2px 8px">Woraus sich das ergibt</div>
+    <div class="klar-eyebrow gruppen-titel">Woraus sich das ergibt</div>
     <div class="klar-list-card" id="profileGroups"></div>
   `;
 
@@ -628,7 +628,7 @@ function openGroupSheet(key, onChanged) {
   const titles = { body: "Körperdaten", goal: "Ziel & Aktivität", diet: "Ernährungsform", limits: "Grenzwerte" };
   overlay.innerHTML = `
     <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:10px">${esc(titles[key])}</h2>
+      <h2 class="klar-sheet-title" style="margin:0 0 10px">${esc(titles[key])}</h2>
       ${bodyHtml}
       <button type="button" class="btn" id="groupDone" style="margin-top:16px">Fertig</button>
     </div>
@@ -798,10 +798,10 @@ function openMergeDialog(container, json, fileInfo = {}) {
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Backup einspielen</h2>
+      <h2 class="klar-sheet-title" style="margin:0 0 2px">Backup einspielen</h2>
       ${sourceLine ? `<p class="hint" style="margin-top:0">${sourceLine}</p>` : ""}
 
-      <div class="klar-eyebrow" style="margin:10px 2px 8px">Kommt dazu</div>
+      <div class="klar-eyebrow gruppen-titel">Kommt dazu</div>
       <div class="klar-tile-grid">
         <div class="klar-tile"><div class="val">${p.consumption}</div><div class="lbl">Tage</div></div>
         <div class="klar-tile"><div class="val">${p.recipes}</div><div class="lbl">Rezepte</div></div>
@@ -998,7 +998,7 @@ function openRecipesOnlySheet() {
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal-card">
-      <h2 style="text-transform:none;color:var(--text);font-size:1.1rem;font-weight:800;margin-bottom:2px">Nur Rezepte</h2>
+      <h2 class="klar-sheet-title" style="margin:0 0 2px">Nur Rezepte</h2>
       <p class="hint">Schickt nur die Rezepte (ohne Profile, Verlauf, Listen) — z.B. um ein einzelnes neues Rezept ans andere Handy zu schicken. Vorhandene Rezepte dort bleiben erhalten, gleiche Rezepte werden aktualisiert.</p>
       <div class="btn-row" style="margin-top:10px">
         <button class="btn secondary" id="importRecipesBtn">${ikon("laden", { groesse: 17 })} Import</button>
