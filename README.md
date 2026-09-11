@@ -208,7 +208,9 @@ stellen — und das änderte auch die Ringe auf der Startseite.
 - Beim Eintippen bleibt der Fokus im Feld: Wort, Enter, Wort, Enter. Vorher zeichnete jedes
   Hinzufügen den ganzen Reiter neu, das Feld war ein neues Element und am Handy klappte die
   Tastatur zu
-- Zeilen sind einzeilig; zu langer Text wird abgeschnitten (vollständig im `title`)
+- Zeilen sind einzeilig und 52 px hoch statt 64: in den anderen Listen tragen die 64 px zwei
+  Zeilen (Name und Marke), hier steht nur der Artikel. Der Löschknopf bleibt 44 px hoch, er
+  wurde nur aus dem Polster geholt. Zu langer Text wird abgeschnitten (vollständig im `title`)
 - Der Einkauf hat **dasselbe Format wie die drei anderen Reiter**: eine Karte je Gruppe
   (Offen, Erledigt) mit Zeilen darin, gleiche Polster, gleiche Schriftgröße, gleicher Radius.
   Er hatte vorher eine eigene, zweite Fassung derselben Idee — höhere Zeilen, größere Schrift,
