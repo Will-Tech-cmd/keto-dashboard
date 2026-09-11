@@ -132,6 +132,10 @@ Wertekorrektur, die der Abgleich mitnimmt).
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
+  (110 Einträge, darunter 22 Gewürze und Kräuter mit 5-g-Portion). `test/lebensmitteltabelle.test.mjs`
+  prüft die Tabelle: Bestandteile ≤ 100 g je 100 g, Zucker in den Kohlenhydraten, gesättigtes
+  Fett im Fett, und die Kalorien gegen Atwater. Kakao ist die dokumentierte Ausnahme — die USDA
+  rechnet ihn mit eigenen Faktoren
 - Die Trefferliste ist **eine Karte mit Trennlinien** statt einer Karte je Treffer — zwanzig
   gerahmte Kästchen untereinander waren zwanzigmal Rand und Schatten für eine Liste, die man
   überfliegt

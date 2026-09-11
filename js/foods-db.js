@@ -116,6 +116,42 @@ export const FOODS = [
   food("Flohsamenschalen", { kcal: 220, carbs: 3, fiber: 85, sugars: 0, fat: 1, saturatedFat: 0, protein: 3, salt: 0.02 }, 10),
   food("Mascarpone", { kcal: 429, carbs: 4, fiber: 0, sugars: 4, fat: 44, saturatedFat: 29, protein: 5, salt: 0.1 }, 30),
   food("Skyr", { kcal: 63, carbs: 4, fiber: 0, sugars: 4, fat: 0.2, saturatedFat: 0.1, protein: 11, salt: 0.1 }, 150),
+
+  // Gewürze & Kräuter
+  //
+  // Portionsgröße durchgehend 5 g — ein gehäufter Teelöffel. Bei Salz ist das viel (die
+  // Tagesempfehlung liegt bei rund 6 g); die Portion steht hier trotzdem einheitlich auf 5 g
+  // und lässt sich beim Eintragen überschreiben.
+  //
+  // Die Ampel dieser App bewertet je 100 g und stellt getrocknete Gewürze deshalb fast alle
+  // auf Gelb oder Rot. Das ist rechnerisch richtig und praktisch irreführend: kein Mensch isst
+  // 100 g Oregano. Auf die 5-g-Portion gerechnet liegen fast alle unter 1 g Netto-KH, nur
+  // Knoblauch- und Zwiebelpulver bei rund 3 g.
+  //
+  // Werte je 100 g nach USDA-Referenzdaten (getrocknet bzw. gemahlen), `carbs` nach
+  // EU-Konvention bereits ohne Ballaststoffe.
+  food("Salz", { kcal: 0, carbs: 0, fiber: 0, sugars: 0, fat: 0, saturatedFat: 0, protein: 0, salt: 100 }, 5, ["Meersalz", "Kochsalz", "Tafelsalz"]),
+  food("Pfeffer schwarz", { kcal: 251, carbs: 38.7, fiber: 25.3, sugars: 0.6, fat: 3.3, saturatedFat: 1.4, protein: 10.4, salt: 0.05 }, 5, ["Pfeffer", "Schwarzer Pfeffer"]),
+  food("Paprikapulver", { kcal: 282, carbs: 19.1, fiber: 34.9, sugars: 10.3, fat: 13, saturatedFat: 2.1, protein: 14.1, salt: 0.1 }, 5, ["Paprika edelsüß", "Paprika geräuchert"]),
+  food("Chilipulver", { kcal: 318, carbs: 29.8, fiber: 27.2, sugars: 7.2, fat: 17.3, saturatedFat: 3.3, protein: 12, salt: 0.08 }, 5, ["Cayennepfeffer", "Chili", "Chiliflocken"]),
+  food("Knoblauchpulver", { kcal: 331, carbs: 63.7, fiber: 9, sugars: 2.4, fat: 0.7, saturatedFat: 0.2, protein: 16.6, salt: 0.15 }, 5, ["Knoblauchgranulat"]),
+  food("Zwiebelpulver", { kcal: 341, carbs: 63.8, fiber: 15.2, sugars: 6.6, fat: 1, saturatedFat: 0.2, protein: 10.4, salt: 0.18 }, 5, ["Zwiebelgranulat"]),
+  food("Oregano getrocknet", { kcal: 265, carbs: 26.5, fiber: 42.5, sugars: 4.1, fat: 4.3, saturatedFat: 1.6, protein: 9, salt: 0.06 }, 5, ["Oregano"]),
+  food("Basilikum getrocknet", { kcal: 233, carbs: 10.3, fiber: 37.7, sugars: 1.7, fat: 4, saturatedFat: 2.1, protein: 23, salt: 0.19 }, 5, ["Basilikum"]),
+  food("Thymian getrocknet", { kcal: 276, carbs: 26.9, fiber: 37, sugars: 1.7, fat: 7.4, saturatedFat: 2.7, protein: 9.1, salt: 0.014 }, 5, ["Thymian"]),
+  food("Rosmarin getrocknet", { kcal: 331, carbs: 21.5, fiber: 42.6, sugars: 0, fat: 15.2, saturatedFat: 7.4, protein: 4.9, salt: 0.13 }, 5, ["Rosmarin"]),
+  food("Majoran getrocknet", { kcal: 271, carbs: 20.3, fiber: 40.3, sugars: 4.1, fat: 7, saturatedFat: 0.5, protein: 12.7, salt: 0.19 }, 5, ["Majoran"]),
+  food("Petersilie getrocknet", { kcal: 292, carbs: 25, fiber: 26.7, sugars: 7.3, fat: 5.5, saturatedFat: 1.4, protein: 26.6, salt: 1.4 }, 5, ["Petersilie"]),
+  food("Currypulver", { kcal: 325, carbs: 22.6, fiber: 33.2, sugars: 2.8, fat: 14, saturatedFat: 1.6, protein: 12.7, salt: 0.13 }, 5, ["Curry"]),
+  food("Kreuzkümmel", { kcal: 375, carbs: 33.7, fiber: 10.5, sugars: 2.3, fat: 22.3, saturatedFat: 1.5, protein: 17.8, salt: 0.42 }, 5, ["Kumin", "Cumin"]),
+  food("Koriander gemahlen", { kcal: 298, carbs: 13.1, fiber: 41.9, sugars: 0, fat: 17.8, saturatedFat: 1, protein: 12.4, salt: 0.09 }, 5, ["Koriander"]),
+  food("Kümmel", { kcal: 333, carbs: 11.9, fiber: 38, sugars: 0.6, fat: 14.6, saturatedFat: 0.6, protein: 19.8, salt: 0.44 }, 5, ["Kümmelsamen"]),
+  food("Senfmehl", { kcal: 508, carbs: 15.9, fiber: 12.2, sugars: 6.8, fat: 36.2, saturatedFat: 1.9, protein: 26.1, salt: 0.03 }, 5, ["Senfkörner", "Senfsaat"]),
+  food("Ingwer gemahlen", { kcal: 335, carbs: 57.5, fiber: 14.1, sugars: 3.4, fat: 4.2, saturatedFat: 2.6, protein: 9, salt: 0.07 }, 5, ["Ingwerpulver"]),
+  food("Kurkuma", { kcal: 312, carbs: 44.4, fiber: 22.7, sugars: 3.2, fat: 3.3, saturatedFat: 1.8, protein: 9.7, salt: 0.07 }, 5, ["Gelbwurz"]),
+  food("Zimt gemahlen", { kcal: 247, carbs: 27.5, fiber: 53.1, sugars: 2.2, fat: 1.2, saturatedFat: 0.3, protein: 4, salt: 0.03 }, 5, ["Zimt"]),
+  food("Muskatnuss", { kcal: 525, carbs: 28.5, fiber: 20.8, sugars: 28, fat: 36.3, saturatedFat: 25.9, protein: 5.8, salt: 0.04 }, 5, ["Muskat"]),
+  food("Lorbeerblätter", { kcal: 313, carbs: 48.7, fiber: 26.3, sugars: 0, fat: 8.4, saturatedFat: 2.3, protein: 7.6, salt: 0.06 }, 5, ["Lorbeer"]),
 ];
 
 /** Sucht in der lokalen Tabelle nach Namen/Aliassen, beste Treffer (startsWith) zuerst. */
