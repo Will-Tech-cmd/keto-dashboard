@@ -296,6 +296,24 @@ export function saveOwnProduct(barcode, data) {
  * Ohne Netz und ohne Wartezeit, gedacht fürs Zeichnen von Listen. Gibt null zurück, wenn zu
  * diesem Barcode nichts vorliegt.
  */
+/**
+ * Hält fest, was eine Portion dieses Produkts wiegt — der Umrechnungsfaktor zwischen
+ * Portionen und Gramm beim Eintragen.
+ *
+ * Geht denselben Weg wie jede andere Wertekorrektur (eigenes Produkt mit Vorrang vor Cache
+ * und eingebauter Tabelle), damit die Angabe den Abgleich mitmacht und auf dem anderen Handy
+ * ankommt. Ein eigener Speicher nur für diese eine Zahl hätte in beiden Speicherwegen und im
+ * Abgleich nachgezogen werden müssen.
+ */
+export function setServingSize(barcode, grams) {
+  const vorhanden = getProductOffline(barcode);
+  const g = Number(grams);
+  if (!vorhanden || !Number.isFinite(g) || g <= 0) return null;
+  const produkt = { ...vorhanden, source: "own", servingSize: `${Math.round(g * 10) / 10} g` };
+  Store.saveOwnProduct(barcode, produkt);
+  return produkt;
+}
+
 export function getProductOffline(barcode) {
   if (!barcode) return null;
   const own = Store.getOwnProduct(barcode);

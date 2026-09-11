@@ -861,10 +861,10 @@ body[data-design="klar"] .subtab-btn.active {
 /* Einkaufszeile: eine `.list-item`-Zeile wie in den anderen Listen, nur mit Haken statt
    Ampel. Das Durchstreichen kommt aus der allgemeinen `.checked .name`-Regel. */
 .einkauf-zeile { cursor: pointer; }
-/* Anders als in den anderen Listen kommt der Text hier vom Menschen und nicht aus einer
-   Produktdatenbank: „Brokkoli, Blumenkohl und was sonst grün ist" darf umbrechen. Dort hält
-   die einzeilige Zeile die Nährwertspalte in Reihe — die gibt es im Einkauf nicht. */
-.einkauf-zeile .name { white-space: normal; overflow-wrap: anywhere; }
+/* Einzeilig wie jede andere Listenzeile, langer Text wird abgeschnitten. Eine Einkaufsliste
+   wird überflogen; gleich hohe Zeilen zählt das Auge schneller als umbrechende. Der volle
+   Text steht im `title`, und im Eingabefeld sieht man ihn beim Tippen ohnehin. */
+.einkauf-zeile .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .klar-check {
   flex: none; width: 22px; height: 22px; border-radius: 7px;

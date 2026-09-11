@@ -124,6 +124,11 @@ eigene Datenart — **ein Wert je Person und Tag**, optional mit Körperfettante
 - Der Gewichtsverlauf steht auch im Textbericht für die KI-Analyse, samt der Frage, ob
   Rechnung und Waage zueinander passen.
 
+Beim Eintragen stehen **Portionen und Gramm** nebeneinander, sobald das Produkt eine
+Portionsgröße hat. Hat es keine — bei Open Food Facts die Regel —, fragt „In Portionen
+eintragen" einmal nach dem Gewicht einer Portion und merkt es sich beim Produkt (als eigene
+Wertekorrektur, die der Abgleich mitnimmt).
+
 ### Scannen & Suchen
 - Barcode über die Kamera: nutzt die native `BarcodeDetector`-API, sonst ZXing als Rückfall
 - Namenssuche über Open Food Facts, eine eingebaute Tabelle gängiger Grundnahrungsmittel
@@ -175,6 +180,8 @@ nur zur Auswertung verschickt und nicht gespeichert.
 
 ### Start
 - Tagesstreifen, Nährwert-Ringe, Gewichtszeile, die Mahlzeiten des Tages
+- Neben „Auswertung" steht der Schnellscan (Kamera). Er war beim Umstieg von Emoji auf
+  gezeichnete Ikonen versehentlich verschwunden
 - **Zukünftige Tage sind anwählbar** (Planung für morgen) und sehen jetzt auch so aus. Sie
   standen in der Linienfarbe `--text-faint` — 1,49:1 Kontrast, also wie ein abgeschalteter
   Knopf, was die Planung praktisch versteckte
@@ -194,6 +201,10 @@ stellen — und das änderte auch die Ringe auf der Startseite.
   Entfernen unbeschriftete 19-Pixel-Ziele daneben waren
 - Der Einkaufswagen setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie
   im Verlauf
+- Beim Eintippen bleibt der Fokus im Feld: Wort, Enter, Wort, Enter. Vorher zeichnete jedes
+  Hinzufügen den ganzen Reiter neu, das Feld war ein neues Element und am Handy klappte die
+  Tastatur zu
+- Zeilen sind einzeilig; zu langer Text wird abgeschnitten (vollständig im `title`)
 - Der Einkauf hat **dasselbe Format wie die drei anderen Reiter**: eine Karte je Gruppe
   (Offen, Erledigt) mit Zeilen darin, gleiche Polster, gleiche Schriftgröße, gleicher Radius.
   Er hatte vorher eine eigene, zweite Fassung derselben Idee — höhere Zeilen, größere Schrift,
