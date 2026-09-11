@@ -60,10 +60,28 @@ export const DIET_TYPES = {
 
 const DEFAULT_THRESHOLDS = DIET_TYPES.keto.defaultThresholds;
 
-export function ketoGrade(netCarbs100, thresholds = DEFAULT_THRESHOLDS) {
+/**
+ * Die Ampel eines Produkts.
+ *
+ * Bewertet wird, was EINE PORTION kostet — nicht 100 g. Die Grenzwerte (5 g grün, 10 g gelb
+ * bei Keto) stehen neben einem Tagesbudget von etwa 20 g: eine Portion mit 5 g Netto-KH ist
+ * ein Viertel des Tages, und genau das soll der Punkt sagen. Je 100 g zu bewerten ging an der
+ * Frage vorbei, sobald eine Portion deutlich kleiner ist: 5 g Oregano schlagen mit 1,3 g zu
+ * Buche, die Zeile stand aber auf Rot, weil 100 g Oregano 26,5 g hätten. Niemand isst 100 g
+ * Oregano.
+ *
+ * Rezepte wurden von jeher je Portion bewertet (siehe views/recipes.js) — Produkte ziehen hier
+ * nach, statt dass zwei Listen in derselben App zwei verschiedene Maßstäbe anlegen.
+ *
+ * Ohne hinterlegte Portionsgröße bleibt es bei 100 g: dann gibt es keine Portion, auf die man
+ * rechnen könnte. Die Nährwerte werden unverändert je 100 g eingetragen und gespeichert; nur
+ * die Ampel rechnet um.
+ */
+export function ketoGrade(netCarbs100, thresholds = DEFAULT_THRESHOLDS, servingG = null) {
   if (netCarbs100 == null) return "gray";
-  if (netCarbs100 <= thresholds.green) return "green";
-  if (netCarbs100 <= thresholds.yellow) return "yellow";
+  const wert = servingG > 0 ? (netCarbs100 * servingG) / 100 : netCarbs100;
+  if (wert <= thresholds.green) return "green";
+  if (wert <= thresholds.yellow) return "yellow";
   return "red";
 }
 
@@ -83,9 +101,8 @@ export const GRADE_LABEL = {
 export function evaluateProduct(product, profileTargets, opts = {}) {
   const subtractFiber = opts.subtractFiber ?? product.likelyUsLabel;
   const netCarbs100 = calcNetCarbs(product.per100, { subtractFiber });
-  const grade = ketoGrade(netCarbs100, profileTargets?.gradeThresholds);
-
   const servingGrams = opts.servingGrams ?? parseServingGrams(product.servingSize);
+  const grade = ketoGrade(netCarbs100, profileTargets?.gradeThresholds, servingGrams);
   const netCarbsServing = netCarbs100 != null && servingGrams
     ? +(netCarbs100 * servingGrams / 100).toFixed(1)
     : null;

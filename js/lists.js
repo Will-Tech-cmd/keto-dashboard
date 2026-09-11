@@ -2,9 +2,9 @@
 // Verlauf) sowie die Auswertungsseite.
 import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { getTargetsForDate } from "./profiles.js";
-import { parseServingGrams } from "./keto.js";
+
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
-import { ketoGrade } from "./keto.js";
+import { ketoGrade, parseServingGrams } from "./keto.js";
 import { openProductEditor } from "./product-editor.js";
 import {
   openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
@@ -126,17 +126,21 @@ function renderProductRows(body, listName) {
     // Nur die Marke. Die Nährwerte stehen aufgeklappt in den Kacheln — sie doppelt zu
     // führen machte die Zeile lang, ohne dass die Kacheln dadurch entbehrlich wurden.
     const meta = item.brand || "";
+    // Die Ampel wird beim Zeichnen gerechnet, nicht aus dem Eintrag gelesen: die gespeicherte
+    // stammt vom Zeitpunkt des Merkens und weiß nichts von einer Portionsgröße, die später
+    // dazukam — und seit die Ampel je Portion bewertet, ändert genau die das Ergebnis.
+    const grade = ampelFuer(item.barcode, nutri);
     return `
       <div class="list-entry" data-barcode="${esc(item.barcode)}">
         <div class="list-item" style="cursor:pointer">
-          ${gradeDotHtml(item.grade)}
+          ${gradeDotHtml(grade)}
           <div class="info">
             <div class="name">${esc(item.name)}</div>
             <div class="meta">${esc(meta)}</div>
           </div>
           ${isNoGo ? "" : `<button class="icon-btn" data-action="cart" title="Auf Einkaufsliste" aria-label="Auf Einkaufsliste">${ikon("einkauf", { groesse: 19 })}</button>`}
         </div>
-        ${isNoGo ? noGoDetailHtml(item, nutri) : detailHtml(nutri)}
+        ${isNoGo ? noGoDetailHtml(item, nutri) : detailHtml(nutri, portionsZeile(item.barcode, nutri))}
       </div>
     `;
   }).join("")}</div>`;
@@ -242,7 +246,8 @@ function nutriOf(item, listName) {
   if (listName === "favorites" || listName === "noGo") {
     // Mit den Werten auch die Ampel nachziehen: sie stammt vom Zeitpunkt des Merkens und
     // stünde sonst weiter auf grau, obwohl die Kacheln daneben echte Werte zeigen.
-    const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds);
+    const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds,
+      parseServingGrams(product.servingSize));
     item.grade = grade;
     // backfillListEntry statt updateListEntry: hier wird nur nachgetragen, was ohnehin auf
     // diesem Gerät liegt — das ist keine Änderung des Menschen. Mit einem frischen updatedAt
@@ -251,6 +256,31 @@ function nutriOf(item, listName) {
     Store.backfillListEntry(listName, item.barcode, { nutri100: snapshot, grade });
   }
   return snapshot;
+}
+
+/**
+ * Die Ampel eines Listeneintrags: aus den Nährwerten und der Portionsgröße des Produkts.
+ * Ohne Portionsgröße bleibt es bei der Bewertung je 100 g (siehe ketoGrade).
+ */
+function ampelFuer(barcode, nutri) {
+  if (!nutri || nutri.netCarbs == null) return "gray";
+  const product = getProductOffline(barcode);
+  return ketoGrade(nutri.netCarbs, Store.getActiveProfile().gradeThresholds,
+    product ? parseServingGrams(product.servingSize) : null);
+}
+
+/**
+ * Eine Zeile, die sagt, worauf sich der Punkt bezieht — sonst ist nicht zu sehen, ob Grün für
+ * 100 g oder für eine Portion gilt, und die Kacheln daneben tragen „je 100 g".
+ */
+function portionsZeile(barcode, nutri) {
+  const product = getProductOffline(barcode);
+  const servingG = product ? parseServingGrams(product.servingSize) : null;
+  if (!servingG || !nutri || nutri.netCarbs == null) {
+    return `<p class="hint">Keine Portionsgröße hinterlegt — die Ampel bewertet je 100 g. Beim Eintragen lässt sie sich festlegen.</p>`;
+  }
+  const jePortion = Math.round((nutri.netCarbs * servingG / 100) * 10) / 10;
+  return `<p class="hint">Eine Portion (${servingG} g): ${jePortion} g Netto-KH — darauf bezieht sich der Punkt.</p>`;
 }
 
 /** Aufklappbereich einer Listenzeile: Kacheln, optionale Zusatzzeile, Aktionen. */
@@ -284,7 +314,8 @@ async function resolveProduct(barcode) {
 /** Nach einer Wertekorrektur: Ampelfarbe und Kennwerte in allen Listen nachziehen. */
 function applyCorrectionToLists(product) {
   const snapshot = nutriSnapshot(product);
-  const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds);
+  const grade = ketoGrade(snapshot.netCarbs, Store.getActiveProfile().gradeThresholds,
+    parseServingGrams(product.servingSize));
   for (const listName of ["favorites", "noGo"]) {
     Store.updateListEntry(listName, product.barcode, {
       name: product.name,
@@ -476,10 +507,13 @@ function renderHistoryList(el, items) {
       || (entry.netCarbs100 != null ? { netCarbs: entry.netCarbs100 } : null);
     const meta = [time, entry.brand || ""].filter(Boolean).join(" · ");
     const isFav = Store.isInList("favorites", entry.barcode);
+    // Wie in den Listen: die Ampel wird gerechnet, damit der Punkt überall dasselbe meint.
+    // Ohne bekannte Werte bleibt die Bewertung von damals stehen — besser als grau.
+    const grade = nutri ? ampelFuer(entry.barcode, nutri) : (entry.grade || "gray");
     rows.push(`
       <div class="list-entry" data-barcode="${esc(entry.barcode)}">
         <div class="list-item" style="cursor:pointer">
-          ${gradeDotHtml(entry.grade)}
+          ${gradeDotHtml(grade)}
           <div class="info">
             <div class="name">${esc(entry.name)}</div>
             <div class="meta">${esc(meta)}</div>
