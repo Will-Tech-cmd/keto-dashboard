@@ -1393,11 +1393,49 @@ body[data-design="klar"] .icon-btn.warm { color: var(--warm); }
 /* Auswertung: 30-Tage-Streifen unter der Kopfzahl — jeder Tag ein Strich, grün im Ziel,
    Terrakotta darüber, blass ohne Eintrag. Ergänzt die Kopfzahl um den zeitlichen Verlauf,
    ohne gleich das ganze Liniendiagramm wiederholen zu müssen. */
-.klar-day-strip { display: flex; align-items: stretch; gap: 2px; margin-top: 16px; height: 28px; }
-.klar-day-strip-bar { flex: 1; min-width: 2px; border-radius: 2px; background: var(--divider); }
-.klar-day-strip-bar.ok { background: var(--accent); }
-.klar-day-strip-bar.over { background: var(--warm); }
-.klar-day-strip-bar.empty { background: var(--divider); opacity: .5; }
+/* Ersetzt durch das Makro-Diagramm (siehe makroChartHtml): der Streifen sagte nur Ja/Nein zum
+   KH-Limit, und dasselbe stand als Zahl darüber und als Liniendiagramm darunter. */
+
+/* Makro-Diagramm: ein Balken je Tag, Höhe = Anteil am kcal-Ziel, Schichtung = Kalorien aus
+   Fett / Eiweiß / Kohlenhydraten.
+   Die drei Farben sind gegen Farbfehlsichtigkeit geprüft (ΔE 21 zwischen den benachbarten
+   Paaren im Normalsehen, 19 bei Deuteranopie) — Grün und das Oliv der App lagen bei 2 und
+   waren damit für einen Teil der Menschen dieselbe Farbe. Blau ist `--water-fg`, das seit dem
+   Wegfall der Wasseranzeige ungenutzt herumlag. Dunkel bekommt eigene, etwas dunklere Stufen
+   derselben Töne: die hellen Marken der App leuchten auf dunklem Grund zu stark. */
+:root { --makro-fett: #1f8a5f; --makro-eiweiss: #1565c0; --makro-kh: #b8632f; }
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) { --makro-fett: #2aa16c; --makro-eiweiss: #4a86e0; --makro-kh: #c4784a; }
+}
+body[data-theme="dark"] { --makro-fett: #2aa16c; --makro-eiweiss: #4a86e0; --makro-kh: #c4784a; }
+
+.makro-svg { width: 100%; height: 130px; display: block; margin-top: 16px; }
+.makro-fett    { fill: var(--makro-fett); }
+.makro-eiweiss { fill: var(--makro-eiweiss); }
+.makro-kh      { fill: var(--makro-kh); }
+.makro-ueber   { fill: var(--red-fg); }
+.makro-leer    { fill: var(--divider); }
+.makro-ziel    { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.makro-legende {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px;
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+}
+.makro-legende span { display: inline-flex; align-items: center; gap: 5px; }
+.makro-punkt { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.makro-punkt.fett { background: var(--makro-fett); }
+.makro-punkt.eiweiss { background: var(--makro-eiweiss); }
+.makro-punkt.kh { background: var(--makro-kh); }
+.makro-punkt.ueber { background: var(--red-fg); border-radius: 1px; height: 3px; }
+.makro-punkt.linie { background: none; border-top: 1px dashed var(--text-muted); height: 0; border-radius: 0; }
+
+/* Wochenzeile in der Auswertung */
+.woche-spanne { font-weight: 600; color: var(--text-muted); font-size: 11.5px; }
+.woche-quote {
+  flex: none; font-size: 12px; font-weight: 800; color: var(--text-muted);
+  background: var(--bg); border-radius: 999px; padding: 3px 9px;
+}
+.woche-quote.voll { color: var(--accent); }
+.list-entry.open .woche-quote { background: none; }
 .klar-day-strip-labels {
   display: flex; justify-content: space-between; margin-top: 5px;
   font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted);

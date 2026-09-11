@@ -239,8 +239,22 @@ stellen — und das änderte auch die Ringe auf der Startseite.
   Kacheln: vier einstellige Zahlen brauchten mehr Platz als der Verlauf darunter. Seine
   Zeilen zeigen Uhrzeit und Marke; die bekannten Netto-KH stehen aufgeklappt in den
   Kacheln, wo vorher gar nichts stand
-- Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Verlaufsdiagramm,
-  Gewichtskurve mit Trend
+- Auswertung über 30 Tage: Durchschnitte, Tage im Ziel, längste Serie, Gewichtskurve mit Trend
+- **Ein Balken je Tag** statt zweier Diagramme: die Höhe sagt, wie viel vom kcal-Ziel der Tag
+  ausmacht, die Schichtung, woraus die Kalorien kamen (Fett / Eiweiß / KH). Vorher standen dort
+  ein Streifen aus 30 Ja/Nein-Balken und darunter ein Liniendiagramm — beide zeigten die
+  Kohlenhydrate, keines die Verteilung, und die ist bei dieser Ernährungsform die Frage.
+  Tage über dem KH-Limit bekommen einen Deckel in Rot; die Farbe allein trägt die Aussage
+  nicht, der Deckel steht mit seinem Namen in der Legende
+- Die drei Farben sind gegen Farbfehlsichtigkeit geprüft (ΔE 21 bzw. 19 bei Deuteranopie).
+  Grün und das Oliv der App lagen bei ΔE 2 — für einen Teil der Menschen dieselbe Farbe.
+  Dunkel bekommt eigene, dunklere Stufen derselben Töne
+- **Einzelne Tage stehen in Wochen**: eine Zeile je Kalenderwoche mit den Ø-Werten und „5/7 im
+  Ziel", ein Tipp klappt die Tage auf. Aus rund 30 Zeilen werden fünf; die Seite ist damit
+  1200 statt 3000 Pixel lang
+- **Favoriten stehen nach Verwendung**: was in den letzten 90 Tagen am häufigsten eingetragen
+  wurde, steht oben. Bei über hundert Einträgen lagen die acht Sachen des Alltags vorher
+  irgendwo in der Reihenfolge des Merkens
 - Textbericht für eine Analyse durch ein Sprachmodell (kopieren oder teilen)
 
 Karten haben überall dieselbe Form (18er Radius, 15er Polster). Die alte `.card` mit 12er
