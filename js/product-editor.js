@@ -3,6 +3,7 @@
 // Ergebniskarte) und aus den Listen heraus als Dialog.
 import { Store } from "./store.js";
 import { saveOwnProduct } from "./off.js";
+import { checkKcalPlausibility, parseServingGrams } from "./keto.js";
 import { esc, showToast, bindBackClose, selectOnFocus } from "./ui.js";
 
 /**
@@ -37,6 +38,7 @@ export function ownProductFormHtml(barcode, existing = null, prefillName = "", {
     <div class="field-row">
       <div><label>Portionsgröße (z.B. "30 g")</label><input type="text" id="opServing" value="${esc(existing?.servingSize || "")}"></div>
     </div>
+    <p class="hint" id="opServingHint" style="margin-top:6px" hidden></p>
     <p class="hint" style="margin-top:12px">Nährwerte pro 100 g — in der Reihenfolge der Verpackung:</p>
     <div class="klar-nutri-table">
       ${nutriRow("Brennwert", "opKcal", p.kcal, { unit: "kcal" })}
@@ -50,6 +52,7 @@ export function ownProductFormHtml(barcode, existing = null, prefillName = "", {
     </div>
     <label>Zutaten (optional, für Warnhinweise)</label>
     <input type="text" id="opIngredients" placeholder="z.B. Wasser, Zucker, Maltodextrin …" value="${esc(existing?.ingredientsText || "")}">
+    <div class="klar-warnung" id="opPlausi" hidden></div>
     <div class="btn-row" style="margin-top:14px">
       ${existing ? `<button type="button" class="btn secondary" id="opCancel">Abbrechen</button>` : ""}
       <button type="button" class="btn" id="opSave">Speichern</button>
@@ -70,10 +73,30 @@ function readAndSave(root, barcode) {
     const n = parseFloat(raw);
     return Number.isNaN(n) ? null : n;
   };
+  const werte = {
+    kcal: numOrNull(val("#opKcal")),
+    fat: numOrNull(val("#opFat")),
+    carbs: numOrNull(val("#opCarbs")),
+    fiber: numOrNull(val("#opFiber")),
+    protein: numOrNull(val("#opProtein")),
+  };
+  // Die Prüfung steht hier NACH dem Namen und VOR dem Speichern, meldet sich aber nur und
+  // hält nichts auf: ein Etikett kann abweichen, und wer die Packung vor sich hat, weiß mehr
+  // als die Formel. Beim zweiten Tippen auf Speichern geht es durch.
+  const plausi = checkKcalPlausibility(werte);
+  const warnung = root.querySelector("#opPlausi");
+  if (plausi && warnung && warnung.hidden) {
+    warnung.innerHTML = `<b>${plausi.calculatedKcal} statt ${werte.kcal} kcal?</b> Aus Fett, `
+      + `Kohlenhydraten und Eiweiß errechnen sich ${plausi.calculatedKcal} kcal je 100 g `
+      + `(${plausi.deviationPct}% Abweichung). Häufigste Ursache: die Werte gelten für ein `
+      + `Stück oder eine Portion, nicht für 100 g. Nochmal auf Speichern tippen übernimmt sie so.`;
+    warnung.hidden = false;
+    return null;
+  }
   const product = saveOwnProduct(barcode, {
     name,
     brand: val("#opBrand").trim(),
-    servingSize: val("#opServing").trim(),
+    servingSize: normalisierePortion(val("#opServing")),
     kcal: numOrNull(val("#opKcal")),
     fat: numOrNull(val("#opFat")),
     saturatedFat: numOrNull(val("#opSatFat")),
@@ -90,8 +113,41 @@ function readAndSave(root, barcode) {
   return product;
 }
 
+/**
+ * "30" wird zu "30 g".
+ *
+ * Das Feld nimmt freien Text („1 Riegel (30 g)"), gelesen wird daraus aber eine Grammzahl
+ * (parseServingGrams sucht eine Zahl vor einem g). Eine nackte Zahl fiel dabei durch: der
+ * Eintrag hatte eine Portionsgröße, die App fand keine — und bot beim Eintragen kein
+ * Portionen-Feld an, ohne dass irgendwo stand, warum.
+ */
+function normalisierePortion(rohwert) {
+  const text = String(rohwert || "").trim();
+  if (!text) return "";
+  return /^\d+(?:[.,]\d+)?$/.test(text) ? `${text.replace(",", ".")} g` : text;
+}
+
+/** Sagt beim Tippen, was die App aus der Portionsangabe herausliest — oder dass sie nichts findet. */
+function wirePortionsHinweis(root) {
+  const feld = root.querySelector("#opServing");
+  const hinweis = root.querySelector("#opServingHint");
+  if (!feld || !hinweis) return;
+  const pruefe = () => {
+    const text = normalisierePortion(feld.value);
+    const gramm = parseServingGrams(text);
+    if (!text) { hinweis.hidden = true; return; }
+    hinweis.hidden = false;
+    hinweis.textContent = gramm
+      ? `Gelesen als ${gramm} g je Portion.`
+      : "Daraus kann die App keine Grammzahl lesen — eine Zahl mit „g\" schreiben, z.B. „30 g\".";
+  };
+  feld.addEventListener("input", pruefe);
+  pruefe();
+}
+
 /** Verdrahtet ein direkt in der Seite gerendertes Formular (Scan-Tab). */
 export function wireOwnProductForm(root, barcode, { onSaved, onCancel } = {}) {
+  wirePortionsHinweis(root);
   root.querySelector("#opCancel")?.addEventListener("click", () => onCancel?.());
   root.querySelector("#opSave").addEventListener("click", () => {
     const product = readAndSave(root, barcode);
@@ -117,6 +173,7 @@ export function openProductEditor(product, onSaved) {
   `;
   document.body.appendChild(overlay);
 
+  wirePortionsHinweis(overlay);
   const close = bindBackClose(() => overlay.remove());
   overlay.querySelector("#opBack").addEventListener("click", close);
   overlay.querySelector("#opCancel").addEventListener("click", close);

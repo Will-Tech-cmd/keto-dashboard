@@ -124,6 +124,23 @@ eigene Datenart — **ein Wert je Person und Tag**, optional mit Körperfettante
 - Der Gewichtsverlauf steht auch im Textbericht für die KI-Analyse, samt der Frage, ob
   Rechnung und Waage zueinander passen.
 
+**Die Ampel bewertet eine Portion, nicht 100 g.** Die Grenzwerte (5 g grün, 10 g gelb bei
+Keto) stehen neben einem Tagesbudget von rund 20 g — eine Portion mit 5 g ist ein Viertel des
+Tages, und das soll der Punkt sagen. Rezepte wurden von jeher so bewertet; Produkte ziehen
+nach, statt dass zwei Listen in derselben App zwei Maßstäbe anlegen. Die Nährwerte werden
+unverändert **je 100 g** eingetragen und gespeichert, nur die Ampel rechnet um; ohne
+hinterlegte Portionsgröße bleibt es bei 100 g. Über der Zeile steht aufgeklappt, worauf sich
+der Punkt bezieht. In der eingebauten Tabelle ändern sich dadurch 38 von 110 Einträgen: 31
+werden besser (Gewürze, Nüsse, Mehle), 7 schlechter — 150 g Brokkoli sind 6 g Netto-KH, und
+das ist zu Recht gelb.
+
+Beim Speichern eigener Werte rechnet die App nach: passen die Kalorien nicht zu Fett,
+Kohlenhydraten und Eiweiß (mehr als 20 % daneben), fragt sie einmal nach und nennt die
+häufigste Ursache — Werte für ein Stück statt für 100 g. Aufgehalten wird niemand, ein
+zweites Tippen speichert. Eine nackte Zahl im Feld Portionsgröße wird zu „30 g" ergänzt;
+sonst stand dort etwas, das die App nicht lesen konnte, und das Portionen-Feld blieb ohne
+Begründung weg.
+
 Beim Eintragen stehen **Portionen und Gramm** nebeneinander, sobald das Produkt eine
 Portionsgröße hat. Hat es keine — bei Open Food Facts die Regel —, fragt „In Portionen
 eintragen" einmal nach dem Gewicht einer Portion und merkt es sich beim Produkt (als eigene

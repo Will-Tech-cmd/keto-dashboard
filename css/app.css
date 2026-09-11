@@ -866,6 +866,15 @@ body[data-design="klar"] .subtab-btn.active {
    Text steht im `title`, und im Eingabefeld sieht man ihn beim Tippen ohnehin. */
 .einkauf-zeile .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Hinweiskasten im Werte-Formular: meldet sich, hält aber nichts auf (siehe
+   product-editor.js). Gelb wie „in Maßen" — es ist eine Nachfrage, kein Fehler. */
+.klar-warnung {
+  margin-top: 14px; padding: 11px 13px; border-radius: 14px;
+  background: var(--yellow-bg); border: 1px solid var(--yellow-border); color: var(--yellow-fg);
+  font-size: 12.5px; font-weight: 600; line-height: 1.45;
+}
+.klar-warnung b { font-weight: 800; }
+
 .klar-check {
   flex: none; width: 22px; height: 22px; border-radius: 7px;
   border: 2px solid var(--text-faint); display: flex; align-items: center; justify-content: center;
