@@ -96,8 +96,9 @@ function renderProductList(body, listName) {
   }
 
   body.innerHTML = `
-    <div class="such-feld" style="margin-bottom:12px">${ikon("suche", { groesse: 17 })}
+    <div class="such-feld" style="margin-bottom:${listName === "favorites" ? "6px" : "12px"}">${ikon("suche", { groesse: 17 })}
       <input type="text" id="listSearch" placeholder="Suchen …" aria-label="In dieser Liste suchen" autocomplete="off" value="${esc(listFilter)}"></div>
+    ${listName === "favorites" ? `<p class="hint" style="margin:0 2px 10px">Häufigste zuerst — gezählt werden die letzten 90 Tage.</p>` : ""}
     <div id="listRows"></div>
   `;
   const search = body.querySelector("#listSearch");
@@ -111,9 +112,10 @@ function renderProductList(body, listName) {
 function renderProductRows(body, listName) {
   const rowsEl = body.querySelector("#listRows");
   const q = listFilter.trim().toLowerCase();
-  const items = Store.get()[listName].filter(item =>
+  let items = Store.get()[listName].filter(item =>
     !q || item.name.toLowerCase().includes(q) || (item.brand || "").toLowerCase().includes(q)
   );
+  if (listName === "favorites") items = nachVerwendung(items);
 
   if (items.length === 0) {
     rowsEl.innerHTML = emptyState("suche", `Kein Eintrag passt zu „${listFilter}".`);
@@ -256,6 +258,36 @@ function nutriOf(item, listName) {
     Store.backfillListEntry(listName, item.barcode, { nutri100: snapshot, grade });
   }
   return snapshot;
+}
+
+/**
+ * Favoriten in der Reihenfolge, in der sie gebraucht werden: was in den letzten 90 Tagen am
+ * häufigsten eingetragen wurde, steht oben; bei gleicher Anzahl entscheidet, was zuletzt dran
+ * war; alles nie Benutzte folgt alphabetisch.
+ *
+ * Alphabetisch war die Liste nie — sie stand in der Reihenfolge des Merkens, und bei über
+ * hundert Einträgen heißt das: die acht Sachen, die man täglich einträgt, liegen irgendwo
+ * dazwischen. Der Zeitraum ist bewusst kurz: was man vor einem halben Jahr oft gegessen hat,
+ * sagt wenig darüber, wonach man heute sucht.
+ */
+function nachVerwendung(items) {
+  const grenze = Date.now() - 90 * 86400000;
+  const nutzung = new Map();
+  for (const e of Store.getConsumption()) {
+    if (!e.barcode || !(e.at >= grenze)) continue;
+    const bisher = nutzung.get(e.barcode) || { anzahl: 0, zuletzt: 0 };
+    bisher.anzahl++;
+    bisher.zuletzt = Math.max(bisher.zuletzt, e.at);
+    nutzung.set(e.barcode, bisher);
+  }
+  const leer = { anzahl: 0, zuletzt: 0 };
+  return [...items].sort((a, b) => {
+    const na = nutzung.get(a.barcode) || leer;
+    const nb = nutzung.get(b.barcode) || leer;
+    return nb.anzahl - na.anzahl
+      || nb.zuletzt - na.zuletzt
+      || a.name.localeCompare(b.name, "de");
+  });
 }
 
 /**
@@ -651,13 +683,7 @@ function renderEvaluation(body, goToTab) {
         <span class="klar-result-unit">von ${withData.length} Tagen mit Einträgen</span>
       </div>
       ${withData.length > 0 ? `
-        <div class="klar-day-strip">
-          ${days.map(d => {
-            const cls = !d.hasEntries ? "empty" : d.totals.netCarbs <= d.targets.netCarbG ? "ok" : "over";
-            return `<span class="klar-day-strip-bar ${cls}"></span>`;
-          }).join("")}
-        </div>
-        <div class="klar-day-strip-labels"><span>vor 30 Tagen</span><span>heute</span></div>
+        ${makroChartHtml(days)}
         <div class="klar-tile-grid" style="margin-top:16px">
           <div class="klar-tile"><div class="val">${avg("kcal") ?? "–"}</div><div class="lbl">kcal</div></div>
           <div class="klar-tile"><div class="val">${avg("netCarbs") ?? "–"}</div><div class="lbl">g Netto-KH</div></div>
@@ -667,10 +693,9 @@ function renderEvaluation(body, goToTab) {
         <div class="klar-tile-unit">Ø pro Tag</div>
       ` : `<p class="hint" style="text-align:center;margin:14px 0 0">Noch keine Einträge in den letzten 30 Tagen.</p>`}
     </div>
-    ${trendChartHtml(days)}
     ${gewichtKarteHtml(profile)}
     <button class="klar-pill-btn" id="analyzeBtn" style="margin-bottom:14px">${ikon("ki", { groesse: 17 })} Mit Claude analysieren</button>
-    <div class="klar-eyebrow" style="margin:0 2px 8px">Tage einzeln</div>
+    <div class="klar-eyebrow gruppen-titel">Wochen</div>
     <div id="evalDays"></div>
   `;
 
@@ -680,22 +705,174 @@ function renderEvaluation(body, goToTab) {
   });
 
   const daysEl = body.querySelector("#evalDays");
-  daysEl.innerHTML = `<div class="klar-list-card">${[...days].reverse().map(evalDayRowHtml).join("")}</div>`;
+  daysEl.innerHTML = `<div class="klar-list-card">${wochenGruppen(days).map(wochenZeileHtml).join("")}</div>`;
 
-  daysEl.querySelectorAll(".list-item[data-daykey]").forEach(row => {
-    row.addEventListener("click", () => {
+  daysEl.querySelectorAll(".list-entry").forEach(entry => {
+    entry.querySelector(".list-item").addEventListener("click", () => toggleDetail(entry));
+  });
+  daysEl.querySelectorAll("[data-daykey]").forEach(row => {
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
       setActiveDateKey(row.dataset.daykey);
+      goToTab?.("start");
+    });
+  });
+  // Ein Balken im Diagramm führt auf denselben Tag wie eine Zeile darunter.
+  body.querySelectorAll("[data-chartday]").forEach(bar => {
+    bar.addEventListener("click", () => {
+      setActiveDateKey(bar.dataset.chartday);
       goToTab?.("start");
     });
   });
 }
 
 /**
- * Kleines SVG-Liniendiagramm des täglichen Netto-KH-Verbrauchs über den 30-Tage-Zeitraum.
- * Tage ohne Eintrag reißen die Linie ab statt sie auf 0 zu ziehen (sonst sähe "nichts
- * gegessen" wie "perfekt eingehalten" aus). Referenzlinie zeigt das HEUTIGE Ziel — frühere
- * Tage können (durch die Zielwert-Einfrierung) ein anderes gehabt haben, siehe Punktfarbe.
+ * Ein Balken je Tag: die Höhe sagt WIE VIEL (Anteil am kcal-Ziel des Tages), die Schichtung
+ * sagt WORAUS (Fett, Eiweiß, Kohlenhydrate, jeweils nach ihrem Anteil an den Kalorien).
+ *
+ * Ersetzt zwei Bilder durch eines. Vorher standen hier ein Streifen aus 30 Ja/Nein-Balken und
+ * darunter ein Liniendiagramm — beide zeigten dasselbe, nämlich die Kohlenhydrate, und keines
+ * zeigte, ob die Verteilung stimmt. Genau die ist bei dieser Ernährungsform aber die Frage:
+ * rund 70 % der Kalorien aus Fett, 25 % aus Eiweiß, der Rest Kohlenhydrate.
+ *
+ * Tage über dem KH-Limit bekommen einen Punkt über dem Balken. Nicht die Farbe der
+ * KH-Schicht zu ändern ist Absicht: Farbe allein trägt keine Aussage, wenn jemand sie nicht
+ * unterscheiden kann — der Punkt steht in der Legende mit seinem Namen daneben.
  */
+function makroChartHtml(days) {
+  const W = 640, H = 150, PAD = 8, LUECKE = 2;
+  const breite = (W - PAD * 2 - LUECKE * (days.length - 1)) / days.length;
+  // Der Maßstab richtet sich nach dem höchsten Tag, schließt das kcal-Ziel aber immer ein:
+  // sonst klebte die Ziellinie bei jemandem, der deutlich darunter isst, weit über allen
+  // Balken und verschenkte die halbe Höhe.
+  const anteile = days.filter(d => d.hasEntries)
+    .map(d => (d.totals.fat * 9 + d.totals.protein * 4 + d.totals.netCarbs * 4) / (d.targets.kcal || 1));
+  const DECKEL = Math.min(Math.max(1.08, ...anteile.map(a => a + 0.08)), 2);
+
+  const x = (i) => PAD + i * (breite + LUECKE);
+  const hoeheFuer = (anteil) => Math.min(anteil, DECKEL) / DECKEL * (H - PAD * 2);
+  const zielY = H - PAD - hoeheFuer(1);
+
+  const balken = days.map((d, i) => {
+    if (!d.hasEntries) {
+      return `<rect x="${x(i).toFixed(1)}" y="${H - PAD - 2}" width="${breite.toFixed(1)}" height="2" class="makro-leer"></rect>`;
+    }
+    // Kalorien aus den Makros, nicht der eingetragene kcal-Wert: nur so ergeben die drei
+    // Schichten zusammen die volle Höhe. Abweichungen zwischen beiden fängt die Prüfung
+    // beim Speichern ab (product-editor.js).
+    const kcalFett = d.totals.fat * 9;
+    const kcalEiweiss = d.totals.protein * 4;
+    const kcalKh = d.totals.netCarbs * 4;
+    const summe = kcalFett + kcalEiweiss + kcalKh;
+    if (summe <= 0) return "";
+    const ziel = d.targets.kcal || summe;
+    const gesamt = hoeheFuer(summe / ziel);
+    const teile = [
+      { h: gesamt * (kcalFett / summe), klasse: "fett" },
+      { h: gesamt * (kcalEiweiss / summe), klasse: "eiweiss" },
+      { h: gesamt * (kcalKh / summe), klasse: "kh" },
+    ];
+    let y = H - PAD;
+    const rects = teile.map(t => {
+      if (t.h < 0.6) return "";
+      y -= t.h;
+      return `<rect x="${x(i).toFixed(1)}" y="${y.toFixed(1)}" width="${breite.toFixed(1)}" height="${Math.max(t.h - 1, 0.6).toFixed(1)}" class="makro-${t.klasse}"></rect>`;
+    }).join("");
+    // Ein Deckel über dem Balken, kein Kreis: das SVG wird in der Breite gestreckt
+    // (preserveAspectRatio="none"), ein Kreis würde dabei zur Ellipse.
+    const ueber = d.totals.netCarbs > d.targets.netCarbG
+      ? `<rect x="${x(i).toFixed(1)}" y="${Math.max(y - 6, 1).toFixed(1)}" width="${breite.toFixed(1)}" height="3" class="makro-ueber"></rect>`
+      : "";
+    return `<g data-chartday="${d.key}" style="cursor:pointer"><title>${esc(dayLabel(new Date(d.key.split("-")[0], +d.key.split("-")[1] - 1, +d.key.split("-")[2]).getTime()))}: ${round1(d.totals.kcal)} kcal, ${round1(d.totals.netCarbs)} g KH</title>${rects}${ueber}</g>`;
+  }).join("");
+
+  const anteil = (feld, faktor) => {
+    const mit = days.filter(d => d.hasEntries);
+    const summe = mit.reduce((s, d) => s + d.totals.fat * 9 + d.totals.protein * 4 + d.totals.netCarbs * 4, 0);
+    if (!summe) return 0;
+    return Math.round(mit.reduce((s, d) => s + d.totals[feld] * faktor, 0) / summe * 100);
+  };
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="makro-svg" preserveAspectRatio="none" role="img"
+      aria-label="Tägliche Kalorienverteilung aus Fett, Eiweiß und Kohlenhydraten">
+      <line x1="${PAD}" y1="${zielY.toFixed(1)}" x2="${W - PAD}" y2="${zielY.toFixed(1)}" class="makro-ziel"></line>
+      ${balken}
+    </svg>
+    <div class="klar-day-strip-labels"><span>vor 30 Tagen</span><span>heute</span></div>
+    <div class="makro-legende">
+      <span><i class="makro-punkt fett"></i>Fett ${anteil("fat", 9)} %</span>
+      <span><i class="makro-punkt eiweiss"></i>Eiweiß ${anteil("protein", 4)} %</span>
+      <span><i class="makro-punkt kh"></i>KH ${anteil("netCarbs", 4)} %</span>
+      <span><i class="makro-punkt ueber"></i>über KH-Limit</span>
+      <span><i class="makro-punkt linie"></i>kcal-Ziel</span>
+    </div>
+  `;
+}
+
+/** Die 30 Tage in Kalenderwochen, neueste zuerst. Montag beginnt die Woche. */
+function wochenGruppen(days) {
+  const wochen = new Map();
+  for (const d of days) {
+    const [j, m, t] = d.key.split("-").map(Number);
+    const datum = new Date(Date.UTC(j, m - 1, t));
+    const wochentag = (datum.getUTCDay() + 6) % 7; // Montag = 0
+    const montag = new Date(datum.getTime() - wochentag * 86400000);
+    const schluessel = montag.toISOString().slice(0, 10);
+    if (!wochen.has(schluessel)) wochen.set(schluessel, { montag, tage: [] });
+    wochen.get(schluessel).tage.push(d);
+  }
+  return [...wochen.values()].reverse();
+}
+
+/** Kalenderwoche nach ISO 8601 — die Woche mit dem ersten Donnerstag des Jahres ist die erste. */
+function kalenderwoche(montag) {
+  const d = new Date(montag.getTime());
+  d.setUTCDate(d.getUTCDate() + 3); // Donnerstag derselben Woche
+  const jahresanfang = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - jahresanfang) / 86400000 + 1) / 7);
+}
+
+/**
+ * Eine Woche als Zeile: Ø der vier Werte und wie viele Tage im KH-Ziel lagen. Ein Tipp klappt
+ * die einzelnen Tage auf. Aus rund 30 Zeilen werden fünf — die Auswertung war länger als der
+ * Rest der App zusammen, und dreißig einzelne Tage beantworten keine Frage, die man im
+ * Vorbeiscrollen stellt.
+ */
+function wochenZeileHtml({ montag, tage }) {
+  const mit = tage.filter(d => d.hasEntries);
+  const kw = kalenderwoche(montag);
+  const sonntag = new Date(montag.getTime() + 6 * 86400000);
+  const kurz = (d) => `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.`;
+  const spanne = `${kurz(montag)}–${kurz(sonntag)}`;
+
+  if (mit.length === 0) {
+    return `
+      <div class="list-entry">
+        <div class="list-item" style="opacity:.55">
+          <div class="info"><div class="name">KW ${kw}</div><div class="meta">${spanne} · keine Einträge</div></div>
+        </div>
+      </div>`;
+  }
+
+  const schnitt = (feld) => round1(mit.reduce((s, d) => s + d.totals[feld], 0) / mit.length);
+  const imZiel = mit.filter(d => d.totals.netCarbs <= d.targets.netCarbG).length;
+  return `
+    <div class="list-entry">
+      <div class="list-item" style="cursor:pointer">
+        <div class="info">
+          <div class="name">KW ${kw} <span class="woche-spanne">${spanne}</span></div>
+          <div class="meta">Ø ${schnitt("kcal")} kcal · ${schnitt("netCarbs")} g KH · F ${schnitt("fat")} · E ${schnitt("protein")}</div>
+        </div>
+        <span class="woche-quote ${imZiel === mit.length ? "voll" : ""}">${imZiel}/${mit.length}</span>
+        <span class="chevron">›</span>
+      </div>
+      <div class="list-detail" hidden>
+        ${[...tage].reverse().map(evalDayRowHtml).join("")}
+      </div>
+    </div>`;
+}
+
 /**
  * Gewichtsverlauf über denselben Zeitraum wie der Rest der Auswertung.
  *
@@ -796,52 +973,6 @@ function gewichtKarteHtml(profile) {
   `;
 }
 
-function trendChartHtml(days) {
-  const withData = days.filter(d => d.hasEntries);
-  if (withData.length < 2) return "";
-
-  const W = 640, H = 140, PAD = 10;
-  const todayTarget = days[days.length - 1].targets.netCarbG;
-  const maxVal = Math.max(todayTarget, ...withData.map(d => d.totals.netCarbs)) * 1.15 || 1;
-  const n = days.length;
-  const x = (i) => PAD + (i / (n - 1)) * (W - PAD * 2);
-  const y = (v) => H - PAD - (Math.min(v, maxVal) / maxVal) * (H - PAD * 2);
-
-  const segments = [];
-  let current = [];
-  days.forEach((d, i) => {
-    if (d.hasEntries) {
-      current.push(`${x(i).toFixed(1)},${y(d.totals.netCarbs).toFixed(1)}`);
-    } else if (current.length) {
-      segments.push(current);
-      current = [];
-    }
-  });
-  if (current.length) segments.push(current);
-
-  const dots = days.map((d, i) => {
-    if (!d.hasEntries) return "";
-    const over = d.totals.netCarbs > d.targets.netCarbG;
-    return `<circle cx="${x(i).toFixed(1)}" cy="${y(d.totals.netCarbs).toFixed(1)}" r="3" class="trend-dot ${over ? "over" : ""}"></circle>`;
-  }).join("");
-
-  const targetY = y(todayTarget).toFixed(1);
-
-  return `
-    <div class="klar-card" style="margin-bottom:14px">
-      <div class="klar-card-head">
-        <span class="klar-eyebrow">Netto-KH-Verlauf</span>
-        <span class="klar-pill-btn">Ziel ${todayTarget} g</span>
-      </div>
-      <p class="hint" style="margin-top:0">Frühere Tage können ein anderes Ziel gehabt haben — Punkte in Terrakotta lagen über ihrem jeweiligen Ziel.</p>
-      <svg viewBox="0 0 ${W} ${H}" class="trend-svg" preserveAspectRatio="none" style="width:100%;height:120px">
-        <line x1="${PAD}" y1="${targetY}" x2="${W - PAD}" y2="${targetY}" class="trend-target-line"></line>
-        ${segments.map(seg => `<polyline points="${seg.join(" ")}" class="trend-line"></polyline>`).join("")}
-        ${dots}
-      </svg>
-    </div>
-  `;
-}
 
 function evalDayRowHtml(d) {
   const targets = d.targets;
