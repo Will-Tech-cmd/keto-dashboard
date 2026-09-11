@@ -5,7 +5,8 @@ import { Store, dateKeyOf, shiftDateKey } from "./store.js";
 import { ikon } from "./ikonen.js";
 import { calcNetCarbs, parseServingGrams } from "./keto.js";
 import { getTargetsForDate } from "./profiles.js";
-import { esc, showToast, showSnackbar, bindBackClose, selectOnFocus } from "./ui.js";
+import { setServingSize } from "./off.js";
+import { esc, showToast, showSnackbar, bindBackClose, selectOnFocus, zahlAus } from "./ui.js";
 import { zutatenFuerRezept, aufEinkaufsliste } from "./planer.js";
 
 /**
@@ -396,7 +397,7 @@ export function budgetLineText(addNetCarbs, { excludeId = null } = {}) {
  * Portionsgröße ("1× (60 g)" usw.), in einer Zeile ohne Umbruch — bei vielen/langen Werten
  * scrollt die Zeile statt in eine zweite umzubrechen.
  */
-export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], chipNeben = "", grammNeben = "" } = {}) {
+export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], chipNeben = "", grammNeben = "", portionsEinstellbar = false } = {}) {
   const portions = servingG ? round1(grams / servingG) : null;
   // Zusatzknöpfe stehen NEBEN dem Eingabefeld, in derselben Zeile und auf derselben Höhe.
   // Das Feld wird dafür schmaler — eine Menge ist drei- bis vierstellig, mehr Platz braucht
@@ -422,12 +423,25 @@ export function amountFieldsHtml(servingG, grams, { multiples = [1, 2, 3, 4], ch
     ` : ""}
     <label for="qtyGramsInput">Menge in Gramm</label>
     ${zeile(grammFeld, servingG ? grammNeben : chipNeben + grammNeben)}
+    ${!servingG && portionsEinstellbar ? `
+      <button type="button" class="klar-pill-btn" id="qtyServingToggle" style="margin-top:10px">
+        ${ikon("wiegen", { groesse: 15 })} In Portionen eintragen
+      </button>
+      <div id="qtyServingWrap" hidden>
+        <label for="qtyServingInput">Was wiegt eine Portion?</label>
+        <div class="klar-feld-zeile">
+          <input type="text" inputmode="decimal" id="qtyServingInput" placeholder="z. B. 30">
+          <button type="button" class="btn secondary" id="qtyServingSave" style="width:auto;padding:0 16px">Merken</button>
+        </div>
+        <p class="hint" style="margin-top:6px">Wird beim Produkt gespeichert. Ab dann stehen hier Portionen und Gramm nebeneinander.</p>
+      </div>
+    ` : ""}
   `;
 }
 
 /** Verdrahtet amountFieldsHtml(): hält Portion/Gramm synchron und ruft `onChange(grams)` bei
  * jeder Änderung. Gibt eine getGrams()-Abfrage zurück für den Bestätigen-Knopf. */
-export function wireAmountFields(overlay, servingG, onChange) {
+export function wireAmountFields(overlay, servingG, onChange, { onServingSet = null } = {}) {
   const portionsInput = overlay.querySelector("#qtyPortionsInput");
   const gramsInput = overlay.querySelector("#qtyGramsInput");
   let syncing = false;
@@ -473,6 +487,29 @@ export function wireAmountFields(overlay, servingG, onChange) {
     onChange(g);
   });
 
+  // „In Portionen eintragen": Produkte ohne Portionsangabe (die meisten aus Open Food Facts)
+  // hatten nur das Gramm-Feld. Das Gewicht einer Portion steht auf keinem Etikett, das die
+  // App kennen könnte — also fragt sie einmal danach und merkt es sich beim Produkt.
+  const portionsToggle = overlay.querySelector("#qtyServingToggle");
+  if (portionsToggle && onServingSet) {
+    const wrap = overlay.querySelector("#qtyServingWrap");
+    const feld = overlay.querySelector("#qtyServingInput");
+    portionsToggle.addEventListener("click", () => {
+      wrap.hidden = false;
+      portionsToggle.hidden = true;
+      feld.focus();
+    });
+    const uebernehmen = () => {
+      const g = zahlAus(feld.value);
+      if (!g || g <= 0) return;
+      onServingSet(g);
+    };
+    overlay.querySelector("#qtyServingSave").addEventListener("click", uebernehmen);
+    feld.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); uebernehmen(); }
+    });
+  }
+
   return { getGrams: () => parseFloat(gramsInput.value) };
 }
 
@@ -481,7 +518,8 @@ export function wireAmountFields(overlay, servingG, onChange) {
  * als "gegessen" ein. `onLogged` wird nach erfolgreichem Eintrag aufgerufen (z.B. für Refresh).
  */
 export function openQuantityModal(product, onLogged) {
-  const servingG = parseServingGrams(product.servingSize);
+  // Kein const: legt der Mensch die Portionsgröße hier erst fest, wird daraus gerechnet.
+  let servingG = parseServingGrams(product.servingSize);
   let selectedMeal = suggestMeal();
   let currentGrams = servingG || 100;
 
@@ -497,7 +535,7 @@ export function openQuantityModal(product, onLogged) {
       <div class="klar-sheet-title">${esc(product.name)}</div>
       <div class="klar-sheet-sub">${esc(product.brand || "")}${product.brand ? " · " : ""}${isViewingToday() ? "Eintrag für Heute" : `Eintrag für ${esc(dateLabel(getActiveDateKey()))}`}</div>
 
-      ${amountFieldsHtml(servingG, currentGrams)}
+      <div id="qtyAmountWrap">${amountFieldsHtml(servingG, currentGrams, { portionsEinstellbar: true })}</div>
 
       <div class="klar-portion-panel gray" id="qtyPreview" style="margin-top:16px"></div>
 
@@ -539,7 +577,23 @@ export function openQuantityModal(product, onLogged) {
       <div class="klar-portion-sub">${budgetLineText(netCarbs)}</div>
     `;
   };
-  wireAmountFields(overlay, servingG, updatePreview);
+  // Nach dem Festlegen einer Portionsgröße wird der Feldblock neu gezeichnet (er bekommt die
+  // Chips und das Portionen-Feld dazu) und neu verdrahtet — die eingetragene Menge bleibt.
+  const verdrahteMenge = () => {
+    wireAmountFields(overlay, servingG, updatePreview, {
+      onServingSet: (g) => {
+        const gespeichert = setServingSize(product.barcode, g);
+        if (gespeichert) product.servingSize = gespeichert.servingSize;
+        servingG = g;
+        overlay.querySelector("#qtyAmountWrap").innerHTML =
+          amountFieldsHtml(servingG, currentGrams, { portionsEinstellbar: true });
+        verdrahteMenge();
+        updatePreview(currentGrams);
+        showToast(`Portionsgröße gemerkt: ${g} g`);
+      },
+    });
+  };
+  verdrahteMenge();
   selectOnFocus(overlay);
   updatePreview(currentGrams);
 

@@ -297,16 +297,45 @@ function applyCorrectionToLists(product) {
 }
 
 function renderShopping(body) {
-  const state = Store.get();
-  const items = state.shoppingList;
+  // Das Eingabefeld wird EINMAL gezeichnet und danach nicht mehr angefasst. Vorher zeichnete
+  // jedes Hinzufügen den ganzen Reiter neu — das Feld war ein neues Element, der Fokus weg und
+  // am Handy klappte die Tastatur zu. Wer eine Einkaufsliste schreibt, tippt aber mehrere
+  // Sachen hintereinander: Wort, Enter, Wort, Enter. Nur die Liste darunter wird neu gezeichnet.
+  body.innerHTML = `
+    <form id="addItemForm" class="listen-eingabe">
+      <div class="such-feld">${ikon("neu", { groesse: 17 })}
+        <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" aria-label="Artikel auf die Einkaufsliste setzen"
+          autocomplete="off" enterkeyhint="done"></div>
+      <button class="btn" type="submit" title="Auf die Liste setzen" aria-label="Auf die Liste setzen">${ikon("einkauf", { groesse: 18 })}</button>
+    </form>
+    <div id="shopList"></div>
+  `;
+
+  const input = body.querySelector("#newItemText");
+  body.querySelector("#addItemForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    Store.addShoppingItem(text);
+    input.value = "";
+    input.focus(); // Tastatur bleibt offen, der nächste Artikel kann direkt getippt werden.
+    renderShoppingList(body);
+  });
+
+  renderShoppingList(body);
+}
+
+/** Nur die Liste unter dem Eingabefeld — das Feld selbst bleibt stehen (siehe renderShopping). */
+function renderShoppingList(body) {
+  const el = body.querySelector("#shopList");
+  const items = Store.get().shoppingList;
 
   // Offen zuerst, Erledigtes gesammelt darunter — beim Einkaufen zählt, was noch fehlt.
   const open = items.filter(i => !i.checked);
   const done = items.filter(i => i.checked);
   // Dieselbe Karte, dieselbe Zeile wie in Favoriten, No-Go und Verlauf: eine `.klar-list-card`
-  // mit `.list-item`-Zeilen darin. Vorher hatte der Einkauf mit `.klar-shop-card`/`.klar-shop-row`
-  // eine zweite, eigene Fassung derselben Idee — andere Polster, anderer Radius, andere
-  // Schriftgröße. Der Haken tritt hier nur an die Stelle, an der sonst die Ampel steht.
+  // mit `.list-item`-Zeilen darin. Der Haken tritt hier nur an die Stelle, an der sonst die
+  // Ampel steht.
   const group = (title, list) => list.length === 0 ? "" : `
     <div class="klar-eyebrow gruppen-titel">${title} · ${list.length}</div>
     <div class="klar-list-card">
@@ -314,53 +343,34 @@ function renderShopping(body) {
         <label class="list-item einkauf-zeile ${item.checked ? "checked" : ""}" data-id="${item.id}">
           <input type="checkbox" ${item.checked ? "checked" : ""} hidden>
           <span class="klar-check ${item.checked ? "on" : ""}">${item.checked ? "✓" : ""}</span>
-          <div class="info"><div class="name">${esc(item.text)}</div></div>
+          <div class="info"><div class="name" title="${esc(item.text)}">${esc(item.text)}</div></div>
           <button class="icon-btn" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
         </label>
       `).join("")}
     </div>
   `;
-  const listHtml = items.length === 0
+
+  el.innerHTML = (items.length === 0
     ? emptyState("einkauf", "Einkaufsliste ist leer. Trag oben ein, was fehlt.")
-    : group("Offen", open) + group("Erledigt", done);
+    : group("Offen", open) + group("Erledigt", done))
+    + (done.length ? `<button class="btn ghost" id="clearChecked" style="margin-top:14px">Erledigte entfernen</button>` : "");
 
-  // Das Eingabefeld hat die Form des Suchfelds der anderen Reiter (Pille, Ikon innen) —
-  // es steht an derselben Stelle und tut das Gegenstück: dort suchen, hier hinzufügen.
-  body.innerHTML = `
-    <form id="addItemForm" class="listen-eingabe">
-      <div class="such-feld">${ikon("neu", { groesse: 17 })}
-        <input type="text" id="newItemText" placeholder="Artikel hinzufügen …" aria-label="Artikel auf die Einkaufsliste setzen" autocomplete="off"></div>
-      <button class="btn" type="submit" title="Auf die Liste setzen" aria-label="Auf die Liste setzen">${ikon("einkauf", { groesse: 18 })}</button>
-    </form>
-    <div id="shopList">${listHtml}</div>
-    ${items.some(i => i.checked) ? `<button class="btn ghost" id="clearChecked" style="margin-top:14px">Erledigte entfernen</button>` : ""}
-  `;
-
-  body.querySelector("#addItemForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const input = body.querySelector("#newItemText");
-    const text = input.value.trim();
-    if (!text) return;
-    Store.addShoppingItem(text);
-    renderShopping(body);
-  });
-
-  body.querySelectorAll(".einkauf-zeile").forEach(row => {
+  el.querySelectorAll(".einkauf-zeile").forEach(row => {
     const id = row.dataset.id;
     row.querySelector('input[type="checkbox"]').addEventListener("change", () => {
       Store.toggleShoppingItem(id);
-      renderShopping(body);
+      renderShoppingList(body);
     });
     row.querySelector('[data-action="remove"]').addEventListener("click", (e) => {
       e.preventDefault();
       Store.removeShoppingItem(id);
-      renderShopping(body);
+      renderShoppingList(body);
     });
   });
 
-  body.querySelector("#clearChecked")?.addEventListener("click", () => {
+  el.querySelector("#clearChecked")?.addEventListener("click", () => {
     Store.clearCheckedShoppingItems();
-    renderShopping(body);
+    renderShoppingList(body);
   });
 }
 

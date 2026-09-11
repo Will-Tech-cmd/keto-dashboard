@@ -224,7 +224,10 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
   el.innerHTML = `
     <div class="klar-card-head">
       <span class="klar-eyebrow">Nährwerte ${esc(dateLabel(getActiveDateKey()).toLowerCase())}${planHint ? " · geplant" : ""}</span>
-      <button type="button" class="klar-pill-btn" id="klarEvalBtn">${ikon("auswertung", { groesse: 17 })} Auswertung</button>
+      <div class="klar-head-actions">
+        <button type="button" class="klar-pill-btn icon-only" id="klarScanBtn" title="Produkt scannen" aria-label="Produkt scannen">${ikon("kamera", { groesse: 17 })}</button>
+        <button type="button" class="klar-pill-btn" id="klarEvalBtn">${ikon("auswertung", { groesse: 17 })} Auswertung</button>
+      </div>
     </div>
     ${ringDiagramHtml(rings, profile.ringStyle)}
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
@@ -233,6 +236,7 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
   `;
 
   el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
+  el.querySelector("#klarScanBtn").addEventListener("click", () => goToTab("scan"));
 
   // Über der Nährwertkarte tageweise blättern — dieselbe Geste wie im Wochenstreifen, nur
   // eine Schrittweite feiner.
