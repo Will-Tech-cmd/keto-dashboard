@@ -252,6 +252,13 @@ stellen — und das änderte auch die Ringe auf der Startseite.
 - **Einzelne Tage stehen in Wochen**: eine Zeile je Kalenderwoche mit den Ø-Werten und „5/7 im
   Ziel", ein Tipp klappt die Tage auf. Aus rund 30 Zeilen werden fünf; die Seite ist damit
   1200 statt 3000 Pixel lang
+- **Warengruppen als Auswahlleiste** über der Liste: Fleisch, Käse, Gemüse, Gewürze …, jede
+  mit ihrer Anzahl. Gepflegt wird dabei nichts — für die eingebaute Tabelle sind die
+  Abschnitte der Datei die Gruppe, für alles andere rät `js/kategorie.js` über den Namen.
+  Die Reihenfolge der Regeln ist die halbe Miete („Thunfisch in Sonnenblumenöl" ist Fisch,
+  kein Öl); jede Vertauschung, die bei einer Probe über 102 echte Favoriten auffiel, steht
+  als Beispiel in `test/kategorie.test.mjs`. Ohne Hinweis im Namen bleibt ein Eintrag
+  „Sonstiges" — lieber ehrlich unsortiert als falsch einsortiert
 - **Favoriten stehen nach Verwendung**: was in den letzten 90 Tagen am häufigsten eingetragen
   wurde, steht oben. Bei über hundert Einträgen lagen die acht Sachen des Alltags vorher
   irgendwo in der Reihenfolge des Merkens

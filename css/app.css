@@ -858,6 +858,12 @@ body[data-design="klar"] .subtab-btn.active {
 .gruppen-titel { margin: 16px 2px 8px; }
 .gruppen-titel:first-child { margin-top: 0; }
 
+/* Warengruppen-Leiste über den Favoriten: eine Zeile, die seitwärts läuft statt umzubrechen —
+   elf Gruppen ergäben sonst drei Zeilen über der Liste, die sie sortieren soll. */
+.kat-leiste { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; margin-bottom: 10px; }
+.kat-leiste .klar-chip { flex: none; white-space: nowrap; }
+.kat-anzahl { font-size: 10.5px; font-weight: 800; opacity: .65; margin-left: 1px; }
+
 /* Einkaufszeile: eine `.list-item`-Zeile wie in den anderen Listen, nur mit Haken statt
    Ampel. Das Durchstreichen kommt aus der allgemeinen `.checked .name`-Regel. */
 .einkauf-zeile { cursor: pointer; }
