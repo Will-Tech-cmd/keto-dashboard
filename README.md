@@ -280,7 +280,14 @@ Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite
 - Die Fußzeile eines Rezepts (Einkauf, Kochbuch, Löschen) liegt in einem Raster, das nicht
   breiter werden kann als der Bildschirm. Vorher war die Rezeptseite auf einem 390-px-Gerät
   467 px breit und ließ sich seitwärts schieben
-- Import aus Text oder Foto (Texterkennung mit Tesseract, optional zusätzlich per Gemini)
+- Import aus Text oder Foto (Texterkennung mit Tesseract, optional zusätzlich per Gemini).
+  Tesseract legt seinen Worker über eine `blob:`-URL an und übersetzt sein Rechenwerk als
+  WebAssembly — die CSP in `index.html` muss beides erlauben (`worker-src … blob:` und
+  `script-src … 'wasm-unsafe-eval'`), sonst scheitert die Erkennung stumm. `test/csp.test.mjs`
+  hält das fest; `'unsafe-eval'` bleibt verboten, das Kochbuch behält seine enge CSP
+- Emoji vor einer Zutat („🥩 300g Rinderhack", auf TikTok und Instagram die Regel) werden von
+  der Texterkennung zu Zeichensalat und fielen durch den Parser. Er entfernt jetzt bis zu
+  sechs Sonderzeichen vor dem ersten Buchstaben; Zeilen ganz ohne Buchstaben sind keine Zutat
 - Portionsgewicht wird aus den Zutatenmengen abgeleitet („1 P. (240 g)")
 - Zutaten auf die Einkaufsliste übernehmen
 - Rezepte einzeln exportieren, teilen und importieren — ohne den Rest der Daten

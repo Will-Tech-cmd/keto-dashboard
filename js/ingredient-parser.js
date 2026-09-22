@@ -31,6 +31,13 @@ const TRAILING_DESCRIPTORS = /[,\s]+\b(fein gehackt|gehackt|gewürfelt|gepresst|
 // Ein Zeichen je Durchlauf statt "+", sonst kann eine lange Strichfolge den Regex-Motor
 // in exponentielles Zurücksetzen treiben.
 const BULLET_PREFIX = /^\s*(?:\d+[.)]\s*)?(?:(?:[-–—•*·]|[oO](?=\s))\s*)*/;
+// Was die Texterkennung aus einem Emoji macht. Auf TikTok und Instagram steht vor jeder
+// Zutat eines ("🥩 300g Rinderhack"), und Tesseract liest daraus Zeichensalat: "&) 300g
+// Rinderhack". Die Zeile fiel damit durch beide Mengen-Muster und landete samt Menge als
+// Name in der Liste. Höchstens sechs Zeichen und nur vor einem Buchstaben oder einer Ziffer,
+// damit "„Zwiebel" gekürzt wird, eine Zeile aus lauter Sonderzeichen aber unberührt bleibt
+// und nicht versehentlich zu einer Zutat wird.
+const JUNK_PREFIX = /^[^\p{L}\d]{1,6}(?=[\p{L}\d])/u;
 // Abschnittsüberschriften ohne Menge überspringen: "Zutaten:", "Boden:", "Füllung:" …
 const SECTION_HEADER = /^[^\d]*:\s*$/;
 // Klammerzusätze wie "(geschmolzen)" oder "(ggf mehr oder weniger …)" sind keine Zutat.
@@ -50,11 +57,15 @@ function parseIngredientLine(rawLine) {
   const raw = rawLine.trim();
   if (!raw) return null;
 
-  let cleaned = raw.replace(BULLET_PREFIX, "").trim();
+  let cleaned = raw.replace(JUNK_PREFIX, "").replace(BULLET_PREFIX, "").trim();
   if (!cleaned || SECTION_HEADER.test(cleaned)) return null;
 
   cleaned = cleaned.replace(PAREN_CONTENT, "").replace(/\s{2,}/g, " ").trim();
   if (!cleaned) return null;
+  // Ohne einen einzigen Buchstaben ist es keine Zutat. Aus einer Texterkennung kommen solche
+  // Zeilen regelmäßig (Trennlinien, Rahmen, Symbole einer App-Oberfläche), und sie standen
+  // bisher als Zutat mit ihrem Zeichensalat als Namen in der Prüfliste.
+  if (!/\p{L}/u.test(cleaned)) return null;
 
   cleaned = cleaned.replace(QUANTITY_RANGE, "$1");
   cleaned = cleaned.replace(TRAILING_DESCRIPTORS, "").trim() || cleaned;
