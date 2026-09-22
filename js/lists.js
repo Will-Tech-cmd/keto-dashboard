@@ -5,6 +5,7 @@ import { getTargetsForDate } from "./profiles.js";
 
 import { lookupProduct, getProductOffline, nutriSnapshot } from "./off.js";
 import { ketoGrade, parseServingGrams } from "./keto.js";
+import { kategorieFuer, kategorienMitAnzahl } from "./kategorie.js";
 import { openProductEditor } from "./product-editor.js";
 import {
   openQuantityModal, getConsumptionForDate, sumConsumption, setActiveDateKey,
@@ -18,6 +19,7 @@ import { ikon } from "./ikonen.js";
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
 let listFilter = "";       // Suchbegriff für Favoriten/No-Go
+let kategorieFilter = null; // gewählte Warengruppe in den Favoriten (null = alle)
 let historyFilter = "";    // Suchbegriff für den Verlauf
 let pendingSubtab = null;  // von App-Shortcuts gesetzter Ziel-Reiter, einmalig beim nächsten Aufruf
 let subtabChosen = false;  // true, sobald bewusst ein Reiter angetippt wurde (siehe Klar-Standard)
@@ -55,6 +57,7 @@ export function renderLists(container, goToTab) {
       subtabChosen = true;
       listFilter = ""; // Suchbegriffe gelten nicht über Reiter hinweg
       historyFilter = "";
+      kategorieFilter = null;
       renderSubtabs(container);
       renderBody(container, goToTab);
     });
@@ -98,15 +101,60 @@ function renderProductList(body, listName) {
   body.innerHTML = `
     <div class="such-feld" style="margin-bottom:${listName === "favorites" ? "6px" : "12px"}">${ikon("suche", { groesse: 17 })}
       <input type="text" id="listSearch" placeholder="Suchen …" aria-label="In dieser Liste suchen" autocomplete="off" value="${esc(listFilter)}"></div>
-    ${listName === "favorites" ? `<p class="hint" style="margin:0 2px 10px">Häufigste zuerst — gezählt werden die letzten 90 Tage.</p>` : ""}
+    ${listName === "favorites" ? `<p class="hint" style="margin:0 2px 8px">Häufigste zuerst — gezählt werden die letzten 90 Tage.</p>` : ""}
+    ${listName === "favorites" ? `<div id="katLeiste"></div>` : ""}
     <div id="listRows"></div>
   `;
   const search = body.querySelector("#listSearch");
   search.addEventListener("input", () => {
     listFilter = search.value;
+    renderKategorieLeiste(body, listName);
     renderProductRows(body, listName);
   });
+  renderKategorieLeiste(body, listName);
   renderProductRows(body, listName);
+}
+
+/**
+ * Die Warengruppen als Auswahlleiste über der Liste.
+ *
+ * Eine Auswahl unter mehreren wäre nach der Regel dieser App eine Segmentwahl (siehe Planer).
+ * Elf Gruppen passen aber nicht nebeneinander auf ein Handy, und eine Segmentwahl, die
+ * scrollt, ist keine mehr. Deshalb Chips in einer Zeile, die seitwärts läuft — dieselbe Form
+ * wie die Vielfachen-Chips beim Eintragen.
+ *
+ * Die Gruppen kommen aus dem, was WIRKLICH in der Liste liegt, samt Anzahl: eine leere
+ * Gruppe anzubieten wäre eine Sackgasse, und die Anzahl sagt vorher, ob sich der Tipp lohnt.
+ */
+function renderKategorieLeiste(body, listName) {
+  const el = body.querySelector("#katLeiste");
+  if (!el) return;
+  const q = listFilter.trim().toLowerCase();
+  const passend = Store.get()[listName].filter(item =>
+    !q || item.name.toLowerCase().includes(q) || (item.brand || "").toLowerCase().includes(q)
+  );
+  const gruppen = kategorienMitAnzahl(passend);
+  // Unter zwei Gruppen ist nichts zu wählen — dann steht die Leiste nur im Weg.
+  if (gruppen.length < 2) { el.innerHTML = ""; kategorieFilter = null; return; }
+  if (kategorieFilter && !gruppen.some(g => g.kategorie === kategorieFilter)) kategorieFilter = null;
+
+  el.innerHTML = `
+    <div class="klar-chip-row kat-leiste">
+      <button type="button" class="klar-chip ${kategorieFilter === null ? "top" : ""}" data-kat="">Alle <span class="kat-anzahl">${passend.length}</span></button>
+      ${gruppen.map(g => `
+        <button type="button" class="klar-chip ${kategorieFilter === g.kategorie ? "top" : ""}" data-kat="${esc(g.kategorie)}">
+          ${esc(g.kategorie)} <span class="kat-anzahl">${g.anzahl}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+  el.querySelectorAll("[data-kat]").forEach(chip => {
+    chip.addEventListener("click", () => {
+      kategorieFilter = chip.dataset.kat || null;
+      renderKategorieLeiste(body, listName);
+      renderProductRows(body, listName);
+    });
+  });
 }
 
 function renderProductRows(body, listName) {
@@ -115,10 +163,15 @@ function renderProductRows(body, listName) {
   let items = Store.get()[listName].filter(item =>
     !q || item.name.toLowerCase().includes(q) || (item.brand || "").toLowerCase().includes(q)
   );
-  if (listName === "favorites") items = nachVerwendung(items);
+  if (listName === "favorites") {
+    if (kategorieFilter) items = items.filter(item => kategorieFuer(item) === kategorieFilter);
+    items = nachVerwendung(items);
+  }
 
   if (items.length === 0) {
-    rowsEl.innerHTML = emptyState("suche", `Kein Eintrag passt zu „${listFilter}".`);
+    rowsEl.innerHTML = emptyState("suche", listFilter.trim()
+      ? `Kein Eintrag passt zu „${listFilter}".`
+      : `Nichts in dieser Gruppe.`);
     return;
   }
 
