@@ -26,6 +26,7 @@ export const FOODS = [
   // Käse
   food("Gouda", { kcal: 356, carbs: 0, fiber: 0, sugars: 0, fat: 28, saturatedFat: 18, protein: 25, salt: 2.0 }, 30),
   food("Emmentaler", { kcal: 380, carbs: 0, fiber: 0, sugars: 0, fat: 30, saturatedFat: 19, protein: 28, salt: 0.8 }, 30),
+  food("Cheddar", { kcal: 410, carbs: 0.5, fiber: 0, sugars: 0.5, fat: 34, saturatedFat: 21, protein: 25, salt: 1.8 }, 30),
   food("Parmesan", { kcal: 402, carbs: 0, fiber: 0, sugars: 0, fat: 29, saturatedFat: 19, protein: 36, salt: 1.6 }, 20),
   food("Mozzarella", { kcal: 280, carbs: 1, fiber: 0, sugars: 1, fat: 22, saturatedFat: 15, protein: 20, salt: 0.6 }, 100),
   food("Feta", { kcal: 264, carbs: 1.5, fiber: 0, sugars: 1.5, fat: 21, saturatedFat: 15, protein: 17, salt: 3.0 }, 50),

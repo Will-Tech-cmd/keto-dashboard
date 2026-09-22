@@ -47,6 +47,24 @@ ok("'Zutaten:' wird verworfen", parseIngredientText("Zutaten:").length === 0);
 ok("'o Boden:' wird verworfen", parseIngredientText("o Boden:").length === 0,
    JSON.stringify(parseIngredientText("o Boden:")));
 
+// Auf TikTok und Instagram steht vor jeder Zutat ein Emoji. Die Texterkennung macht daraus
+// Zeichensalat ("&)" aus einem Steak, "@®" aus einem Ei) — die Zeile fiel damit durch beide
+// Mengen-Muster und landete samt Menge als Name in der Liste.
+console.log("\nZeichensalat aus erkannten Emoji am Zeilenanfang");
+for (const [zeile, name, gramm] of [
+  ["&) 300g Rinderhack", "Rinderhack", 300],
+  ["@® 6Eier", "Eier", null],
+  ["&® 300g Eisbergsalat", "Eisbergsalat", 300],
+  ["„60 g Cheddar", "Cheddar", 60],
+  ["\u{1F969} 300 g Rinderhack", "Rinderhack", 300],
+]) {
+  const e = eine(zeile);
+  ok(`"${zeile}" -> ${gramm ?? "?"} g ${name}`, e && e.name === name && e.grams === gramm,
+     e ? `${e.grams} g "${e.name}"` : "nicht erkannt");
+}
+ok("eine Zeile aus lauter Sonderzeichen wird nicht zur Zutat",
+   parseIngredientText("&)(/%$ ---").length === 0, JSON.stringify(parseIngredientText("&)(/%$ ---")));
+
 console.log("\nKein exponentielles Zuruecksetzen bei langer Strichfolge");
 const start = process.hrtime.bigint();
 parseIngredientText("-".repeat(2000) + "x");
