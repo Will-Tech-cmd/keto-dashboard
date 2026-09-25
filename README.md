@@ -207,6 +207,19 @@ nur zur Auswertung verschickt und nicht gespeichert.
   standen in der Linienfarbe `--text-faint` — 1,49:1 Kontrast, also wie ein abgeschalteter
   Knopf, was die Planung praktisch versteckte
 - „Gewicht" stand als einzige Stelle der App in `--sage` (3,73:1). Jetzt normale Textfarbe
+- **Schritte mit Partner-Vergleich**: beide Profile des Haushalts nebeneinander, Balken im
+  Verhältnis zueinander (kein Schrittziel — das hat niemand eingestellt, 10.000 zu behaupten
+  wäre eine erfundene Vorgabe). Fehlt ein Wert, nennt die Zeile die Lücke statt einen
+  Rückstand zu behaupten.
+
+  **Eingetragen wird von Hand, und das ist keine Bequemlichkeit.** Eine Website kann keinen
+  Schrittzähler lesen: dafür gibt es keine Web-Schnittstelle, und eine PWA läuft nicht im
+  Hintergrund, kann also auch nichts selbst mitzählen. Health Connect ist laut
+  Android-Dokumentation ausdrücklich gerätezentriert und nur über das Android-SDK erreichbar;
+  die Google-Fit-REST-Schnittstelle, die ein Server hätte abfragen können, wird „only be
+  supported until the end of 2026". Die Tabelle `schritte` ist deshalb so gebaut, dass eine
+  Automatisierung auf dem Handy später an dieselbe Stelle schreiben kann, ohne dass sich an
+  der App etwas ändert.
 
 Gemessene Kontraste (WCAG AA, 4,5:1 für Text unter 18,66 px fett): geprüft wurden alle
 Bildschirme in Hell und Dunkel. Was bleibt: **Grün auf Weiß liegt bei 4,32:1, grüner Text

@@ -5,13 +5,15 @@ import { getTargetsForDate } from "../profiles.js";
 import {
   getConsumptionForDate, sumConsumption, openEditConsumptionModal,
   getActiveDateKey, shiftActiveDate, setActiveDateKey, dateLabel, MEAL_LABELS,
-  bestaetigeGeplant, bestaetigeMahlzeit,
+  bestaetigeGeplant, bestaetigeMahlzeit, otherProfiles,
 } from "../consumption.js";
 import { esc, showToast, showSnackbar, shareOrDownloadFile } from "../ui.js";
 import { openTodayQuestionModal } from "../analysis.js";
 import { gewichtsBericht, trendSatz } from "../gewicht.js";
 import { ikon } from "../ikonen.js";
 import { openGewichtModal } from "../gewicht-eingabe.js";
+import { vergleich, vergleichSatz, zahl as zahlS } from "../schritte.js";
+import { openSchritteModal } from "../schritte-eingabe.js";
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -107,6 +109,7 @@ async function renderStartKlar(container, goToTab, profile, openEntrySheet) {
   renderKlarWeekStrip(container, dateKey, refresh);
   renderKlarMacros(container, totals, targets, goToTab, profile, refresh, entries);
   renderKlarWeight(container, profile, dateKey, refresh);
+  renderKlarSchritte(container, profile, dateKey, refresh);
   renderKlarMeals(container, entries, refresh, openEntrySheet, profile, dateKey);
 }
 
@@ -233,6 +236,7 @@ function renderKlarMacros(container, totals, targets, goToTab, profile, refresh,
     ${budgetHint ? `<div class="klar-hint">${esc(budgetHint)}</div>` : ""}
     ${planHint ? `<div class="klar-hint klar-plan-hint">${esc(planHint)}</div>` : ""}
     <div id="klarWeight"></div>
+    <div id="klarSchritte"></div>
   `;
 
   el.querySelector("#klarEvalBtn").addEventListener("click", () => goToTab("evaluation"));
@@ -373,6 +377,62 @@ function klarBarHtml(b) {
  * der letzte bekannte Wert steht trotzdem da — sonst sähe der geplante Donnerstag aus, als
  * wäre nie jemand auf die Waage gestiegen.
  */
+/**
+ * Schritte des Tages — die eigenen und die des Haushalts nebeneinander.
+ *
+ * Der Vergleich ist der eigentliche Zweck: eine Zahl allein sagt wenig, zwei Zahlen
+ * nebeneinander sagen, ob man heute noch losgeht. Deshalb steht der Partnerwert nicht als
+ * Fußnote da, sondern gleichberechtigt daneben, und der Balken zeigt das Verhältnis.
+ *
+ * Fehlt einer der beiden Werte, gibt es keinen Rückstand, sondern eine Lücke — die Zeile
+ * sagt dann, wer noch nichts eingetragen hat, statt ein Ergebnis zu behaupten (siehe
+ * vergleich() in schritte.js).
+ */
+function renderKlarSchritte(container, profile, dateKey, refresh) {
+  const el = container.querySelector("#klarSchritte");
+  const heute = dateKeyOf(Date.now());
+  const zukunft = dateKey > heute;
+  const partner = otherProfiles()[0] || null;
+  const v = vergleich(profile.id, partner?.id, dateKey);
+
+  // Der Balken zeigt das Verhältnis der beiden, nicht ein Ziel: ein Schrittziel hat hier
+  // niemand eingestellt, und 10.000 zu behaupten wäre eine erfundene Vorgabe.
+  const groesster = Math.max(v.meine || 0, v.seine || 0, 1);
+  const anteil = (n) => (n == null ? 0 : Math.round((n / groesster) * 100));
+
+  el.innerHTML = `
+    <hr class="klar-divider">
+    <div class="klar-schritte-row${zukunft ? "" : " tippbar"}"${zukunft ? "" : ` role="button" tabindex="0"`}>
+      <div class="klar-schritte-kopf">
+        <span class="klar-weight-title">Schritte</span>
+        ${zukunft ? "" : `<button type="button" class="klar-weight-btn" id="klarSchritteBtn">${v.meine == null ? `${ikon("wiegen", { groesse: 17 })} Eintragen` : "Ändern"}</button>`}
+      </div>
+      <div class="klar-schritte-paar">
+        <div class="klar-schritte-person">
+          <div class="klar-schritte-name">${esc(profile.name)}</div>
+          <div class="klar-schritte-wert ${v.meine == null ? "leer" : ""}">${zahlS(v.meine)}</div>
+          <div class="klar-schritte-balken"><span style="width:${anteil(v.meine)}%"></span></div>
+        </div>
+        ${partner ? `
+          <div class="klar-schritte-person">
+            <div class="klar-schritte-name">${esc(partner.name)}</div>
+            <div class="klar-schritte-wert ${v.seine == null ? "leer" : ""}">${zahlS(v.seine)}</div>
+            <div class="klar-schritte-balken partner"><span style="width:${anteil(v.seine)}%"></span></div>
+          </div>
+        ` : ""}
+      </div>
+      ${partner ? `<div class="klar-weight-trend">${esc(vergleichSatz(v, partner.name))}</div>` : ""}
+    </div>
+  `;
+
+  const zeile = el.querySelector(".klar-schritte-row.tippbar");
+  const oeffnen = () => openSchritteModal(dateKey, refresh);
+  zeile?.addEventListener("click", oeffnen);
+  zeile?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); oeffnen(); }
+  });
+}
+
 function renderKlarWeight(container, profile, dateKey, refresh) {
   const el = container.querySelector("#klarWeight");
   const heute = dateKeyOf(Date.now());
