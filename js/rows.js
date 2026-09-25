@@ -221,6 +221,36 @@ const gewicht = {
 };
 
 // ---------------------------------------------------------------------------
+// schritte — dieselbe Form wie gewicht: ein Wert je Profil und Tag, Schlüssel
+// (profil_id, datum). Die Zahl kommt von Hand (eine Website kann keinen Schrittzähler
+// lesen); eine Automatisierung auf dem Handy könnte später an dieselbe Stelle schreiben.
+const schritte = {
+  tabelle: "schritte",
+  konflikt: "profil_id,datum",
+  filter: (k) => {
+    const [profilId, datum] = String(k).split("|");
+    return `profil_id=eq.${q(profilId)}&datum=eq.${q(datum)}`;
+  },
+  schluessel: (s) => `${s.profileId}|${s.dateKey}`,
+  zeit: (s) => stempel(s.updatedAt, s.at),
+  zuZeile: (s, ctx) => ({
+    haushalt_id: ctx.haushaltId,
+    profil_id: s.profileId,
+    datum: s.dateKey,
+    anzahl: Math.round(Number(s.steps)),
+    erfasst_am: iso(stempel(s.at, s.updatedAt)),
+    geaendert_am: iso(stempel(s.updatedAt, s.at)),
+  }),
+  ausZeile: (z) => ({
+    profileId: z.profil_id,
+    dateKey: z.datum,
+    steps: Number(z.anzahl),
+    at: millis(z.erfasst_am),
+    updatedAt: millis(z.geaendert_am),
+  }),
+};
+
+// ---------------------------------------------------------------------------
 // tagesziel — in der App eine verschachtelte Karte profileId -> dateKey -> Werte, auf
 // dem Server eine flache Tabelle mit (profil_id, datum) als Primärschlüssel. Keine id.
 // ---------------------------------------------------------------------------
@@ -437,7 +467,7 @@ export function zutatenAusZeilen(zeilen) {
 }
 
 export const ENTITAETEN = {
-  profil, mahlzeit, wasser, gewicht, tagesziel, listen_eintrag, einkauf, produkt_korrektur, rezept,
+  profil, mahlzeit, wasser, gewicht, schritte, tagesziel, listen_eintrag, einkauf, produkt_korrektur, rezept,
 };
 
 /**
@@ -446,7 +476,7 @@ export const ENTITAETEN = {
  * ab. Rezepte davor, weil eine Mahlzeit auf ein Rezept zeigen kann.
  */
 export const REIHENFOLGE = [
-  "profil", "rezept", "tagesziel", "mahlzeit", "wasser", "gewicht",
+  "profil", "rezept", "tagesziel", "mahlzeit", "wasser", "gewicht", "schritte",
   "listen_eintrag", "einkauf", "produkt_korrektur",
 ];
 
