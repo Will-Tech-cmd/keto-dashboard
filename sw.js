@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v86";
+const CACHE_NAME = "keto-dashboard-v87";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -72,7 +72,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      // Nur die eigenen Vorräte räumen: Kochbuch und Sema teilen sich den Origin und damit die
+      // Cache-Liste. Früher löschte jedes Update der Keto-App deren Offline-Vorrat mit.
+      .then(keys => Promise.all(keys
+        .filter(k => k.startsWith("keto-dashboard-") && k !== CACHE_NAME)
+        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -86,6 +90,8 @@ self.addEventListener("fetch", (event) => {
   // CACHE_NAME. Dessen genauerer Scope gewinnt zwar ohnehin laut Spezifikation, aber dieser
   // frühe Ausstieg macht die Trennung explizit und unabhängig von Registrierungsreihenfolge.
   if (url.pathname.includes("/kochbuch/")) return;
+  // Dasselbe für Sema (sema/), die dritte App mit eigenem Service Worker.
+  if (url.pathname.includes("/sema/")) return;
   const isOff = url.hostname.endsWith("openfoodfacts.org");
   const isAppShell = url.origin === self.location.origin;
 

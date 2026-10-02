@@ -3,7 +3,7 @@
 // Spezifikation gewinnt bei überlappenden Scopes ohnehin der genauere, das sw.js der Keto-App
 // steigt für /kochbuch/-Pfade zusätzlich früh aus (siehe dort).
 
-const CACHE_NAME = "kochbuch-v9";
+const CACHE_NAME = "kochbuch-v10";
 const SCOPE = self.registration.scope;
 const SUPABASE_HOST = "viedjnpmvnkufoysuxvl.supabase.co";
 
@@ -45,7 +45,10 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      // Nur die eigenen Vorräte räumen — Keto-App und Sema teilen sich den Origin.
+      .then(keys => Promise.all(keys
+        .filter(k => k.startsWith("kochbuch-") && k !== CACHE_NAME)
+        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
