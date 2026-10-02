@@ -652,3 +652,22 @@ Beratung**. Bei gesundheitlichen Fragen bitte ärztlichen Rat einholen.
 
 Für dieses Projekt ist keine Lizenz hinterlegt; es gilt das gesetzliche Urheberrecht.
 Die Dateien unter `vendor/` stehen unter ihren jeweils eigenen, oben genannten Lizenzen.
+
+---
+
+## Sema
+
+Unter [`sema/`](sema/) liegt eine dritte, eigenständige PWA: ein KH-Rechner für ein Kind mit
+Typ-1-Diabetes, umgesetzt nach dem Entwurf „Sema App“ aus Claude Design.
+**→ [will-tech-cmd.github.io/keto-dashboard/sema](https://will-tech-cmd.github.io/keto-dashboard/sema/)**
+
+- Startseite mit **Foto** (KI zerlegt den Teller in Bestandteile, optional mit gewogenem
+  Gesamtgewicht), **Scannen** (Open Food Facts, Portion als Stückzahl) und **Eingeben**
+  („Birne 50 g“: Favoriten → Barcode-Datenbank → KI-Schätzung, jeweils gekennzeichnet)
+- Favoriten mit KH je 100 g oder je Portion; ein Tipp auf + trägt eine Portion ein
+- Tagesansicht mit „Vom Vortag übernehmen“; nach sieben Tagen wird automatisch gelöscht
+- Einheit fest **Gramm KH**, angezeigt in ganzen Gramm (Summen aus ungerundeten Werten).
+  **Keine Insulinberechnung** — das macht die Pumpe.
+- KI-Anbieter wählbar (Gemini oder OpenAI) mit eigenem API-Key, der nur auf dem Gerät liegt
+- Export/Import als JSON (Favoriten, Profil, Anbieter — ohne API-Key), z. B. Eltern → Kita
+- Alle Daten nur lokal in IndexedDB; kein Konto, kein Abgleich

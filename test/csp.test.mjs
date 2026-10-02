@@ -54,5 +54,17 @@ ok("connect-src kennt Supabase", kb["connect-src"]?.includes("https://viedjnpmvn
 ok("worker-src bleibt eng (keine Texterkennung)", !kb["worker-src"]?.includes("blob:"));
 ok("script-src bleibt eng", kb["script-src"]?.every(w => w === "'self'"));
 
+console.log("\nSema (sema/index.html)");
+const sema = csp("sema/index.html");
+ok("hat überhaupt eine CSP", sema !== null);
+for (const ziel of ["https://world.openfoodfacts.org", "https://generativelanguage.googleapis.com", "https://api.openai.com"]) {
+  ok(`connect-src kennt ${ziel}`, sema["connect-src"]?.includes(ziel));
+}
+// Kamerabild im <video> und die Fotovorschau kommen als blob:.
+ok("media-src erlaubt blob: (Kamera)", sema["media-src"]?.includes("blob:"));
+ok("script-src bleibt eng", sema["script-src"]?.every(w => w === "'self'"));
+// Schriften liegen unter vendor/ — kein Google Fonts, also auch keine Ausnahme dafür.
+ok("keine Verbindung zu Google Fonts", !JSON.stringify(sema).includes("fonts.g"));
+
 console.log(fails === 0 ? "\nAlle Pruefungen bestanden." : `\n${fails} Pruefung(en) fehlgeschlagen.`);
 process.exit(fails === 0 ? 0 : 1);

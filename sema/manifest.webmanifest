@@ -1,0 +1,18 @@
+{
+  "name": "Sema – KH-Rechner",
+  "short_name": "Sema",
+  "description": "Kohlenhydrate schnell ermitteln – per Foto, Barcode oder Eingabe.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "de",
+  "categories": ["health", "food"],
+  "background_color": "#f5ead8",
+  "theme_color": "#f5ead8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

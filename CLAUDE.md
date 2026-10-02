@@ -1,7 +1,8 @@
 # Keto-Dashboard — Hinweise für Claude
 
-Zwei eigenständige PWAs in einem Repo, ausgeliefert von GitHub Pages direkt aus `main`:
-die Keto-App in der Wurzel und das gemeinsame Kochbuch unter `kochbuch/`.
+Drei eigenständige PWAs in einem Repo, ausgeliefert von GitHub Pages direkt aus `main`:
+die Keto-App in der Wurzel, das gemeinsame Kochbuch unter `kochbuch/` und der KH-Rechner
+Sema unter `sema/` (nur lokal, IndexedDB, kein Server; Tests in `test/sema.test.mjs`).
 
 **Reines HTML/CSS/ES-Module. Kein Bauschritt, keine Laufzeit-Abhängigkeit.** Was im Repo
 liegt, ist genau das, was ausgeliefert wird. Fremdbibliotheken sind unter `vendor/`
@@ -39,7 +40,9 @@ der beide Seiten nachstellt (siehe `test/sync2.test.mjs`), nicht nur eine.
 
 - **`CACHE_NAME` in `sw.js` hochzählen** — sonst liefert der Service Worker den alten Stand
   aus. Das Kochbuch hat mit `kochbuch/sw.js` einen **eigenen** Service Worker mit eigenem
-  `CACHE_NAME`; wer dort etwas ändert, zählt dort hoch.
+  `CACHE_NAME`; wer dort etwas ändert, zählt dort hoch. Dasselbe gilt für `sema/sw.js`.
+  Jeder Service Worker löscht beim Aktivieren nur Caches mit dem **eigenen Präfix** — alle
+  drei teilen sich einen Origin und damit eine Cache-Liste.
 - Neue Dateien unter `js/` gehören zusätzlich in `APP_SHELL` des jeweiligen `sw.js`.
 - **Ausgehende Verbindungen brauchen einen Eintrag in der CSP** im `<meta>` von `index.html`
   bzw. `kochbuch/index.html`. Fehlt er, scheitert der Aufruf stumm.
