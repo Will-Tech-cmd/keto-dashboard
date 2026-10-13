@@ -669,5 +669,17 @@ Typ-1-Diabetes, umgesetzt nach dem Entwurf „Sema App“ aus Claude Design.
 - Einheit fest **Gramm KH**, angezeigt in ganzen Gramm (Summen aus ungerundeten Werten).
   **Keine Insulinberechnung** — das macht die Pumpe.
 - KI-Anbieter wählbar (Gemini oder OpenAI) mit eigenem API-Key, der nur auf dem Gerät liegt
-- Export/Import als JSON (Favoriten, Profil, Anbieter — ohne API-Key), z. B. Eltern → Kita
+- Export/Import als JSON (Favoriten, geprüfte Listenwerte, Behälter, Profil, Anbieter —
+  ohne API-Key), z. B. Eltern → Kita
+- **Lebensmittel-Liste** mit Startwerten (`sema/js/grunddaten.js`): allgemeine Richtwerte,
+  alle als *ungeprüft* markiert, bis die Eltern sie bestätigen oder ersetzen; Markenprodukte
+  als Platzhalter ohne Wert. Roh/gekocht steht immer im Namen. App-Updates ergänzen nur
+  fehlende Einträge, eigene Änderungen werden nie überschrieben
+- **Eigene Gerichte**: Zutaten + Endgewicht des fertigen Gerichts → KH je 100 g, als Favorit
+- **Teilverzehr**: ¼/½/¾/nichts oder Rest wiegen, je Eintrag oder Mahlzeit; die Differenz zur
+  Eingabe wird angezeigt
+- **Behälter (Tara)** einmal anlegen, beim Wiegen mit einem Tipp abziehen
+- **Teilen** einer Mahlzeit oder des Tages als Text mit Uhrzeit (Web Share, sonst Zwischenablage)
+- **Plausibilität**: Warnung bei > 100 g KH je 100 g, über 1 kg Portion, KI-Abweichung > 20 %
+  von bekannten Werten (mit „Wert übernehmen“) und optional ab einer KH-Grenze je Mahlzeit
 - Alle Daten nur lokal in IndexedDB; kein Konto, kein Abgleich
