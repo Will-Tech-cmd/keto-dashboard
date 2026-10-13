@@ -77,5 +77,91 @@ ok("2 übernommen", geaendert === 2, geaendert);
 const zurueck = L.favsZusammenfuehren(favs, b);
 ok("älterer Rückimport überschreibt nichts", zurueck.geaendert === 0 && zurueck.favs.find(x => x.id === "g1").name === "Müsli");
 
+console.log("\nLebensmittel-Liste: Startwerte");
+const { GRUNDDATEN, GRUND_VERSION } = await import("../sema/js/grunddaten.js");
+ok("Version gesetzt", GRUND_VERSION >= 1);
+ok("ids eindeutig", new Set(GRUNDDATEN.map(g => g.id)).size === GRUNDDATEN.length);
+ok("kein Startwert ist bestätigt", GRUNDDATEN.every(g => g.verifiziert === false && g.updatedAt === 0));
+ok("alle Werte 0–100 oder Platzhalter", GRUNDDATEN.every(g => g.kh100 === null || (g.kh100 >= 0 && g.kh100 <= 100)));
+const beilagen = GRUNDDATEN.filter(g => g.kategorie === "Beilage");
+ok("jede Beilage nennt roh/gekocht", beilagen.length > 0 && beilagen.every(g => g.zustand === "roh" || g.zustand === "gekocht"));
+const elternwert = { ...GRUNDDATEN[0], kh100: 13, verifiziert: true, updatedAt: 500 };
+const erg = L.grundErgaenzen([elternwert], GRUNDDATEN);
+ok("Ergänzen fügt nur Fehlendes hinzu", erg.liste.length === GRUNDDATEN.length && erg.neu === GRUNDDATEN.length - 1);
+ok("Elternwert wird nicht überschrieben", erg.liste.find(g => g.id === elternwert.id).kh100 === 13);
+ok("Name zeigt Zustand", L.grundName({ name: "Reis", zustand: "gekocht" }) === "Reis (gekocht)");
+ok("Platzhalter hat keinen Wert", !L.grundHatWert({ kh100: null }) && L.grundHatWert({ kh100: 0 }));
+
+console.log("\nBekannte Werte finden");
+const quellen = {
+  favs: [{ name: "Vanilleeis", kh100: 24 }],
+  grund: [{ name: "Reis", zustand: "gekocht", kh100: 28, verifiziert: true }, { name: "Banane", zustand: "roh", kh100: 20, verifiziert: false }],
+  produkte: [],
+};
+ok("Favorit vor allem anderen", L.bekanntenWertFinden("Vanilleeis", quellen)?.kh100 === 24);
+ok("Zustand im Namen stört nicht", L.bekanntenWertFinden("Reis", quellen)?.kh100 === 28);
+ok("Richtwert als letzte Quelle", L.bekanntenWertFinden("Banane", quellen)?.quelle === "Richtwert");
+ok("„Ei“ passt nicht auf „Eis“", L.bekanntenWertFinden("Ei", quellen) === null);
+// Gefunden im Browsertest: „Reis (roh)“ bekam den Wert von gekochtem Reis (28 statt 78).
+const reis = { favs: [], produkte: [], grund: [
+  { name: "Reis", zustand: "gekocht", kh100: 28, verifiziert: false },
+  { name: "Reis", zustand: "roh", kh100: 78, verifiziert: false },
+] };
+ok("„Reis (roh)“ → 78, nicht gekocht", L.bekanntenWertFinden("Reis (roh)", reis)?.kh100 === 78, JSON.stringify(L.bekanntenWertFinden("Reis (roh)", reis)));
+ok("„Reis gekocht“ → 28", L.bekanntenWertFinden("Reis gekocht", reis)?.kh100 === 28);
+ok("bloß „Reis“ ist mehrdeutig → kein Wert", L.bekanntenWertFinden("Reis", reis) === null);
+ok("Abweichung 30 % erkannt", L.abweichung(26, 20) > L.KI_ABWEICHUNG_GRENZE);
+ok("Abweichung 10 % ok", L.abweichung(22, 20) <= L.KI_ABWEICHUNG_GRENZE);
+
+console.log("\nPlausibilität");
+ok("120 g KH je 100 g gewarnt", L.plausibilitaet({ kh100: 120 }).length === 1);
+ok("1,5 kg gewarnt", L.plausibilitaet({ gramm: 1500 }).length === 1);
+ok("normaler Wert still", L.plausibilitaet({ kh100: 12, gramm: 80 }).length === 0);
+ok("Grenze leer = aus", !L.mahlzeitUeberGrenze(500, ""));
+ok("Grenze 60 bei 61 g", L.mahlzeitUeberGrenze(61, "60") && !L.mahlzeitUeberGrenze(60, "60"));
+
+console.log("\nTeilverzehr");
+const apfel = { id: "x", name: "Apfel", kh: 12, gramm: 100 };
+const halb = L.teilVerzehr(apfel, 0.5);
+ok("½ → 6 g, Ursprung 12 g", halb.kh === 6 && halb.khUrspruenglich === 12 && halb.anteil === 0.5);
+ok("zweimal ½ bleibt ½ (bezieht sich auf die Eingabe)", L.teilVerzehr(halb, 0.5).kh === 6);
+ok("½ → ¾ korrigierbar", L.teilVerzehr(halb, 0.75).kh === 9);
+const ganz = L.teilVerzehr(halb, 1);
+ok("„alles“ stellt die Eingabe her", ganz.kh === 12 && ganz.anteil === undefined && ganz.khUrspruenglich === undefined);
+ok("Rest 30 g von 100 g → 70 %", L.anteilAusRest(100, "30") === 0.7);
+ok("Rest schwerer als Portion → 0", L.anteilAusRest(100, 150) === 0);
+ok("ohne Ausgangsgewicht kein Anteil", L.anteilAusRest(null, 30) === null);
+
+console.log("\nEigenes Gericht");
+// 100 g Milchreis roh (78 %), 500 g Milch (4,8 %), 30 g Zucker (100 %), fertig 600 g
+const mr = L.rezeptRechnen([{ gStr: "100", kh100Str: "78" }, { gStr: "500", kh100Str: "4,8" }, { gStr: "30", kh100Str: "100" }], "600");
+ok("KH gesamt 132 g", Math.abs(mr.khGesamt - 132) < 1e-9, mr.khGesamt);
+ok("22 g KH je 100 g fertig", Math.abs(mr.kh100 - 22) < 1e-9, mr.kh100);
+ok("ohne Endgewicht kein Wert", L.rezeptRechnen([{ gStr: "100", kh100Str: "78" }], "").kh100 === null);
+
+console.log("\nBehälter");
+ok("320 − 180 = 140", L.taraAbziehen("320", 180) === 140);
+ok("nie negativ", L.taraAbziehen("100", 180) === 0);
+
+console.log("\nTeilen");
+const t0 = new Date(2026, 9, 13, 10, 15).getTime();
+const text = L.teilenText({ titel: "Sema · Di", eintraege: [
+  { meal: "Snack", name: "Apfel", amount: "80 g", kh: 4.5, khUrspruenglich: 9, anteil: 0.5, createdAt: t0, src: "fav" },
+  { meal: "Snack", name: "Waffel", amount: "1 Stück", kh: 12, createdAt: t0 + 60000, src: "ki" },
+] });
+ok("Uhrzeit des ersten Eintrags", text.includes("10:15 Snack: 17 g KH"), text);
+ok("Teilverzehr markiert", text.includes("½ gegessen, eingegeben 9 g"), text);
+ok("KI markiert", text.includes("KI geschätzt"), text);
+
+console.log("\nExport/Import mit Liste und Behältern");
+const grund = [{ id: "g-apfel", name: "Apfel", kh100: 11.4, updatedAt: 0 }, { id: "g-birne", name: "Birne", kh100: 12, verifiziert: true, updatedAt: 900 }];
+const d2 = JSON.parse(JSON.stringify(L.exportDaten({ ...a, grund, behaelter: [{ id: "b", name: "Vesperbox", gramm: 180, updatedAt: 1 }] })));
+ok("nur geänderte Listenwerte im Export", d2.grund.length === 1 && d2.grund[0].id === "g-birne");
+ok("Behälter im Export", d2.behaelter.length === 1);
+const alt1 = L.importPruefen({ format: "sema-backup", version: 1, favs: [] });
+ok("Version-1-Datei bleibt lesbar", Array.isArray(alt1.grund) && Array.isArray(alt1.behaelter));
+const zg = L.listenZusammenfuehren(grund.map(g => g.id === "g-birne" ? { ...g, verifiziert: false, updatedAt: 0 } : g), d2.grund);
+ok("Bestätigung kommt auf dem zweiten Gerät an", zg.favs.find(g => g.id === "g-birne").verifiziert === true);
+
 console.log(fails === 0 ? "\nAlle Pruefungen bestanden." : `\n${fails} Pruefung(en) fehlgeschlagen.`);
 process.exit(fails === 0 ? 0 : 1);

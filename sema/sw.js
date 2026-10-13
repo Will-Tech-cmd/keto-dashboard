@@ -6,7 +6,7 @@
 // der anderen Apps mit ab (so stand es früher in den beiden anderen Service Workern).
 
 const CACHE_PREFIX = "sema-";
-const CACHE_NAME = "sema-v1";
+const CACHE_NAME = "sema-v2";
 const SCOPE = self.registration.scope;
 
 const APP_SHELL = [
@@ -20,6 +20,7 @@ const APP_SHELL = [
   "./js/speicher.js",
   "./js/off.js",
   "./js/ki.js",
+  "./js/grunddaten.js",
   "../js/scanner.js",
   "../vendor/zxing/reader.js",
   "../vendor/zxing/zxing-library.min.js",
