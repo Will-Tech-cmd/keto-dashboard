@@ -233,6 +233,11 @@ stellen — und das änderte auch die Ringe auf der Startseite.
   Werte, Entfernen. Vorher standen kcal und Netto-KH doppelt (in der Zeile *und* in den
   Kacheln), und „Eintragen" war so breit wie die halbe Karte, während Bearbeiten und
   Entfernen unbeschriftete 19-Pixel-Ziele daneben waren
+- **Einkaufszeilen tragen eine Menge, wenn sie aus einem Rezept kommen** („Rinderhack · 600 g",
+  „Eier · 4 Stk"). Handeinträge bleiben reiner Text. Kommt dieselbe Zutat noch einmal aus
+  einem Rezept, wird die Menge zur offenen Zeile addiert statt eine zweite anzulegen;
+  erledigte Zeilen zählen dabei nicht. Nur Gramm oder Stück — „EL" oder „Packung" ließen
+  sich nicht zusammenzählen (`js/einkauf.js`, Server-Spalten `menge`/`einheit`)
 - Der Einkaufswagen setzt ein Produkt direkt auf die Einkaufsliste — in den Favoriten wie
   im Verlauf
 - Beim Eintippen bleibt der Fokus im Feld: Wort, Enter, Wort, Enter. Vorher zeichnete jedes
@@ -309,7 +314,23 @@ Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite
   der Texterkennung zu Zeichensalat und fielen durch den Parser. Er entfernt jetzt bis zu
   sechs Sonderzeichen vor dem ersten Buchstaben; Zeilen ganz ohne Buchstaben sind keine Zutat
 - Portionsgewicht wird aus den Zutatenmengen abgeleitet („1 P. (240 g)")
-- Zutaten auf die Einkaufsliste übernehmen
+- **Zutaten auf die Einkaufsliste** — mit der Rückfrage „Wie oft kochen? 1× 2× 3× 4×" und
+  einer Vorschau der Posten. Jede Zutat geht mit ihrer Menge auf die Liste (Gramm, oder Stück,
+  wenn die Zutat eine Stückzahl hat); 2× verdoppelt alles
+- Eine Zutat kann neben Gramm eine **Stückzahl** tragen („4 Eier"): sie steht im Zutaten-
+  Editor als eigenes Feld, der Import setzt sie aus „2 Eier"/„3 Stk" selbst. Gerechnet wird
+  weiter mit Gramm — die Stückzahl ist nur fürs Einkaufen. Zum Kochbuch fährt sie im
+  `mengentext` der Zutatenzeile mit („4 Stk")
+- **Teilen aus TikTok:** die installierte App taucht in Androids Teilen-Menü auf
+  (`share_target` im Manifest). Der geteilte Link geht an die Edge Function `tiktok-rezept`,
+  die nur die Videobeschreibung holt (kein Video). Daraus entstehen Name, Portionen, Zutaten
+  und Zubereitungsschritte — mit Gemini-Schlüssel erkennt das Modell alles in einem Zug,
+  ohne Schlüssel zerlegt `js/tiktok.js` den Text an den Mengenangaben und Satzenden.
+  Die Zutaten landen in der bekannten Prüfansicht, erst „Zutaten übernehmen" schreibt sie
+  ins Rezept; Zubereitung und Quelle stehen sofort im Rezept und gehen mit ins Kochbuch.
+  Grenzen: TikTok wirft die Zeilenumbrüche der Beschreibung weg, Mengen im gesprochenen
+  Video stehen nirgends — dann hilft nur Abtippen. Funktioniert nur mit angemeldetem
+  Abgleich (die Funktion verlangt die Haushalts-Sitzung) und in der installierten App
 - Rezepte einzeln exportieren, teilen und importieren — ohne den Rest der Daten
 - „📖 Im Kochbuch öffnen": übergibt ein Rezept an das Kochbuch (siehe unten) und springt direkt
   zu dessen Ansicht dort, wo sich Zubereitung, Fotos und mehr ergänzen lassen
@@ -392,6 +413,15 @@ um Zubereitungsschritte, Fotos, Zeiten, Schwierigkeit, Kategorien, Bewertung und
   die Migration `kochbuch_init` im Supabase-Projekt.
 
 ---
+
+### Zubereitung aus der Keto-App
+
+Ein Rezept, das aus TikTok in die Keto-App kam, bringt Zubereitungsschritte und den Link
+mit. Beim Übernehmen ins Kochbuch (automatisch im klassischen Abgleich, sonst über „Im
+Kochbuch öffnen") landen die Schritte in `kochbuch_schritte` und der Link in den Notizen —
+**aber nur, solange im Kochbuch noch keine Schritte stehen.** Die Zubereitung wird im
+Kochbuch gepflegt; wer sie dort umformuliert hat, soll sie beim nächsten Abgleich nicht
+wieder in der TikTok-Fassung vorfinden. Die Notizen werden nur beim Anlegen geschrieben.
 
 ## Daten, Abgleich und Datenschutz
 
@@ -545,6 +575,23 @@ bleibt, wo sie war. Dadurch liest jede bestehende Auswertung weiterhin genau das
 immer gelesen hat; es musste keine einzige Lesestelle angefasst werden. Der sichtbare Preis:
 wer ein Komma tippt, sieht einen Punkt erscheinen. Barcodefelder (`inputmode="numeric"`)
 bleiben außen vor — dort ist ein Trennzeichen kein Dezimalpunkt, sondern ein Tippfehler.
+
+### Teilen-Ziel (TikTok → Rezept)
+
+`manifest.webmanifest` meldet die App als `share_target` an (GET mit `title`, `text`, `url`).
+Android öffnet dann `index.html?text=…&url=…`; `js/app.js` erkennt das beim Start
+(`js/tiktok.js`, `geteiltesAus`), säubert die Adresse und startet `js/tiktok-import.js`.
+Der Browser darf tiktok.com nicht abrufen (CORS), und TikToks oEmbed liefert seit 2026
+keine Beschreibung mehr — nur noch das Einbett-HTML. Deshalb holt die Supabase Edge
+Function `supabase/functions/tiktok-rezept/index.ts` die Videoseite mit Browser-Kennung
+und liest die Beschreibung aus dem eingebetteten JSON (`__UNIVERSAL_DATA_FOR_REHYDRATION__`).
+Sie nimmt nur `https://…tiktok.com`-Links an, verlangt die Supabase-Sitzung (`verify_jwt`)
+und gibt nur Text zurück. Der Service Worker legt Seitenaufrufe mit Parametern unter dem
+nackten Pfad ab, damit ein geteilter Link offline nicht am Cache vorbeiläuft.
+
+Bricht TikTok den Weg (Umbau der Seite, Captcha für Rechenzentrums-Adressen), antwortet
+die Funktion mit `{ fehler }`, und die App bietet an, den Text von Hand einzufügen —
+Screenshot der Beschreibung plus Bild-Import geht immer.
 
 ### Aktualisierung und Offline-Betrieb
 

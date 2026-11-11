@@ -19,6 +19,8 @@ import { ikon, setzeIkon } from "./ikonen.js";
 import { isSyncEnabled, syncNow, onSyncApplied } from "./sync.js";
 import { openTellerFoto } from "./teller.js";
 import { hasApiKey } from "./ai.js";
+import { geteiltesAus } from "./tiktok.js";
+import { starteGeteiltesRezept } from "./tiktok-import.js";
 
 function round1(v) {
   return v == null ? null : Math.round(v * 10) / 10;
@@ -361,9 +363,14 @@ function initialTabFromUrl() {
   const tab = params.get("tab");
   const sub = params.get("sub");
   if (tab === "lists" && sub) openListsSubtab(sub);
+  // Vom Teilen-Dialog (TikTok → „Keto"): Link/Text merken, der Import startet nach dem
+  // ersten Zeichnen (siehe unten) — hier ist der Reiter noch nicht da.
+  geteilt = geteiltesAus(params);
   if (location.search) history.replaceState(null, "", location.pathname);
+  if (geteilt) return "recipes";
   return tab && RENDERERS[tab] ? tab : "start";
 }
+let geteilt = null;
 
 // Kommt über den Abgleich etwas Neues herein, den sichtbaren Reiter auffrischen — sonst
 // sieht man die Eingabe des anderen Geräts erst nach einem Neustart. Nur im Zeilenmodus:
@@ -436,6 +443,11 @@ if (Store.isOnboarded()) {
   applyDesignTheme();
   updateProfileSwitchLabel();
   goToTab(initialTabFromUrl());
+  if (geteilt) {
+    const g = geteilt;
+    geteilt = null;
+    starteGeteiltesRezept(g, goToTab);
+  }
   if (drainedFromKochbuch > 0) {
     showToast(`${drainedFromKochbuch} Zutat(en) aus dem Kochbuch auf die Einkaufsliste übernommen`);
   }

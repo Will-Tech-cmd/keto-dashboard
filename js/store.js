@@ -16,6 +16,7 @@ import * as ablage from "./ablage.js";
 import * as db from "./db.js";
 import * as umzug from "./umzug.js";
 import { nurLokales } from "./entities.js";
+import { fuegeZusammen } from "./einkauf.js";
 
 const KEY = "keto-dashboard-v1";
 const SCHEMA_VERSION = 1;
@@ -54,7 +55,7 @@ function defaultState() {
     activeProfileId: p1.id,
     favorites: [],     // { barcode, name, brand, addedAt, netCarbs100, grade }
     noGo: [],
-    shoppingList: [],  // { id, text, checked, barcode? }
+    shoppingList: [],  // { id, text, checked, barcode?, menge?, einheit? ("g"|"Stk") — Menge nur aus Rezepten }
     ownProducts: {},   // barcode -> product object (manuell angelegt)
     cache: {},         // barcode -> { product, fetchedAt }
     recent: [],        // zuletzt gescannte barcodes, neueste zuerst
@@ -959,9 +960,32 @@ export const Store = {
   },
 
   // --- Einkaufsliste ---
-  addShoppingItem(text, barcode = null) {
-    state.shoppingList.unshift({ id: crypto.randomUUID(), text, checked: false, barcode, updatedAt: Date.now() });
+  addShoppingItem(text, barcode = null, { menge = null, einheit = null } = {}) {
+    state.shoppingList.unshift({
+      id: crypto.randomUUID(), text, checked: false, barcode,
+      menge: menge > 0 ? menge : null, einheit: menge > 0 && einheit ? einheit : null,
+      updatedAt: Date.now(),
+    });
     persist();
+  },
+  /**
+   * Ein Posten aus einem Rezept ({ text, menge, einheit }, siehe einkauf.js). Steht die Zutat
+   * schon offen auf der Liste, wird die Menge addiert statt eine zweite Zeile anzulegen.
+   * Liefert "neu" | "ergaenzt" | "vorhanden" für die Meldung.
+   */
+  addShoppingPosten(posten) {
+    const e = fuegeZusammen(state.shoppingList, posten);
+    if (e.aktion === "neu") {
+      Store.addShoppingItem(posten.text, null, { menge: posten.menge, einheit: posten.einheit });
+      return "neu";
+    }
+    if (e.aktion === "ergaenzt") {
+      e.item.menge = e.menge;
+      if (e.einheit) e.item.einheit = e.einheit;
+      e.item.updatedAt = Date.now();
+      persist();
+    }
+    return e.aktion;
   },
   toggleShoppingItem(id) {
     const item = state.shoppingList.find(i => i.id === id);

@@ -18,9 +18,42 @@ import {
 import { startScanner, stopScanner, isScannerSupported } from "../scanner.js";
 import { showToast, esc, bindBackClose, keepActionsInView, gradeDotHtml, nutriTilesHtml, selectOnFocus } from "../ui.js";
 import { hasApiKey, recognizeIngredientsFromText, recognizeIngredientsFromImage, describeAiError } from "../ai.js";
+import { zutatenFuerEinkauf, mengeText } from "../einkauf.js";
 
 let openRecipeId = null;
 let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-Phase
+// Prüfzeilen, die ein Import von außen (TikTok-Teilen, tiktok-import.js) mitbringt: der
+// Editor holt sie beim nächsten Zeichnen ab und zeigt sofort die Prüfansicht — der Mensch
+// soll die erkannten Mengen sehen, bevor sie im Rezept stehen.
+let pendingReview = null;
+
+/**
+ * Legt ein von außen erkanntes Rezept an (Name, Portionen, Zubereitung, Quelle) und öffnet
+ * den Editor mit der Prüfansicht für die Zutaten. Die Zutaten landen NICHT direkt im Rezept —
+ * erst nach „Zutaten übernehmen", wie beim Bild-/Text-Import auch.
+ */
+export function oeffneImportiertesRezept({ name, servings, steps, quelle, ingredients, ingredientsText, matchQuality = "ai" }) {
+  const recipe = createRecipe(name, servings);
+  updateRecipeMeta(recipe.id, {
+    steps: (steps || []).map(s => String(s).trim()).filter(Boolean),
+    quelle: quelle || null,
+  });
+  openRecipeId = recipe.id;
+  // Entweder fertige Zutaten (KI, mit Nährwerten) oder rohe Zeilen, die wie beim
+  // „Text einfügen"-Import durch Parser und Lebensmitteltabelle laufen.
+  pendingReview = ingredientsText ? pruefzeilenAusText(ingredientsText) : (ingredients || []).map(i => ({
+    id: crypto.randomUUID(),
+    raw: i.raw ?? i.name,
+    name: i.name,
+    grams: i.grams > 0 ? i.grams : null,
+    stueck: i.stueck > 0 ? i.stueck : null,
+    per100: i.per100 || null,
+    likelyUsLabel: !!i.likelyUsLabel,
+    matchedName: i.per100 ? (i.matchedName ?? i.name) : null,
+    matchQuality: i.per100 ? (i.matchQuality ?? matchQuality) : null,
+  }));
+  return recipe;
+}
 
 /** Steht gerade ein Rezept offen zum Bearbeiten? Der Abgleich fragt danach, bevor er den
  * Reiter auffrischt — ein Neuzeichnen mitten im Editor würde die halbe Eingabe verwerfen. */
@@ -247,7 +280,8 @@ function round1(v) {
 function renderEditor(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   if (!recipe) { openRecipeId = null; renderList(container); return; }
-  reviewRows = null;
+  reviewRows = pendingReview;
+  pendingReview = null;
   // Der Rezeptname ist hier die Kopfzeile — die App-Leiste darüber wäre eine zweite und
   // kostet nur Platz. Zurückgesetzt in renderList() und bei jedem Tabwechsel (app.js).
   document.body.classList.add("chrome-hidden");
@@ -296,6 +330,8 @@ function renderEditor(container, recipeId) {
 
     <div id="reviewWrap"></div>
 
+    ${schritteKarteHtml(recipe)}
+
     <div class="zeilen-aktionen" style="margin-top:20px">
       <button class="btn secondary" id="ingToShoppingBtn">${ikon("einkauf", { groesse: 17 })} Einkauf</button>
       <button class="btn secondary" id="toKochbuchBtn">${ikon("kochbuch", { groesse: 17 })} Kochbuch</button>
@@ -341,8 +377,7 @@ function renderEditor(container, recipeId) {
   container.querySelector("#ingToShoppingBtn").addEventListener("click", () => {
     const current = Store.getRecipe(recipeId);
     if (current.ingredients.length === 0) { showToast("Noch keine Zutaten in diesem Rezept"); return; }
-    const added = addIngredientsToShoppingList(current.ingredients);
-    showToast(added > 0 ? `${added} Zutat(en) auf die Einkaufsliste gesetzt` : "Bereits alle auf der Einkaufsliste");
+    openEinkaufSheet(current);
   });
 
   container.querySelector("#toKochbuchBtn").addEventListener("click", () => {
@@ -359,19 +394,97 @@ function renderEditor(container, recipeId) {
   wireIngredientSearch(container, recipeId);
   wireManualIngredient(container, recipeId);
   wireImport(container, recipeId);
+  // Prüfzeilen aus einem Import von außen (siehe oeffneImportiertesRezept) sofort zeigen.
+  if (reviewRows && reviewRows.length) renderReview(container, recipeId);
 }
 
 /** Fügt Zutatennamen zur Einkaufsliste hinzu, ohne bereits vorhandene Einträge zu duplizieren. */
-function addIngredientsToShoppingList(ingredients) {
-  const existingNames = new Set(Store.get().shoppingList.map(i => i.text.toLowerCase()));
-  let added = 0;
-  for (const ing of ingredients) {
-    if (existingNames.has(ing.name.toLowerCase())) continue;
-    Store.addShoppingItem(ing.name);
-    existingNames.add(ing.name.toLowerCase());
-    added++;
-  }
-  return added;
+/**
+ * „Auf die Einkaufsliste" — mit der Rückfrage, wie oft gekocht wird. 1× ist voreingestellt;
+ * 2× und 3× verdoppeln/verdreifachen jede Menge. Die Posten gehen durch Store.addShoppingPosten,
+ * das gleiche Zutaten mit der Liste zusammenführt (600 g statt zweimal 300 g).
+ */
+function openEinkaufSheet(recipe) {
+  let faktor = 1;
+  const overlay = document.createElement("div");
+  overlay.className = "klar-sheet-overlay";
+  overlay.innerHTML = `
+    <div class="klar-sheet">
+      <div class="klar-sheet-handle"></div>
+      <div class="klar-sheet-title">Auf die Einkaufsliste</div>
+      <div class="klar-sheet-sub">${esc(recipe.name)} · ${recipe.servings} Portionen je Durchgang</div>
+
+      <div class="klar-meal-select-head" style="margin-top:14px">
+        <span class="klar-eyebrow">Wie oft kochen?</span>
+      </div>
+      <div class="klar-meal-segments" id="ekFaktor">
+        ${[1, 2, 3, 4].map(f => `<button type="button" class="klar-meal-segment ${f === 1 ? "active" : ""}" data-faktor="${f}">${f}×</button>`).join("")}
+      </div>
+
+      <div class="klar-list-card" id="ekVorschau" style="margin-top:14px"></div>
+
+      <div class="btn-row" style="margin-top:14px">
+        <button type="button" class="btn secondary" id="ekCancel">Abbrechen</button>
+        <button type="button" class="btn" id="ekConfirm">${ikon("einkauf", { groesse: 17 })} Übernehmen</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const vorschau = overlay.querySelector("#ekVorschau");
+  const zeichne = () => {
+    const posten = zutatenFuerEinkauf(recipe, faktor);
+    vorschau.innerHTML = posten.map(p => `
+      <div class="list-item einkauf-zeile">
+        <div class="info"><div class="name">${esc(p.text)}</div></div>
+        ${mengeText(p.menge, p.einheit) ? `<span class="einkauf-menge">${mengeText(p.menge, p.einheit)}</span>` : ""}
+      </div>
+    `).join("");
+  };
+  overlay.querySelectorAll("#ekFaktor .klar-meal-segment").forEach(btn => {
+    btn.addEventListener("click", () => {
+      faktor = Number(btn.dataset.faktor);
+      overlay.querySelectorAll("#ekFaktor .klar-meal-segment").forEach(b => b.classList.toggle("active", b === btn));
+      zeichne();
+    });
+  });
+  zeichne();
+
+  const close = bindBackClose(() => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#ekCancel").addEventListener("click", close);
+  overlay.querySelector("#ekConfirm").addEventListener("click", () => {
+    const zaehler = { neu: 0, ergaenzt: 0, vorhanden: 0 };
+    for (const p of zutatenFuerEinkauf(recipe, faktor)) zaehler[Store.addShoppingPosten(p)]++;
+    close();
+    const teile = [];
+    if (zaehler.neu) teile.push(`${zaehler.neu} neu`);
+    if (zaehler.ergaenzt) teile.push(`${zaehler.ergaenzt} Menge ergänzt`);
+    if (zaehler.vorhanden) teile.push(`${zaehler.vorhanden} schon drauf`);
+    showToast(`Einkaufsliste: ${teile.join(", ")}`);
+  });
+}
+
+/**
+ * Zubereitung und Quelle, sofern ein Import sie mitgebracht hat (TikTok). Nur Anzeige: die
+ * Schritte werden im Kochbuch gepflegt, hier fahren sie nur mit, damit sie dort ankommen.
+ */
+function schritteKarteHtml(recipe) {
+  const steps = Array.isArray(recipe.steps) ? recipe.steps.filter(Boolean) : [];
+  const q = recipe.quelle;
+  if (!steps.length && !q?.url) return "";
+  const quelleZeile = q?.url ? `
+    <p class="hint" style="margin:0 0 ${steps.length ? "10px" : "0"}">Quelle: <a href="${esc(q.url)}" target="_blank" rel="noopener">${esc(q.art === "tiktok" ? "TikTok" : "Link")}${q.autor ? ` · ${esc(q.autor)}` : ""}</a></p>` : "";
+  return `
+    <div class="card" id="schritteKarte">
+      <div class="klar-section-head" style="margin-top:0">
+        <h2 class="section-title" style="margin:0">Zubereitung</h2>
+        <span class="klar-eyebrow">${steps.length ? `${steps.length} Schritte · ins Kochbuch` : ""}</span>
+      </div>
+      ${quelleZeile}
+      ${steps.length ? `<ol class="rezept-schritte">${steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+    </div>
+  `;
 }
 
 function renderTotals(container, recipeId) {
@@ -596,8 +709,10 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
       <p class="hint">Nährwerte pro 100 g. Änderungen gelten ab jetzt — bereits eingetragene Tage bleiben unverändert.</p>
       <label for="ieName">Name</label>
       <input type="text" id="ieName" value="${esc(ing.name)}">
-      <label for="ieGrams">Menge im Rezept (g)</label>
-      <input type="text" inputmode="decimal" id="ieGrams" value="${ing.grams ?? ""}">
+      <div class="field-row">
+        <div><label for="ieGrams">Menge im Rezept (g)</label><input type="text" inputmode="decimal" id="ieGrams" value="${ing.grams ?? ""}"></div>
+        <div><label for="ieStueck">Stück (für den Einkauf)</label><input type="text" inputmode="decimal" id="ieStueck" value="${ing.stueck ?? ""}" placeholder="–"></div>
+      </div>
       <label for="ieKcal">Energie (kcal)</label>
       <input type="text" inputmode="decimal" id="ieKcal" value="${p.kcal ?? ""}">
       <div class="field-row">
@@ -634,10 +749,12 @@ function openIngredientEditor(recipeId, ingredientId, onSaved) {
     const name = overlay.querySelector("#ieName").value.trim();
     if (!name) { showToast("Bitte einen Namen eingeben"); return; }
     const grams = num("#ieGrams");
+    const stueck = num("#ieStueck");
 
     updateIngredient(recipeId, ingredientId, {
       name,
       grams: grams != null && grams >= 0 ? grams : ing.grams,
+      stueck: stueck > 0 ? stueck : null,
       per100: {
         ...p,
         kcal: num("#ieKcal"),
@@ -975,6 +1092,7 @@ function startReviewFromAI(container, recipeId, ingredients) {
     raw: i.name,
     name: i.name,
     grams: i.grams > 0 ? i.grams : null,
+    stueck: i.stueck > 0 ? i.stueck : null,
     per100: i.per100,
     likelyUsLabel: false,
     matchedName: i.name,
@@ -984,8 +1102,14 @@ function startReviewFromAI(container, recipeId, ingredients) {
 }
 
 function startReview(container, recipeId, text) {
+  reviewRows = pruefzeilenAusText(text);
+  renderReview(container, recipeId);
+}
+
+/** Rohe Zutatenzeilen → Prüfzeilen mit Zuordnung aus der eingebauten Lebensmitteltabelle. */
+function pruefzeilenAusText(text) {
   const parsed = parseIngredientText(text);
-  reviewRows = parsed.map(p => {
+  return parsed.map(p => {
     const match = bestLocalFoodMatch(p.name);
     const product = match?.product;
     return {
@@ -993,6 +1117,7 @@ function startReview(container, recipeId, text) {
       raw: p.raw,
       name: p.name,
       grams: p.grams ?? (product && p.quantity != null ? guessGrams(product) * p.quantity : null),
+      stueck: stueckAusParser(p),
       per100: product ? product.per100 : null,
       likelyUsLabel: product ? product.likelyUsLabel : false,
       matchedName: product ? product.name : null,
@@ -1000,7 +1125,13 @@ function startReview(container, recipeId, text) {
       matchQuality: match ? match.quality : null,
     };
   });
-  renderReview(container, recipeId);
+}
+
+/** „2 Eier" (Zahl ohne Einheit) oder „3 Stk" → Stückzahl für den Einkauf; „200 g" → nichts. */
+function stueckAusParser(p) {
+  if (!(p.quantity > 0)) return null;
+  if (p.unit == null || /^(stk|stück|stueck|st)$/i.test(p.unit)) return p.quantity;
+  return null;
 }
 
 const UNCERTAIN_MATCH = new Set(["substring", "fuzzy"]);
@@ -1040,6 +1171,7 @@ function renderReview(container, recipeId) {
       <div class="field-row">
         <div><label>Name</label><input type="text" class="rv-name" value="${esc(r.name)}"></div>
         <div><label>Menge (g)</label><input type="text" inputmode="decimal" class="rv-grams" value="${r.grams ?? ""}"></div>
+        <div class="rv-schmal"><label>Stück</label><input type="text" inputmode="decimal" class="rv-stueck" value="${r.stueck ?? ""}" placeholder="–"></div>
       </div>
       <p class="hint rv-match-label" style="margin-top:6px;${matchLabelStyle(r)}">${matchLabelText(r)}</p>
       <div class="btn-row" style="margin-top:6px">
@@ -1058,6 +1190,10 @@ function renderReview(container, recipeId) {
     card.querySelector(".rv-grams").addEventListener("change", (e) => {
       const g = parseFloat(e.target.value);
       row.grams = Number.isNaN(g) ? null : g;
+    });
+    card.querySelector(".rv-stueck").addEventListener("change", (e) => {
+      const n = parseFloat(e.target.value);
+      row.stueck = n > 0 ? n : null;
     });
     card.querySelector(".rv-remove").addEventListener("click", () => {
       reviewRows = reviewRows.filter(r => r.id !== id);
@@ -1113,7 +1249,7 @@ function renderReview(container, recipeId) {
     let added = 0, skipped = 0;
     for (const r of reviewRows) {
       if (r.grams > 0 && r.per100) {
-        addIngredient(recipeId, { name: r.name, grams: r.grams, per100: r.per100, likelyUsLabel: r.likelyUsLabel });
+        addIngredient(recipeId, { name: r.name, grams: r.grams, stueck: r.stueck, per100: r.per100, likelyUsLabel: r.likelyUsLabel });
         added++;
       } else {
         skipped++;

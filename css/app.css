@@ -310,6 +310,9 @@ input[type="text"], input[type="number"], input[type="search"], input[type="pass
 }
 .field-row { display: flex; gap: 10px; }
 .field-row > div { flex: 1; }
+/* Schmales Nebenfeld (Stückzahl neben der Grammzahl): bekommt nur, was eine zweistellige
+   Zahl braucht — sonst drückt es auf 390 px das Namensfeld auf drei Buchstaben zusammen. */
+.field-row > .rv-schmal { flex: 0 0 74px; }
 .hint { font-size: .78rem; color: var(--text-muted); margin-top: 4px; }
 
 /* ---------- Badges / traffic light ---------- */
@@ -871,6 +874,20 @@ body[data-design="klar"] .subtab-btn.active {
    wird überflogen; gleich hohe Zeilen zählt das Auge schneller als umbrechende. Der volle
    Text steht im `title`, und im Eingabefeld sieht man ihn beim Tippen ohnehin. */
 .einkauf-zeile .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Menge aus einem Rezept („600 g", „4 Stk") rechts neben dem Artikel, vor dem Löschknopf.
+   Gedämpft und tabellarisch, damit die Zahlen untereinander in einer Flucht stehen und das
+   Auge beim Einkaufen nicht an ihnen hängenbleibt — der Artikel ist die Hauptsache. */
+.einkauf-menge {
+  flex: none; margin-left: 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.einkauf-zeile.checked .einkauf-menge { text-decoration: line-through; opacity: .6; }
+
+/* Zubereitung im Rezept (nur aus einem Import, z.B. TikTok): nummerierte Schritte, Zahl in
+   Akzentfarbe, damit man beim Kochen die Stelle wiederfindet. Gepflegt wird im Kochbuch. */
+.rezept-schritte { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.rezept-schritte li { font-size: 14px; line-height: 1.45; }
+.rezept-schritte li::marker { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* Hinweiskasten im Werte-Formular: meldet sich, hält aber nichts auf (siehe
    product-editor.js). Gelb wie „in Maßen" — es ist eine Nachfrage, kein Fehler. */

@@ -12,7 +12,17 @@ migrations/
   20260823221700_rls_haerten_private_schema.sql           Härtung nach dem Security-Linter
 ```
 
-**Alle drei sind angewendet** (Stand 23.08.2026).
+**Alle drei sind angewendet** (Stand 23.08.2026). Spätere Migrationen (`mahlzeit_geplant`,
+`gewicht`, `schritte`, `einkauf_menge`) liegen daneben, jeweils mit `.rueckname.sql`, und
+sind ebenfalls angewendet.
+
+```
+functions/
+  tiktok-rezept/index.ts   holt zu einem TikTok-Link die Videobeschreibung (Teilen → Rezept)
+```
+
+Deployt mit `verify_jwt` an — die App schickt ihre Haushalts-Sitzung mit. Neu ausrollen:
+`supabase functions deploy tiktok-rezept` oder über das Dashboard.
 
 ## Anwenden
 

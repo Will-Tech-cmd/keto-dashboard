@@ -5,7 +5,7 @@
 // stattdessen gezielt nur gelesen bzw. ein separater Inbox-Schlüssel beschrieben, den die
 // Keto-App selbst beim nächsten Start abholt (js/store.js, `drainKochbuchInbox`).
 
-import { createRezeptHead, forceUpdateRezeptHead, replaceZutaten } from "./api.js";
+import { createRezeptHead, forceUpdateRezeptHead, replaceZutaten, replaceSchritte, getRezept } from "./api.js";
 // Die Übersetzung Keto-Zutat <-> kochbuch_zutaten steht in der Keto-App, weil sie dort
 // auch der zeilenweise Abgleich braucht. Eine zweite Fassung hier daneben wäre zwei
 // Wahrheiten über dieselben Spalten — und sie würden auseinanderlaufen.
@@ -126,12 +126,33 @@ export async function writeKetoRecipe(ketoRecipe, existing, wer) {
     await forceUpdateRezeptHead(existing.id, { ...kopfOhneStempel, geaendert_von: wer });
     rezeptId = existing.id;
   } else {
-    const created = await createRezeptHead({ ...kopfOhneStempel, erstellt_von: wer, geaendert_von: wer });
+    // Die Quelle (TikTok-Link) nur beim Anlegen in die Notizen — danach gehören die Notizen
+    // dem Kochbuch, ein Abgleich darf sie nicht überschreiben.
+    const quelle = ketoRecipe.quelle?.url ? { notizen: `Quelle: ${ketoRecipe.quelle.url}` } : {};
+    const created = await createRezeptHead({ ...kopfOhneStempel, ...quelle, erstellt_von: wer, geaendert_von: wer });
     rezeptId = created.id;
   }
   await replaceZutaten(rezeptId, zutaten);
+  await uebernimmSchritte(rezeptId, ketoRecipe, !!existing);
   await forceUpdateRezeptHead(rezeptId, { keto_updated_at });
   return rezeptId;
+}
+
+/**
+ * Zubereitungsschritte, die ein Import in der Keto-App mitgebracht hat (TikTok): nur dann
+ * ins Kochbuch, wenn dort noch keine stehen. Die Zubereitung wird im Kochbuch gepflegt —
+ * wer sie hier umformuliert hat, soll sie beim nächsten Abgleich nicht wieder in der
+ * TikTok-Fassung vorfinden. Ein Rezept ohne Schritte bleibt unberührt.
+ */
+async function uebernimmSchritte(rezeptId, ketoRecipe, bestehend) {
+  const schritte = (Array.isArray(ketoRecipe.steps) ? ketoRecipe.steps : [])
+    .map(s => String(s).trim()).filter(Boolean);
+  if (schritte.length === 0) return;
+  if (bestehend) {
+    const voll = await getRezept(rezeptId);
+    if ((voll?.kochbuch_schritte || []).length > 0) return;
+  }
+  await replaceSchritte(rezeptId, schritte.map(text => ({ text, minuten: null })));
 }
 
 /**
