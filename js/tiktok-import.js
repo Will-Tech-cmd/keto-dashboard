@@ -38,17 +38,24 @@ export async function holeBeschreibung(link) {
  * über die eingebaute Lebensmitteltabelle (wie „Text einfügen → Zeilen prüfen").
  */
 export async function rezeptAusBeschreibung(beschreibung, { titel = "" } = {}) {
+  const z = zerlegeBeschreibung(beschreibung, { titel });
   if (hasApiKey()) {
     try {
       const r = await erkenneRezept(beschreibung);
-      if (r.ingredients.length || r.steps.length) {
+      if (r.ingredients.length) {
         return { name: r.name || titel || "TikTok-Rezept", servings: r.servings, ingredients: r.ingredients, steps: r.steps, weg: "ki" };
+      }
+      // Das Modell hat Name und Schritte geliefert, aber keine Zutaten — beim ersten echten
+      // Teilen (Cheeseburger Cake) genau so passiert, das Rezept stand dann ohne Zutaten da.
+      // Dann nehmen wir seine Schritte und holen die Zutaten aus der Textzerlegung.
+      if (r.steps.length || r.name) {
+        console.warn("Gemini lieferte keine Zutaten, Zutaten aus der Textzerlegung:", z.zutatenZeilen.length);
+        return { name: r.name || z.name, servings: r.servings > 1 ? r.servings : z.servings, ingredientsText: z.zutatenZeilen.join("\n"), steps: r.steps.length ? r.steps : z.schritte, weg: "ki-ohne-zutaten" };
       }
     } catch (err) {
       console.warn("Gemini-Erkennung fehlgeschlagen, nehme Textzerlegung:", describeAiError(err));
     }
   }
-  const z = zerlegeBeschreibung(beschreibung, { titel });
   return { name: z.name, servings: z.servings, ingredientsText: z.zutatenZeilen.join("\n"), steps: z.schritte, weg: "text" };
 }
 
@@ -116,7 +123,9 @@ export async function starteGeteiltesRezept(geteilt, goToTab) {
       goToTab("recipes");
       showToast(r.weg === "ki"
         ? `${r.ingredients.length} Zutaten erkannt — bitte prüfen und übernehmen`
-        : "Zutaten erkannt — Mengen und Zuordnung bitte prüfen");
+        : r.weg === "ki-ohne-zutaten"
+          ? "KI lieferte keine Zutaten — aus dem Text erkannt, bitte Mengen prüfen"
+          : "Zutaten erkannt — Mengen und Zuordnung bitte prüfen");
     });
   } catch (err) {
     // „Text trotzdem prüfen" nur, wenn außer dem Link noch Text da ist — der nackte Link

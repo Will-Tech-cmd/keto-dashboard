@@ -26,6 +26,7 @@ let reviewRows = null; // Kandidaten aus Bild-/Text-Import, während der Review-
 // Editor holt sie beim nächsten Zeichnen ab und zeigt sofort die Prüfansicht — der Mensch
 // soll die erkannten Mengen sehen, bevor sie im Rezept stehen.
 let pendingReview = null;
+let reviewFuer = null; // Rezept-id, zu der reviewRows gehören
 
 /**
  * Legt ein von außen erkanntes Rezept an (Name, Portionen, Zubereitung, Quelle) und öffnet
@@ -78,6 +79,7 @@ export function renderRecipes(container) {
 let recipeFilter = "";
 
 function renderList(container) {
+  reviewRows = null; reviewFuer = null;
   document.body.classList.remove("chrome-hidden");
   const recipes = Store.getRecipes();
   container.innerHTML = `
@@ -280,8 +282,13 @@ function round1(v) {
 function renderEditor(container, recipeId) {
   const recipe = Store.getRecipe(recipeId);
   if (!recipe) { openRecipeId = null; renderList(container); return; }
-  reviewRows = pendingReview;
+  // Prüfzeilen überleben ein Neuzeichnen DESSELBEN Rezepts (z.B. nach dem Abgleich beim
+  // Start); erst ein anderes Rezept oder die Liste (renderList) räumt sie weg. Sonst war
+  // eine gerade erkannte Zutatenliste weg, bevor jemand „übernehmen" tippen konnte.
+  if (pendingReview) reviewRows = pendingReview;
+  else if (reviewFuer !== recipeId) reviewRows = null;
   pendingReview = null;
+  reviewFuer = recipeId;
   // Der Rezeptname ist hier die Kopfzeile — die App-Leiste darüber wäre eine zweite und
   // kostet nur Platz. Zurückgesetzt in renderList() und bei jedem Tabwechsel (app.js).
   document.body.classList.add("chrome-hidden");
@@ -1059,7 +1066,11 @@ function wireAiImageImport(container, recipeId, statusEl) {
   btn.id = "importAiImageBtn";
   btn.style.marginTop = "8px";
   btn.textContent = "Bild direkt mit KI auswerten";
-  card.querySelector(".btn-row").insertAdjacentElement("afterend", btn);
+  // Die Knopfzeile heißt seit dem Raster-Umbau .zeilen-aktionen, nicht mehr .btn-row. Mit dem
+  // alten Selektor warf diese Zeile bei JEDEM Öffnen eines Rezepts mit Gemini-Schlüssel — und
+  // riss alles mit, was im Editor danach verdrahtet wird (die Prüfansicht eines Imports).
+  const knopfzeile = card.querySelector(".zeilen-aktionen") || card.querySelector(".btn-row");
+  (knopfzeile || container.querySelector("#importStatus")).insertAdjacentElement("afterend", btn);
 
   const aiFileInput = document.createElement("input");
   aiFileInput.type = "file";
