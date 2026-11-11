@@ -56,6 +56,22 @@ ok("Ergibt 4 → 4 Portionen", z.servings === 4);
 ok("vier Schritte an Satzenden", z.schritte.length === 4, JSON.stringify(z.schritte));
 ok("Hashtags nicht in den Schritten", !z.schritte.some(s => s.includes("#")));
 
+console.log("\n4b) Cheeseburger Cake (Emoji als Aufzählung, Tastenkappen-Ziffern, pro.tiktok.com-Fall)");
+const cake = "🍔🔥 Cheeseburger Cake 🧀🥒 Saftig, käsig und einfach brachial! 🤤🔥 Der virale Cheeseburger Cake kommt mit allem, was wir am Cheeseburger lieben – nur als herzhafter Kuchen! 🍔💥 Zutaten 📝 🍕 1 fertiger Pizzateig 🐄 300 g Rinderhack 🧀 150 g Cheddar 🧀 50g Gouda g Gouda-Mozzarella-Mix 🧀 50g Mozzarella 🧅 1 rote Zwiebel, fein gewürfelt 🥒 Gewürzgurken, in Scheiben 🍅 4 EL Ketchup 🥄 2 EL Mayonnaise 🌭 2 TL Senf 🥒 1 EL Gurkenwasser 🧂 1 TL Salz ⚫ ½ TL schwarzer Pfeffer 🌶️ 1 TL Paprikapulver, edelsüß 🧄 ½ TL Knoblauchpulver 🥚 1 Eigelb + 1 TL Milch zum Bestreichen ⚪ Sesam zum Bestreuen Rezept 👨‍🍳 1️⃣ Rinderhack 🐄 in einer heißen Pfanne kräftig anbraten, dann mit Salz 🧂, Pfeffer ⚫, Paprika 🌶️ und Knoblauchpulver 🧄 würzen. Kurz abkühlen lassen. 2️⃣ Für die Soße 🍔 Ketchup 🍅, Mayo, Senf und Gurkenwasser 🥒 verrühren  3️⃣ Pizzateig 🍕 über eine Kuchenform legen und mit der Hälfte vom Käse 🧀 starten. 4️⃣ Die zweite Hälfte genauso schichten. 5️⃣ Bei 200 °C Ober-/Unterhitze im vorgeheizten Ofen 25–30 Minuten backen, bis der Cake goldbraun ist. 🔥 6️⃣ Kurz ruhen lassen, anschneiden und den Cheesepull genießen! 🧀🤤 Kleiner Tipp: Rechtecke lassen sich leichter essen als Scheiben. 7️⃣ An Gutn! ✌️😋 #GrillBabo #FoodTrend @Sonja_Zeb";
+z = zerlegeBeschreibung(cake);
+ok("Name ohne Emoji und ohne Rest des Satzes", z.name === "Cheeseburger Cake", z.name);
+ok("18 Zutaten", z.zutatenZeilen.length === 18, JSON.stringify(z.zutatenZeilen));
+ok("'Zutaten 📝 🍕 1 …' ohne Doppelpunkt wird als Marke erkannt", z.zutatenZeilen[0] === "1 fertiger Pizzateig", z.zutatenZeilen[0]);
+ok("Zutat ohne Menge, aber mit eigenem Emoji, bleibt eigene Zeile", z.zutatenZeilen.includes("Gewürzgurken, in Scheiben"));
+ok("'1 Eigelb + 1 TL Milch' wird zu zwei Zeilen ohne Plus", z.zutatenZeilen.includes("1 Eigelb") && z.zutatenZeilen.includes("1 TL Milch zum Bestreichen"));
+ok("keine Emoji in den Zutaten", !z.zutatenZeilen.some(x => /\p{Extended_Pictographic}/u.test(x)));
+ok("'Rezept 👨‍🍳 1️⃣' startet die Schritte", z.schritte.length === 6, JSON.stringify(z.schritte));
+ok("Emoji mitten im Satz weg, Kommas sauber", z.schritte[0].startsWith("Rinderhack in einer heißen Pfanne kräftig anbraten, dann mit Salz, Pfeffer, Paprika und Knoblauchpulver würzen."), z.schritte[0]);
+ok("'Kleiner Tipp' schneidet am Satzende, nicht mitten im Wort", z.schritte[5] === "Kurz ruhen lassen, anschneiden und den Cheesepull genießen!", z.schritte[5]);
+const gp = parseIngredientText(z.zutatenZeilen.join("\n"));
+ok("Parser: 4 EL Ketchup → 60 g", gp.find(p => /ketchup/i.test(p.name))?.grams === 60);
+ok("Parser: 0,5 TL Pfeffer → 3 g", gp.find(p => /pfeffer/i.test(p.name))?.grams === 3);
+
 console.log("\n5) Kleinkram");
 ok("portionenAus 'für 2 Portionen'", portionenAus("Zutaten für 2 Portionen: 1 Ei") === 2);
 ok("rezeptnameAus kürzt", rezeptnameAus("x".repeat(80)).length <= 60);
@@ -70,7 +86,8 @@ ok("GET mit title/text/url", manifest.share_target?.method === "GET"
   && manifest.share_target?.params?.text === "text" && manifest.share_target?.params?.url === "url");
 ok("action zeigt auf die App", manifest.share_target?.action === "./index.html");
 const fn = readFileSync(join(wurzel, "supabase/functions/tiktok-rezept/index.ts"), "utf8");
-ok("Edge Function lässt nur tiktok.com-Hosts zu", /ERLAUBTE_HOSTS = new Set\(\[[^\]]*"www\.tiktok\.com"/.test(fn) && /protocol !== "https:"/.test(fn));
+ok("Edge Function lässt nur tiktok.com-Hosts zu", /TIKTOK_HOST = \/\^\(\?:\[a-z0-9-\]\+\\\.\)\*tiktok\\\.com\$\/i/.test(fn) && /protocol !== "https:"/.test(fn));
+ok("pro.tiktok.com-Kurzlink wird erkannt", tiktokLinkAus("https://pro.tiktok.com/t/ZGdX5WrK1/") === "https://pro.tiktok.com/t/ZGdX5WrK1/");
 ok("liest __UNIVERSAL_DATA_FOR_REHYDRATION__", fn.includes("__UNIVERSAL_DATA_FOR_REHYDRATION__"));
 ok("antwortet mit CORS", fn.includes("Access-Control-Allow-Origin"));
 const sw = readFileSync(join(wurzel, "sw.js"), "utf8");

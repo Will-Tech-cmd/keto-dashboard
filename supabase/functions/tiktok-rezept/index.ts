@@ -17,7 +17,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const ERLAUBTE_HOSTS = new Set(["www.tiktok.com", "tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]);
+// Jede Unterdomäne von tiktok.com: die Android-App teilt je nach Fassung über www., vm.,
+// vt., m. oder pro.tiktok.com („pro.tiktok.com/t/…" leitet auf die Videoseite weiter).
+// Eine feste Liste hatte beim ersten echten Versuch schon gefehlt.
+const TIKTOK_HOST = /^(?:[a-z0-9-]+\.)*tiktok\.com$/i;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +40,7 @@ function pruefeLink(roh: unknown): URL | null {
   if (typeof roh !== "string") return null;
   let u: URL;
   try { u = new URL(roh.trim()); } catch { return null; }
-  if (u.protocol !== "https:" || !ERLAUBTE_HOSTS.has(u.hostname)) return null;
+  if (u.protocol !== "https:" || !TIKTOK_HOST.test(u.hostname)) return null;
   return u;
 }
 

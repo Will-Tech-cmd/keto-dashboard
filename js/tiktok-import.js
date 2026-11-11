@@ -99,12 +99,14 @@ export async function starteGeteiltesRezept(geteilt, goToTab) {
       const b = await holeBeschreibung(geteilt.link);
       beschreibung = b.text;
       quelle = quelleAus(geteilt, b);
-    } else if (geteilt.text && geteilt.text.trim()) {
-      // Kein Link, aber Text (z.B. aus einer Notiz geteilt): direkt als Beschreibung nehmen.
+    } else if (geteilt.text && geteilt.text.replace(/https?:\/\/\S+/g, "").trim().length >= 20) {
+      // Kein TikTok-Link, aber Text (z.B. aus einer Notiz geteilt): direkt als Beschreibung
+      // nehmen. Ein nackter fremder Link zählt nicht — daraus würde ein leeres Rezept mit
+      // der Adresse als Namen.
       beschreibung = geteilt.text;
       quelle = null;
     } else {
-      zeigeFehler("Im Geteilten war kein TikTok-Link und kein Text.");
+      zeigeFehler("Im Geteilten war kein TikTok-Link und kein Rezepttext.");
       return;
     }
     status.textContent = hasApiKey() ? "Gemini liest Zutaten und Zubereitung …" : "Zutaten und Zubereitung werden erkannt …";
