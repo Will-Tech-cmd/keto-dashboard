@@ -325,7 +325,9 @@ Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite
   (`share_target` im Manifest). Der geteilte Link geht an die Edge Function `tiktok-rezept`,
   die nur die Videobeschreibung holt (kein Video). Daraus entstehen Name, Portionen, Zutaten
   und Zubereitungsschritte — mit Gemini-Schlüssel erkennt das Modell alles in einem Zug,
-  ohne Schlüssel zerlegt `js/tiktok.js` den Text an den Mengenangaben und Satzenden.
+  ohne Schlüssel zerlegt `js/tiktok.js` den Text an den Emoji-Aufzählungszeichen („🍕 1
+  Pizzateig 🐄 300 g Hack"), Mengenangaben und Satzenden; Tastenkappen-Ziffern („1️⃣") gelten
+  als Schrittnummern.
   Die Zutaten landen in der bekannten Prüfansicht, erst „Zutaten übernehmen" schreibt sie
   ins Rezept; Zubereitung und Quelle stehen sofort im Rezept und gehen mit ins Kochbuch.
   Grenzen: TikTok wirft die Zeilenumbrüche der Beschreibung weg, Mengen im gesprochenen
@@ -585,7 +587,9 @@ Der Browser darf tiktok.com nicht abrufen (CORS), und TikToks oEmbed liefert sei
 keine Beschreibung mehr — nur noch das Einbett-HTML. Deshalb holt die Supabase Edge
 Function `supabase/functions/tiktok-rezept/index.ts` die Videoseite mit Browser-Kennung
 und liest die Beschreibung aus dem eingebetteten JSON (`__UNIVERSAL_DATA_FOR_REHYDRATION__`).
-Sie nimmt nur `https://…tiktok.com`-Links an, verlangt die Supabase-Sitzung (`verify_jwt`)
+Sie nimmt nur `https://…tiktok.com`-Links an (jede Unterdomäne: die Android-App teilt je nach
+Fassung über `www.`, `vm.`, `vt.` oder `pro.tiktok.com/t/…`, Kurzlinks leiten auf die
+Videoseite weiter), verlangt die Supabase-Sitzung (`verify_jwt`)
 und gibt nur Text zurück. Der Service Worker legt Seitenaufrufe mit Parametern unter dem
 nackten Pfad ab, damit ein geteilter Link offline nicht am Cache vorbeiläuft.
 

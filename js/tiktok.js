@@ -10,7 +10,10 @@
 // Mengenangaben, Schritte an Nummern oder Satzenden. Mit Gemini-Schlüssel übernimmt das
 // Modell diese Arbeit (ai.js, erkenneRezept) — hier ist der Weg ohne Schlüssel.
 
-const LINK = /https?:\/\/(?:www\.|vm\.|vt\.|m\.)?tiktok\.com\/[^\s"'<>]+/i;
+// Jede Unterdomäne: TikTok teilt je nach App-Fassung über www., vm., vt., m. oder
+// pro.tiktok.com („pro.tiktok.com/t/…" kam aus der aktuellen Android-App) — eine feste
+// Liste war nach einer Woche schon überholt.
+const LINK = /https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/[^\s"'<>]+/i;
 
 /** Der erste TikTok-Link in einem Text, oder null. */
 export function tiktokLinkAus(text) {
@@ -32,21 +35,38 @@ export function geteiltesAus(params) {
 }
 
 const BRUECHE = { "½": "0,5", "¼": "0,25", "¾": "0,75", "⅓": "0,33", "⅔": "0,66", "⅛": "0,125" };
+// Ein Emoji samt Hautton, Variationsselektor und Verbindern (👨‍🍳 ist drei Zeichen).
+const EMOJI = /\p{Extended_Pictographic}(?:[\uFE0F\u200D\u{1F3FB}-\u{1F3FF}]|\p{Extended_Pictographic})*/gu;
 
-/** Hashtags und Mehrfach-Leerzeichen weg, Bruchzeichen zu Zahlen — der Rest bleibt. */
+/**
+ * Hashtags und Mehrfach-Leerzeichen weg, Bruchzeichen zu Zahlen, Tastenkappen-Ziffern
+ * („1️⃣") zu „1." — der Rest bleibt, auch die Emoji: die stehen in vielen Beschreibungen
+ * als Aufzählungszeichen vor jeder Zutat („🍕 1 Pizzateig 🐄 300 g Hack") und sind damit die
+ * einzige Spur der verlorenen Zeilenumbrüche. zutatenAus() teilt daran.
+ */
 export function bereinigeBeschreibung(desc) {
   return String(desc || "")
+    .replace(/(\d)\uFE0F?\u20E3/g, "$1. ")
     .replace(/[½¼¾⅓⅔⅛]/g, (z) => `${BRUECHE[z]} `)
     .replace(/#[^\s#]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+/** Emoji und Sonderzeichen-Reste aus einem Namen oder Satz entfernen. */
+function ohneEmoji(text) {
+  return String(text || "")
+    .replace(EMOJI, " ").replace(/[\uFE0F\u200D\u20E3]/g, "")
+    .replace(/\s+/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
+}
+
 // Die Marke frisst alles bis zum Doppelpunkt mit („Zutaten für 2 Toast:", „Zubereitung vom
 // Keto Rezept:"), aber nie über ein Satzende hinweg. Ohne Doppelpunkt zählt „Zutaten" nur,
 // wenn direkt eine Zahl folgt — „aus nur 5 Zutaten." in der Einleitung ist keine Liste.
-const ZUTATEN_MARKE = /\b(?:zutaten|du brauchst|ihr braucht|ingredients)\b(?:[^:.!?]{0,40}:|\s*(?=\d))/i;
-const SCHRITTE_MARKE = /\b(?:zubereitung|anleitung|so geht'?s|zubereiten|instructions|method)\b(?:[^:.!?]{0,40}:)?/i;
+const ZUTATEN_MARKE = /\b(?:zutaten|du brauchst|ihr braucht|ingredients)\b(?:[^:.!?]{0,40}:|(?=[^\p{L}\d]{0,12}\d))/iu;
+// „Rezept" allein ist keine Marke (steht in jeder zweiten Einleitung) — nur, wenn kurz
+// darauf „1." folgt, wie bei „Rezept 👨‍🍳 1️⃣ Hack anbraten …".
+const SCHRITTE_MARKE = /\b(?:zubereitung|anleitung|so geht'?s|zubereiten|instructions|method)\b(?:[^:.!?]{0,40}:)?|\brezept\b(?=[^\p{L}\d]{0,12}1\.\s)/iu;
 const ENDE_MARKE = /\b(tipp|hinweis|folgt? mir|speicher|abonnier|kommentier|link in (?:der )?bio|rezept speichern)\b/i;
 
 // Wo im Fließtext eine neue Zutat beginnt: eine Zahl (auch 3-4, 1,5, 0,5) oder „etwas",
@@ -80,7 +100,13 @@ export function zerlegeBeschreibung(desc, { titel = "" } = {}) {
   if (!z && !s) zutatenTeil = text; // keine Marken: alles nach Mengenangaben absuchen
 
   const e = teile(schritteTeil || zutatenTeil, ENDE_MARKE);
-  if (e) { if (schritteTeil) schritteTeil = e.vor; else zutatenTeil = e.vor; }
+  if (e) {
+    // Bei den Schritten bis zum vorigen Satzende zurück: „Kleiner Tipp: …" ließe sonst ein
+    // „Kleiner" am letzten Schritt hängen. Bei den Zutaten nicht — die letzte Zutat hat
+    // kein Satzende und wäre weg.
+    if (schritteTeil) schritteTeil = /[.!?]/.test(e.vor) ? e.vor.replace(/[^.!?]*$/, "") : e.vor;
+    else zutatenTeil = e.vor;
+  }
 
   const zutatenZeilen = zutatenAus(zutatenTeil, { nurMitMenge: !z });
   const schritte = schritteAus(schritteTeil);
@@ -97,7 +123,12 @@ export function zerlegeBeschreibung(desc, { titel = "" } = {}) {
 export function zutatenAus(teil, { nurMitMenge = false } = {}) {
   const ohneKlammern = String(teil || "").replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
   if (!ohneKlammern) return [];
-  const stuecke = ohneKlammern.split(ZUTAT_START).map(x => x.trim()).filter(Boolean);
+  // Erst an den Emoji-Aufzählungszeichen teilen (wo es sie gibt), dann jedes Stück noch an
+  // den Mengenangaben — so bleibt „Gewürzgurken, in Scheiben" (ohne Menge, aber mit eigenem
+  // 🥒 davor) eine eigene Zeile statt am Vorgänger zu kleben.
+  const mitEmoji = EMOJI.test(ohneKlammern);
+  const abschnitte = mitEmoji ? ohneKlammern.split(EMOJI) : [ohneKlammern];
+  const stuecke = abschnitte.flatMap(a => a.split(ZUTAT_START)).map(x => ohneEmoji(x)).filter(Boolean);
   const zeilen = [];
   for (let i = 0; i < stuecke.length; i++) {
     let st = stuecke[i];
@@ -106,7 +137,7 @@ export function zutatenAus(teil, { nurMitMenge = false } = {}) {
     if (i === 0 && !hatMenge) continue;
     if (nurMitMenge && !hatMenge) continue;
     // Ein Satzende mitten im Stück heißt: danach beginnt Fließtext, keine Zutat mehr.
-    st = st.replace(/\.\s.*$/, "").replace(/[.,;:]+$/, "").trim();
+    st = st.replace(/\.\s.*$/, "").replace(/[.,;:+&]+$/, "").trim();
     // Mehr als ~7 Wörter nach der Menge sind kein Zutatenname mehr, sondern ein Satz,
     // der ohne Umbruch an die letzte Zutat geklebt ist („Etwas Käse nach Wahl Wenn du …").
     const woerter = st.split(" ");
@@ -127,13 +158,16 @@ export function schritteAus(teil) {
     stuecke = t.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
   }
   return stuecke
-    .map(x => x.trim().replace(/^[-–•]\s*/, ""))
+    .map(x => ohneEmoji(x).replace(/^[-–•]\s*/, "").trim())
     .filter(x => x.length > 3 && /\p{L}/u.test(x));
 }
 
 /** Der erste Satz der Einleitung, gekürzt — sonst der geteilte Titel, sonst „TikTok-Rezept". */
 export function rezeptnameAus(intro, titel = "") {
-  const satz = String(intro || "").split(/[.!?:]\s/)[0]?.trim() || "";
+  // Emoji trennen wie ein Zeilenumbruch: „🍔🔥 Cheeseburger Cake 🧀🥒 Saftig, käsig …" — der
+  // Name ist das erste Stück mit Buchstaben, nicht der ganze erste Satz.
+  const stueck = String(intro || "").split(EMOJI).map(x => x.trim()).find(x => (x.match(/\p{L}/gu) || []).length >= 4) || "";
+  const satz = ohneEmoji(stueck.split(/[.!?:]\s/)[0] || "");
   const kandidat = satz.length >= 4 ? satz : String(titel || "").trim();
   if (!kandidat) return "TikTok-Rezept";
   const kurz = kandidat.replace(/\s*[|–-]\s*(tiktok|rezept).*$/i, "").trim();
