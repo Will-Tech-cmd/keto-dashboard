@@ -34,6 +34,7 @@ const INGREDIENT_SCHEMA = {
         properties: {
           name: { type: "STRING" },
           grams: { type: "NUMBER" },
+          stueck: { type: "NUMBER" },
           kcal100: { type: "NUMBER" },
           carbs100: { type: "NUMBER" },
           fiber100: { type: "NUMBER" },
@@ -54,6 +55,7 @@ const PROMPT = `Du bekommst eine Zutatenliste aus einem Rezept (ggf. mit Tippfeh
 Für jede echte Zutat:
 - name: bereinigter Lebensmittelname, ohne Mengenangabe und ohne Zubereitungshinweise ("gehackt", "geschmolzen" o.ä.)
 - grams: die im Rezept angegebene Menge in Gramm. Einheiten umrechnen (1 EL ≈ 15g, 1 TL ≈ 5g, 1 Ei ≈ 58g, 1 Knoblauchzehe ≈ 5g, 1ml Flüssigkeit ≈ 1g). Wenn keine Menge erkennbar ist: 0.
+- stueck: nur wenn die Menge als Stückzahl angegeben ist (z.B. "4 Eier", "1 Avocado", "2 Zwiebeln"): diese Zahl. Sonst 0.
 - kcal100/carbs100/fiber100/sugars100/fat100/protein100/salt100: STANDARD-Nährwerte dieses Lebensmittels pro 100g nach üblichen deutschen/EU-Nährwerttabellen — UNABHÄNGIG von der im Rezept verwendeten Menge. carbs100 ist die Netto-Kohlenhydratmenge (Ballaststoffe bereits abgezogen, wie auf deutschen Etiketten üblich).
 
 Abschnittsüberschriften ohne Zutat (z.B. "Zutaten:", "Boden:", "Füllung:") gehören NICHT in die Liste. Reine Gewürzzeilen ohne erkennbare Menge (z.B. "Salz, Pfeffer nach Geschmack") mit grams: 0 aufnehmen, nicht weglassen.
@@ -162,6 +164,7 @@ function zuZutaten(parsed) {
     .map(i => ({
       name: String(i.name || "").trim(),
       grams: numOrNull(i.grams),
+      stueck: numOrNull(i.stueck) > 0 ? numOrNull(i.stueck) : null,
       per100: {
         kcal: numOrNull(i.kcal100),
         carbs: numOrNull(i.carbs100),
@@ -180,6 +183,44 @@ function zuZutaten(parsed) {
 export async function recognizeIngredientsFromText(text) {
   const key = schluesselOderFehler();
   return zuZutaten(await callGemini([{ text: `${PROMPT}\n\nZutatenliste:\n${text}` }], key, INGREDIENT_SCHEMA));
+}
+
+// Ein ganzes Rezept aus einer Videobeschreibung (TikTok): Titel, Portionen, Zutaten und
+// Zubereitungsschritte in einem Aufruf. Die Beschreibung kommt als EIN Absatz ohne
+// Zeilenumbrüche an (TikTok wirft sie weg) — Zutaten und Schritte stehen also im Fließtext
+// hintereinander. Genau dafür ist das Modell besser als der Zeilen-Parser.
+const REZEPT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    name: { type: "STRING" },
+    servings: { type: "NUMBER" },
+    ingredients: INGREDIENT_SCHEMA.properties.ingredients,
+    steps: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["name", "ingredients", "steps"],
+};
+
+const REZEPT_PROMPT = `Du bekommst die Beschreibung eines Koch-Videos (TikTok/Instagram). Sie enthält meist eine Zutatenliste und oft eine Zubereitung, alles in einem Absatz ohne Zeilenumbrüche, dazu Hashtags und Werbung.
+
+Erkenne daraus:
+- name: ein kurzer Rezeptname (z.B. "Keto Burger-Brötchen"), ohne Hashtags, ohne "Rezept:".
+- servings: wie viele Portionen/Stücke das Rezept ergibt, falls angegeben ("Ergibt 4 Brötchen" → 4). Sonst 1.
+- ingredients: jede echte Zutat, nach denselben Regeln wie unten.
+- steps: die Zubereitungsschritte als einzelne Sätze in der Reihenfolge des Textes, ohne Nummerierung. Leere Liste, wenn keine Zubereitung beschrieben ist. Hashtags, Werbung, "Folgt mir" u.ä. gehören nicht dazu.
+
+${PROMPT.replace(/^Du bekommst eine Zutatenliste[^\n]*\n\n/, "")}`;
+
+/** Rezept aus einer Videobeschreibung — Name, Portionen, Zutaten, Schritte. Wirft ohne Schlüssel. */
+export async function erkenneRezept(text) {
+  const key = schluesselOderFehler();
+  const parsed = await callGemini([{ text: `${REZEPT_PROMPT}\n\nBeschreibung:\n${text}` }], key, REZEPT_SCHEMA);
+  const servings = numOrNull(parsed?.servings);
+  return {
+    name: String(parsed?.name || "").trim(),
+    servings: servings > 0 ? Math.round(servings) : 1,
+    ingredients: zuZutaten(parsed),
+    steps: (Array.isArray(parsed?.steps) ? parsed.steps : []).map(s => String(s).trim()).filter(Boolean),
+  };
 }
 
 /**

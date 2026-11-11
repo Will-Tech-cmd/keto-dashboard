@@ -5,7 +5,7 @@
 // Fassung aus und die frisch heruntergeladene wird erst beim ÜBERNÄCHSTEN Laden sichtbar.
 // Große, unveränderliche Dateien (Schrift, Symbole, vendor/) bleiben cache-first.
 
-const CACHE_NAME = "keto-dashboard-v87";
+const CACHE_NAME = "keto-dashboard-v88";
 const SCOPE = self.registration.scope; // funktioniert auch unter einem Unterpfad wie /keto-dashboard/
 
 const APP_SHELL = [
@@ -24,6 +24,9 @@ const APP_SHELL = [
   "./js/consumption.js",
   "./js/recipes.js",
   "./js/ingredient-parser.js",
+  "./js/einkauf.js",
+  "./js/tiktok.js",
+  "./js/tiktok-import.js",
   "./js/sync.js",
   // Zeilenweiser Speicher und Abgleich (modus.js schaltet um; Standard ist noch der alte Weg).
   // Muessen mit in den Vorrat: store.js importiert sie beim Start, auch wenn der Schalter aus ist.
@@ -110,7 +113,12 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isAppShell) {
-    event.respondWith(isCode(url) ? networkFirst(request) : cacheFirst(request));
+    // Seitenaufrufe mit Parametern (?tab=scan vom Homescreen, ?text=…&url=… vom Teilen-Dialog)
+    // unter dem nackten Pfad ablegen und nachschlagen: sonst hätte jeder geteilte Link einen
+    // eigenen Cache-Eintrag, und offline fände keiner den gespeicherten Stand der App.
+    const schluessel = isCode(url) && url.search && !/\.(css|js|webmanifest)$/.test(url.pathname)
+      ? new Request(url.origin + url.pathname) : request;
+    event.respondWith(isCode(url) ? networkFirst(request, schluessel) : cacheFirst(request));
   }
 });
 
@@ -127,10 +135,10 @@ function isCode(url) {
  * in der Regel ein 304 ohne Datenübertragung. Jede erfolgreiche Antwort frischt den Cache auf,
  * auch wenn zwischenzeitlich schon die gecachte Fassung ausgeliefert wurde.
  */
-function networkFirst(request) {
+function networkFirst(request, schluessel = request) {
   // 5s statt kurzer angesetzt: bei 2G/3G reißt ein knapperer Timeout den Nutzer sonst mitten
   // im Laden auf den (dann veralteten) Cache-Stand zurück, obwohl das Netz noch geantwortet hätte.
-  const cached = caches.match(request);
+  const cached = caches.match(schluessel);
   return new Promise((resolve) => {
     let settled = false;
     const done = (res) => { if (res && !settled) { settled = true; resolve(res); } };
@@ -141,7 +149,7 @@ function networkFirst(request) {
         clearTimeout(timer);
         if (res && res.ok) {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          caches.open(CACHE_NAME).then(cache => cache.put(schluessel, clone));
           done(res);
           // Falls der Timeout schon mit der Cache-Fassung geantwortet hat: nichts weiter zu tun,
           // der Cache ist jetzt aktuell und der nächste Aufruf bekommt den neuen Stand.

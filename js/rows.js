@@ -333,6 +333,9 @@ const einkauf = {
     text: i.text,
     erledigt: !!i.checked,
     barcode: i.barcode ?? null,
+    // Menge nur, wenn beides da ist — eine Zahl ohne Einheit sagt beim Einkaufen nichts.
+    menge: i.menge > 0 && i.einheit ? Number(i.menge) : null,
+    einheit: i.menge > 0 && i.einheit ? i.einheit : null,
     geaendert_am: iso(stempel(i.updatedAt)),
   }),
   ausZeile: (z) => ({
@@ -340,6 +343,8 @@ const einkauf = {
     text: z.text,
     checked: !!z.erledigt,
     barcode: z.barcode,
+    menge: z.menge == null ? null : Number(z.menge),
+    einheit: z.einheit ?? null,
     updatedAt: millis(z.geaendert_am),
   }),
 };
@@ -447,7 +452,9 @@ export function zutatenZuZeilen(rezeptObjekt, rezeptServerId) {
     abschnitt: null,
     name: zutat.name,
     gramm: zahl(zutat.grams),
-    mengentext: null,
+    // Stückzahl (2 Eier) fährt im Mengentext mit — das Kochbuch zeigt ihn, wenn kein Gramm
+    // da ist, und die Einkaufsliste macht daraus „2 Stk" statt „116 g".
+    mengentext: zutat.stueck > 0 ? `${zutat.stueck} Stk` : null,
     per100: zutat.per100 || null,
     likely_us_label: !!zutat.likelyUsLabel,
   }));
@@ -461,9 +468,20 @@ export function zutatenAusZeilen(zeilen) {
       id: z.id,
       name: z.name,
       grams: z.gramm == null ? null : Number(z.gramm),
+      // Nur setzen, wenn da — eine Zutat ohne Stückzahl soll nach der Rundreise dasselbe
+      // Objekt sein wie vorher (zutaten.test.mjs vergleicht Feld für Feld).
+      ...(stueckAus(z.mengentext) != null ? { stueck: stueckAus(z.mengentext) } : {}),
       per100: z.per100 || null,
       likelyUsLabel: !!z.likely_us_label,
     }));
+}
+
+/** „2 Stk" / „2 Stück" / „1,5 St." → 2 / 2 / 1.5; alles andere → null. */
+export function stueckAus(mengentext) {
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*(stk|stück|stueck|st)\.?\s*$/i.exec(mengentext || "");
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(",", "."));
+  return n > 0 ? n : null;
 }
 
 export const ENTITAETEN = {

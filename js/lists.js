@@ -15,6 +15,7 @@ import { showToast, nutriTilesHtml, gradeDotHtml } from "./ui.js";
 import { gewichtsBericht, trendSatz, zielAbgleichSatz, tagesnummer, kgProWoche } from "./gewicht.js";
 import { openGewichtModal } from "./gewicht-eingabe.js";
 import { ikon } from "./ikonen.js";
+import { mengeText } from "./einkauf.js";
 
 let activeSubtab = "favorites"; // "favorites" | "noGo" | "shopping" | "history" | "evaluation"
 let historyPeriodDays = 7; // 7 | 30 | 90 | null (null = alle)
@@ -40,7 +41,10 @@ const SUBTABS = [
 ];
 
 export function renderLists(container, goToTab) {
-  if (pendingSubtab) { activeSubtab = pendingSubtab; pendingSubtab = null; }
+  // Ein Ziel vom Shortcut/Teilen zählt als bewusste Wahl — sonst setzt die Zeile darunter
+  // beim ersten Aufruf wieder auf Favoriten zurück, und „Einkaufsliste öffnen" vom
+  // Homescreen landete in den Favoriten.
+  if (pendingSubtab) { activeSubtab = pendingSubtab; pendingSubtab = null; subtabChosen = true; }
   // Favoriten sind der Startreiter, solange nicht bewusst ein anderer gewählt wurde.
   if (!subtabChosen || !SUBTABS.some(t => t.sub === activeSubtab)) activeSubtab = "favorites";
 
@@ -460,6 +464,7 @@ function renderShoppingList(body) {
           <input type="checkbox" ${item.checked ? "checked" : ""} hidden>
           <span class="klar-check ${item.checked ? "on" : ""}">${item.checked ? "✓" : ""}</span>
           <div class="info"><div class="name" title="${esc(item.text)}">${esc(item.text)}</div></div>
+          ${mengeText(item.menge, item.einheit) ? `<span class="einkauf-menge">${mengeText(item.menge, item.einheit)}</span>` : ""}
           <button class="icon-btn" data-action="remove" title="Entfernen" aria-label="Entfernen">${ikon("loeschen", { groesse: 19 })}</button>
         </label>
       `).join("")}

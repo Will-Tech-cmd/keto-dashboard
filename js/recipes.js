@@ -45,6 +45,8 @@ export function addIngredient(recipeId, ingredient) {
     id: crypto.randomUUID(),
     name: ingredient.name,
     grams: ingredient.grams,
+    // Stückzahl (2 Eier) nur fürs Einkaufen — gerechnet wird weiter mit Gramm.
+    stueck: ingredient.stueck > 0 ? ingredient.stueck : null,
     per100: ingredient.per100,
     likelyUsLabel: !!ingredient.likelyUsLabel,
   });
