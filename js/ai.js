@@ -203,10 +203,10 @@ const REZEPT_SCHEMA = {
 const REZEPT_PROMPT = `Du bekommst die Beschreibung eines Koch-Videos (TikTok/Instagram). Sie enthält meist eine Zutatenliste und oft eine Zubereitung, alles in einem Absatz ohne Zeilenumbrüche, dazu Hashtags und Werbung.
 
 Erkenne daraus:
+- ingredients: ALLE Zutaten der Zutatenliste, in ihrer Reihenfolge, nach den Regeln unten. Die Liste beginnt meist nach "Zutaten"; oft steht vor jeder Zutat ein Emoji als Aufzählungszeichen (🍕 1 Pizzateig 🐄 300 g Hack …) — jedes Element ist eine eigene Zutat. Auch Zutaten ohne Menge ("Gewürzgurken, in Scheiben", "Sesam zum Bestreuen") aufnehmen, mit grams 0. Diese Liste darf nicht leer sein, wenn der Text Zutaten nennt.
 - name: ein kurzer Rezeptname (z.B. "Keto Burger-Brötchen"), ohne Hashtags, ohne "Rezept:".
 - servings: wie viele Portionen/Stücke das Rezept ergibt, falls angegeben ("Ergibt 4 Brötchen" → 4). Sonst 1.
-- ingredients: jede echte Zutat, nach denselben Regeln wie unten.
-- steps: die Zubereitungsschritte als einzelne Sätze in der Reihenfolge des Textes, ohne Nummerierung. Leere Liste, wenn keine Zubereitung beschrieben ist. Hashtags, Werbung, "Folgt mir" u.ä. gehören nicht dazu.
+- steps: die Zubereitungsschritte in der Reihenfolge des Textes, ohne Nummerierung (auch 1️⃣ 2️⃣ sind Nummern). Ein Schritt darf mehrere Sätze haben, wenn sie im Text zu einem nummerierten Punkt gehören. Leere Liste, wenn keine Zubereitung beschrieben ist. Hashtags, Werbung, "Folgt mir", "Tipp" u.ä. gehören nicht dazu.
 
 ${PROMPT.replace(/^Du bekommst eine Zutatenliste[^\n]*\n\n/, "")}`;
 

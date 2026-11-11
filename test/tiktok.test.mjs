@@ -90,6 +90,12 @@ ok("Edge Function lässt nur tiktok.com-Hosts zu", /TIKTOK_HOST = \/\^\(\?:\[a-z
 ok("pro.tiktok.com-Kurzlink wird erkannt", tiktokLinkAus("https://pro.tiktok.com/t/ZGdX5WrK1/") === "https://pro.tiktok.com/t/ZGdX5WrK1/");
 ok("liest __UNIVERSAL_DATA_FOR_REHYDRATION__", fn.includes("__UNIVERSAL_DATA_FOR_REHYDRATION__"));
 ok("antwortet mit CORS", fn.includes("Access-Control-Allow-Origin"));
+// Mit Gemini-Schlüssel hängt der Knopf „Bild direkt mit KI auswerten" an die Knopfzeile der
+// Import-Karte. Die hieß einmal .btn-row und heißt jetzt .zeilen-aktionen — mit dem alten
+// Selektor warf der Editor bei jedem Öffnen, und die Prüfansicht eines Imports erschien nie.
+const rez = readFileSync(join(wurzel, "js/views/recipes.js"), "utf8");
+const aiBlock = rez.slice(rez.indexOf("function wireAiImageImport"), rez.indexOf("function wireAiImageImport") + 1200);
+ok("KI-Bild-Knopf hängt an .zeilen-aktionen", aiBlock.includes('querySelector(".zeilen-aktionen")'));
 const sw = readFileSync(join(wurzel, "sw.js"), "utf8");
 for (const d of ["./js/einkauf.js", "./js/tiktok.js", "./js/tiktok-import.js"]) ok(`${d} in APP_SHELL`, sw.includes(`"${d}"`));
 
