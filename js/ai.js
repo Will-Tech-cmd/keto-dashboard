@@ -73,7 +73,12 @@ function numOrNull(v) {
  * einen Essensplan zusammenstellen. Was mit dem Ergebnis geschieht, entscheidet die
  * aufrufende Funktion — hier steht nur, wie man mit Gemini redet und was schiefgehen kann.
  */
-async function callGemini(parts, key, schema, { maxOutputTokens = 8192 } = {}) {
+async function callGemini(parts, key, schema, { maxOutputTokens = 8192, protokoll = null } = {}) {
+  // `protokoll` (optional) bekommt Status, finishReason, Token-Verbrauch und den rohen
+  // Antworttext — für die Diagnose des TikTok-Imports (tiktok-import.js), damit man bei einer
+  // halben Antwort sieht, ob das Modell abgebrochen hat oder nur wenig geliefert hat.
+  const start = Date.now();
+  const merke = (felder) => { if (protokoll) Object.assign(protokoll, felder, { dauerMs: Date.now() - start }); };
   let res;
   try {
     res = await fetch(ENDPOINT, {
@@ -92,10 +97,12 @@ async function callGemini(parts, key, schema, { maxOutputTokens = 8192 } = {}) {
       }),
     });
   } catch {
+    merke({ fehler: "keine Verbindung" });
     const err = new Error("Keine Verbindung zu Gemini möglich (offline?).");
     err.networkError = true;
     throw err;
   }
+  merke({ status: res.status });
 
   if (res.status === 400 || res.status === 401 || res.status === 403) {
     const err = new Error("API-Schlüssel ungültig oder abgelehnt.");
@@ -116,6 +123,11 @@ async function callGemini(parts, key, schema, { maxOutputTokens = 8192 } = {}) {
   const json = await res.json();
   const kandidat = json.candidates?.[0];
   const textOut = kandidat?.content?.parts?.[0]?.text;
+  merke({
+    finishReason: kandidat?.finishReason || json.promptFeedback?.blockReason || null,
+    verbrauch: json.usageMetadata || null,
+    rohtext: typeof textOut === "string" ? textOut.slice(0, 8000) : null,
+  });
 
   if (!textOut) {
     // Der häufigste Fall ist nicht "nichts gefunden", sondern "Budget alle": das Modell denkt
@@ -211,9 +223,11 @@ Erkenne daraus:
 ${PROMPT.replace(/^Du bekommst eine Zutatenliste[^\n]*\n\n/, "")}`;
 
 /** Rezept aus einer Videobeschreibung — Name, Portionen, Zutaten, Schritte. Wirft ohne Schlüssel. */
-export async function erkenneRezept(text) {
+export async function erkenneRezept(text, { protokoll = null } = {}) {
   const key = schluesselOderFehler();
-  const parsed = await callGemini([{ text: `${REZEPT_PROMPT}\n\nBeschreibung:\n${text}` }], key, REZEPT_SCHEMA);
+  // Deutlich mehr Ausgabebudget als beim reinen Zutaten-Import: ein ganzes Rezept mit 18
+  // Zutaten à acht Zahlen plus Schritte ist lang, und das Modell denkt vorher noch.
+  const parsed = await callGemini([{ text: `${REZEPT_PROMPT}\n\nBeschreibung:\n${text}` }], key, REZEPT_SCHEMA, { maxOutputTokens: 32768, protokoll });
   const servings = numOrNull(parsed?.servings);
   return {
     name: String(parsed?.name || "").trim(),

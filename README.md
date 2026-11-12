@@ -330,6 +330,11 @@ Radius kam nur noch in Scan, Rezepten und Profil vor und fiel dort aus der Seite
   als Schrittnummern.
   Die Zutaten landen in der bekannten Prüfansicht, erst „Zutaten übernehmen" schreibt sie
   ins Rezept; Zubereitung und Quelle stehen sofort im Rezept und gehen mit ins Kochbuch.
+  KI und Textzerlegung laufen beide; je Teil zählt das vollständigere Ergebnis (Gemini
+  lieferte zum selben Video einmal zehn Schritte ohne Zutat, dann eine Zutat ohne Schritt).
+  Der letzte Import liegt als **Diagnose** unter Profil → KI zum Kopieren oder Teilen:
+  geteilter Link, Beschreibung von TikTok, rohe Gemini-Antwort samt finishReason und
+  Token-Verbrauch, und welcher Teil woher kam.
   Grenzen: TikTok wirft die Zeilenumbrüche der Beschreibung weg, Mengen im gesprochenen
   Video stehen nirgends — dann hilft nur Abtippen. Funktioniert nur mit angemeldetem
   Abgleich (die Funktion verlangt die Haushalts-Sitzung) und in der installierten App

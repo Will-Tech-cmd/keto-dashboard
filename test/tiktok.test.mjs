@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 const wurzel = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const { tiktokLinkAus, geteiltesAus, bereinigeBeschreibung, zerlegeBeschreibung, portionenAus, rezeptnameAus }
+const { tiktokLinkAus, geteiltesAus, bereinigeBeschreibung, zerlegeBeschreibung, portionenAus, rezeptnameAus, kombiniere }
   = await import("../js/tiktok.js");
 const { parseIngredientText } = await import("../js/ingredient-parser.js");
 
@@ -78,6 +78,19 @@ ok("rezeptnameAus kürzt", rezeptnameAus("x".repeat(80)).length <= 60);
 ok("rezeptnameAus nimmt Titel, wenn Intro fehlt", rezeptnameAus("", "Keto Sandwich") === "Keto Sandwich");
 ok("rezeptnameAus Rückfall", rezeptnameAus("", "") === "TikTok-Rezept");
 ok("ohne Marken: nur Stücke mit Menge", zerlegeBeschreibung("Mega lecker heute. 100 g Butter 2 Eier").zutatenZeilen.join("|") === "100 g Butter|2 Eier");
+
+console.log("\n5b) KI und Textzerlegung zusammenlegen (die beiden echten Fälle vom Handy)");
+const text18 = { name: "Cheeseburger Cake", servings: 1, zutatenZeilen: Array.from({ length: 18 }, (_, i) => `${i + 1} g Zutat ${i}`), schritte: ["a.", "b.", "c.", "d.", "e.", "f."] };
+let k = kombiniere({ name: "Cheeseburger Cake", servings: 1, ingredients: [], steps: Array.from({ length: 10 }, (_, i) => `Schritt ${i}`) }, text18);
+ok("10 Schritte, 0 Zutaten → Schritte aus KI, Zutaten aus Text", k.steps.length === 10 && k.ingredientsText.split("\n").length === 18 && k.weg === "gemischt", k.grund);
+k = kombiniere({ name: "Cheeseburger Cake", servings: 1, ingredients: [{ name: "Pizzateig", grams: 400 }], steps: [] }, text18);
+ok("1 Zutat, 0 Schritte → beides aus Text", k.ingredientsText && k.steps.length === 6 && k.weg === "gemischt", k.grund);
+k = kombiniere({ name: "KI-Name", servings: 6, ingredients: Array.from({ length: 12 }, (_, i) => ({ name: `Z${i}`, grams: 10 })), steps: ["x."] }, text18);
+ok("12 von 18 (≥ 60 %) → KI-Zutaten reichen, Name und Portionen von der KI", k.ingredients?.length === 12 && k.name === "KI-Name" && k.servings === 6 && k.weg === "ki");
+k = kombiniere(null, text18);
+ok("ohne KI → Text", k.weg === "text" && k.steps.length === 6 && k.ingredientsText);
+k = kombiniere({ name: "", servings: 1, ingredients: [{ name: "Ei", grams: 58 }], steps: ["Rühren."] }, { name: "Omelett", servings: 1, zutatenZeilen: ["1 Ei"], schritte: [] });
+ok("1 von 1 → KI reicht, Name fällt auf Text zurück", k.ingredients?.length === 1 && k.name === "Omelett" && k.weg === "ki");
 
 console.log("\n6) Manifest und Edge Function");
 const manifest = JSON.parse(readFileSync(join(wurzel, "manifest.webmanifest"), "utf8"));
