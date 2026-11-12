@@ -8,7 +8,7 @@
 // (tiktok.js, geteiltesAus) → hier.
 import { REST, istAngemeldet, anfrage } from "./supabase.js";
 import { hasApiKey, erkenneRezept, describeAiError } from "./ai.js";
-import { zerlegeBeschreibung } from "./tiktok.js";
+import { zerlegeBeschreibung, kombiniere } from "./tiktok.js";
 import { oeffneImportiertesRezept } from "./views/recipes.js";
 import { showToast, esc, bindBackClose } from "./ui.js";
 import { ikon } from "./ikonen.js";
@@ -37,26 +37,51 @@ export async function holeBeschreibung(link) {
  * zerlegt tiktok.js den Text und die Zutaten laufen durch den Zeilen-Parser mit Zuordnung
  * über die eingebaute Lebensmitteltabelle (wie „Text einfügen → Zeilen prüfen").
  */
-export async function rezeptAusBeschreibung(beschreibung, { titel = "" } = {}) {
+export async function rezeptAusBeschreibung(beschreibung, { titel = "", diagnose = null } = {}) {
   const z = zerlegeBeschreibung(beschreibung, { titel });
+  if (diagnose) diagnose.text = { name: z.name, servings: z.servings, zutaten: z.zutatenZeilen, schritte: z.schritte };
+  let ki = null;
   if (hasApiKey()) {
+    const protokoll = {};
     try {
-      const r = await erkenneRezept(beschreibung);
-      if (r.ingredients.length) {
-        return { name: r.name || titel || "TikTok-Rezept", servings: r.servings, ingredients: r.ingredients, steps: r.steps, weg: "ki" };
-      }
-      // Das Modell hat Name und Schritte geliefert, aber keine Zutaten — beim ersten echten
-      // Teilen (Cheeseburger Cake) genau so passiert, das Rezept stand dann ohne Zutaten da.
-      // Dann nehmen wir seine Schritte und holen die Zutaten aus der Textzerlegung.
-      if (r.steps.length || r.name) {
-        console.warn("Gemini lieferte keine Zutaten, Zutaten aus der Textzerlegung:", z.zutatenZeilen.length);
-        return { name: r.name || z.name, servings: r.servings > 1 ? r.servings : z.servings, ingredientsText: z.zutatenZeilen.join("\n"), steps: r.steps.length ? r.steps : z.schritte, weg: "ki-ohne-zutaten" };
-      }
+      ki = await erkenneRezept(beschreibung, { protokoll });
+      if (diagnose) diagnose.ki = { ...protokoll, name: ki.name, servings: ki.servings, zutaten: ki.ingredients.map(i => `${i.name} ${i.grams ?? "?"} g${i.stueck ? ` / ${i.stueck} Stk` : ""}`), schritte: ki.steps };
     } catch (err) {
+      if (diagnose) diagnose.ki = { ...protokoll, fehler: describeAiError(err) };
       console.warn("Gemini-Erkennung fehlgeschlagen, nehme Textzerlegung:", describeAiError(err));
     }
+  } else if (diagnose) {
+    diagnose.ki = { fehler: "kein Schlüssel hinterlegt" };
   }
-  return { name: z.name, servings: z.servings, ingredientsText: z.zutatenZeilen.join("\n"), steps: z.schritte, weg: "text" };
+  const r = kombiniere(ki, z);
+  if (diagnose) diagnose.ergebnis = { weg: r.weg, grund: r.grund, name: r.name, servings: r.servings, zutaten: r.ingredients ? r.ingredients.length : z.zutatenZeilen.length, schritte: r.steps.length };
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// Diagnose: was kam von TikTok, was von Gemini, was wurde daraus. Bleibt nur für den
+// letzten Import liegen (ein Eintrag im localStorage) und lässt sich im Profil unter
+// „KI" kopieren oder teilen — so lässt sich ein leeres Rezept nachvollziehen, ohne am
+// Handy eine Entwicklerkonsole zu brauchen.
+// ---------------------------------------------------------------------------
+const DIAGNOSE_KEY = "keto-dashboard-tiktok-diagnose";
+
+function diagnoseSpeichern(d) {
+  try { localStorage.setItem(DIAGNOSE_KEY, JSON.stringify(d)); } catch { /* voll oder gesperrt — dann eben keine Diagnose */ }
+}
+
+/** Die Diagnose des letzten Imports, oder null. */
+export function letzteDiagnose() {
+  try { return JSON.parse(localStorage.getItem(DIAGNOSE_KEY)) || null; } catch { return null; }
+}
+
+/** Als Text zum Kopieren/Teilen — JSON mit Einrückung, der Rohtext von Gemini am Ende. */
+export function diagnoseText() {
+  const d = letzteDiagnose();
+  if (!d) return "";
+  const { ki, ...rest } = d;
+  const { rohtext, ...kiRest } = ki || {};
+  return `${JSON.stringify({ ...rest, ki: ki ? kiRest : null }, null, 2)}${rohtext ? `\n\n--- Gemini-Rohantwort ---\n${rohtext}` : ""}`;
 }
 
 /**
@@ -101,11 +126,13 @@ export async function starteGeteiltesRezept(geteilt, goToTab) {
   };
 
   let beschreibung = null, quelle = null;
+  const diagnose = { zeit: new Date().toISOString(), version: 1, geteilt: { title: geteilt.title, text: geteilt.text, url: geteilt.url, link: geteilt.link } };
   try {
     if (geteilt.link) {
       const b = await holeBeschreibung(geteilt.link);
       beschreibung = b.text;
       quelle = quelleAus(geteilt, b);
+      diagnose.tiktok = { url: b.url, autor: b.autor, beschreibung: b.text };
     } else if (geteilt.text && geteilt.text.replace(/https?:\/\/\S+/g, "").trim().length >= 20) {
       // Kein TikTok-Link, aber Text (z.B. aus einer Notiz geteilt): direkt als Beschreibung
       // nehmen. Ein nackter fremder Link zählt nicht — daraus würde ein leeres Rezept mit
@@ -117,17 +144,20 @@ export async function starteGeteiltesRezept(geteilt, goToTab) {
       return;
     }
     status.textContent = hasApiKey() ? "Gemini liest Zutaten und Zubereitung …" : "Zutaten und Zubereitung werden erkannt …";
-    const r = await rezeptAusBeschreibung(beschreibung, { titel: geteilt.title });
+    const r = await rezeptAusBeschreibung(beschreibung, { titel: geteilt.title, diagnose });
+    diagnoseSpeichern(diagnose);
     oeffneImportiertesRezept({ ...r, quelle });
     close(() => {
       goToTab("recipes");
       showToast(r.weg === "ki"
         ? `${r.ingredients.length} Zutaten erkannt — bitte prüfen und übernehmen`
-        : r.weg === "ki-ohne-zutaten"
-          ? "KI lieferte keine Zutaten — aus dem Text erkannt, bitte Mengen prüfen"
+        : r.weg === "gemischt"
+          ? "KI-Antwort unvollständig — Lücken aus dem Text gefüllt, bitte prüfen"
           : "Zutaten erkannt — Mengen und Zuordnung bitte prüfen");
     });
   } catch (err) {
+    diagnose.fehler = err.message || String(err);
+    diagnoseSpeichern(diagnose);
     // „Text trotzdem prüfen" nur, wenn außer dem Link noch Text da ist — der nackte Link
     // ergäbe ein leeres Rezept.
     const rest = (beschreibung || geteilt.text || "").replace(/https?:\/\/\S+/g, "").trim();

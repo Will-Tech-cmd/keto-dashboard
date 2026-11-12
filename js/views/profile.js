@@ -6,7 +6,8 @@ import { DIET_TYPES } from "../keto.js";
 import { getApiKey, setApiKey, clearApiKey, testApiKey } from "../ai.js";
 import { hatZugang as hatOffZugang, benutzername as offBenutzer, setzeZugang as setzeOffZugang,
          loescheZugang as loescheOffZugang, REGISTRIER_URL } from "../off-beitrag.js";
-import { showToast, esc, applyDesignTheme, bindBackClose, keepActionsInView, getAppVersion } from "../ui.js";
+import { showToast, esc, applyDesignTheme, bindBackClose, keepActionsInView, getAppVersion, shareOrDownloadFile } from "../ui.js";
+import { letzteDiagnose, diagnoseText } from "../tiktok-import.js";
 import { isSyncEnabled, needsReauth, enableSync, disableSync, syncNow, getLastSyncAt, SyncAuthError } from "../sync.js";
 
 const RING_STYLES = [
@@ -299,6 +300,13 @@ function openExtraSheet(key, neuZeichnen) {
         <button class="btn ghost" id="aiKeyTestBtn">Verbindung testen</button>
         <button class="btn ghost" id="aiKeyClearBtn" style="color:var(--red-fg)">Löschen</button>
       </div>
+      <hr class="klar-divider">
+      <div class="klar-eyebrow">Letzter TikTok-Import</div>
+      <p class="hint" id="ttDiagnoseText" style="margin-top:6px">${esc(diagnoseZusammenfassung())}</p>
+      <div class="btn-row" style="margin-top:4px;flex-wrap:wrap">
+        <button class="btn ghost" id="ttDiagnoseCopyBtn">Diagnose kopieren</button>
+        <button class="btn ghost" id="ttDiagnoseShareBtn">Diagnose teilen</button>
+      </div>
       <p class="hint" style="margin-top:10px">Der Schlüssel bleibt ausschließlich auf diesem Gerät gespeichert — er wird nicht exportiert oder mitgeteilt, wenn du dein Backup sicherst.</p>
     `,
     off: `
@@ -466,6 +474,30 @@ function wireAiKey(wurzel) {
     status.textContent = result.ok
       ? "Verbindung erfolgreich" + (result.message ? ` — ${result.message}` : "")
       : result.message;
+  });
+
+  // Diagnose des letzten TikTok-Imports (tiktok-import.js): kopieren oder teilen, damit
+  // ein leeres Rezept nachvollziehbar wird, ohne am Handy eine Konsole zu brauchen.
+  const diagnoseHolen = () => {
+    const t = diagnoseText();
+    if (!t) showToast("Noch kein TikTok-Import auf diesem Gerät");
+    return t;
+  };
+  wurzel.querySelector("#ttDiagnoseCopyBtn")?.addEventListener("click", async () => {
+    const t = diagnoseHolen();
+    if (!t) return;
+    try {
+      await navigator.clipboard.writeText(t);
+      showToast("Diagnose in die Zwischenablage kopiert");
+    } catch {
+      downloadBlob(t, "tiktok-diagnose.txt");
+    }
+  });
+  wurzel.querySelector("#ttDiagnoseShareBtn")?.addEventListener("click", async () => {
+    const t = diagnoseHolen();
+    if (!t) return;
+    const datei = new File([t], "tiktok-diagnose.txt", { type: "text/plain" });
+    await shareOrDownloadFile(datei, { title: "TikTok-Import Diagnose" });
   });
 
   wurzel.querySelector("#aiKeyClearBtn").addEventListener("click", () => {
@@ -1034,4 +1066,15 @@ function openRecipesOnlySheet() {
     recipesFileInput.value = "";
   });
   keepActionsInView(overlay);
+}
+
+/** Eine Zeile zum letzten TikTok-Import für die KI-Karte. */
+function diagnoseZusammenfassung() {
+  const d = letzteDiagnose();
+  if (!d) return "Noch keiner auf diesem Gerät.";
+  const wann = new Date(d.zeit).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+  if (d.fehler) return `${wann}: fehlgeschlagen — ${d.fehler}`;
+  const e = d.ergebnis || {};
+  const ki = d.ki?.fehler ? `KI: ${d.ki.fehler}` : d.ki ? `KI: ${d.ki.zutaten?.length ?? 0} Zutaten, ${d.ki.schritte?.length ?? 0} Schritte${d.ki.finishReason ? `, ${d.ki.finishReason}` : ""}` : "";
+  return `${wann}: ${e.zutaten ?? "?"} Zutaten, ${e.schritte ?? "?"} Schritte (${e.grund || e.weg || "?"}). ${ki}`;
 }

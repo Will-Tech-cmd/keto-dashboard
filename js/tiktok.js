@@ -181,3 +181,34 @@ export function portionenAus(text) {
   const n = m ? parseInt(m[1], 10) : 0;
   return n > 0 && n <= 50 ? n : 1;
 }
+
+/**
+ * KI-Ergebnis und Textzerlegung zu EINEM Vorschlag zusammenlegen — je Teil das
+ * vollständigere. Anlass: Gemini lieferte zum selben Video einmal zehn Schritte und keine
+ * Zutat, dann eine Zutat und keinen Schritt. Die Antwort ist unvollständig und schwankt;
+ * die Textzerlegung ist stur, aber vollständig. Also: KI-Zutaten nur, wenn sie mindestens
+ * 60 % dessen finden, was die Zerlegung findet; KI-Schritte nur, wenn es welche gibt.
+ * `ki` darf null sein (kein Schlüssel, Fehler) — dann zählt nur die Zerlegung.
+ */
+export function kombiniere(ki, z) {
+  const zutatenText = (z?.zutatenZeilen || []).join("\n");
+  const kiZutaten = ki?.ingredients?.length || 0;
+  const textZutaten = z?.zutatenZeilen?.length || 0;
+  const kiReicht = kiZutaten > 0 && kiZutaten >= Math.ceil(textZutaten * 0.6);
+  const kiSchritte = ki?.steps?.length || 0;
+  const grund = [];
+  if (ki) {
+    grund.push(kiReicht ? `Zutaten aus KI (${kiZutaten}, Text ${textZutaten})` : `Zutaten aus Text (${textZutaten}, KI nur ${kiZutaten})`);
+    grund.push(kiSchritte ? `Schritte aus KI (${kiSchritte})` : `Schritte aus Text (${z?.schritte?.length || 0}, KI keine)`);
+  } else {
+    grund.push(`ohne KI: ${textZutaten} Zutaten, ${z?.schritte?.length || 0} Schritte aus Text`);
+  }
+  return {
+    name: ki?.name || z?.name || "TikTok-Rezept",
+    servings: ki?.servings > 1 ? ki.servings : (z?.servings || 1),
+    ...(kiReicht ? { ingredients: ki.ingredients } : { ingredientsText: zutatenText }),
+    steps: kiSchritte ? ki.steps : (z?.schritte || []),
+    weg: !ki ? "text" : (kiReicht && kiSchritte ? "ki" : "gemischt"),
+    grund: grund.join(" · "),
+  };
+}
